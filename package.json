@@ -1,0 +1,12 @@
+{
+  "name": "shfantasy",
+  "version": "1.0.0",
+  "description": "SH Fantasy Cloud Run App",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
