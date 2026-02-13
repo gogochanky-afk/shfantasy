@@ -3,15 +3,18 @@ const app = express();
 
 app.use(express.json());
 
-// Cloud Run uses PORT env. Keep fallback 8080.
+// Cloud Run uses PORT env. Keep fallback for local runs.
 const PORT = process.env.PORT || 8080;
 
-// Optional: set DATA_MODE in Cloud Run env (DEMO / LIVE)
-const DATA_MODE = process.env.DATA_MODE || "DEMO";
+// DATA_MODE: "demo" | "live"
+// For ALPHA stability, you can default to "demo" when not set.
+// If you want to FORCE demo regardless of env, uncomment the FORCE line below.
+const DATA_MODE = process.env.DATA_MODE || "demo";
+// const DATA_MODE = "demo"; // FORCE DEMO MODE (optional)
 
 /**
- * Root route — avoids "Cannot GET /"
- * If you later host a frontend separately, you can replace this with a redirect or static hosting.
+ * Root route - avoids "Cannot GET /"
+ * If you later host a frontend separately, keep this for quick status checks.
  */
 app.get("/", (req, res) => {
   res
@@ -21,7 +24,7 @@ app.get("/", (req, res) => {
 });
 
 /**
- * Health check — quick verification for Cloud Run
+ * Health check - quick verification for Cloud Run
  */
 app.get("/api/health", (req, res) => {
   res.status(200).json({
@@ -43,14 +46,14 @@ app.get("/api/test", (req, res) => {
 
 /**
  * Pools endpoint (STUB)
- * This prevents frontend from crashing if it accidentally points to this backend.
- * NOTE: Your REAL app should have its own /api/pools that returns real pools.
+ * This prevents frontend from crashing if it accidentally calls this service.
+ * Your real app should have its own pools service / routes.
  */
 app.get("/api/pools", (req, res) => {
   res.status(200).json({
     data_mode: DATA_MODE,
     pools: [],
-    note: "Backend stub active. Replace with real pools service in the app backend.",
+    note: "Backend stub active. Replace with real pools endpoint when ready.",
   });
 });
 
