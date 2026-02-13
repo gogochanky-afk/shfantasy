@@ -3,12 +3,16 @@ const app = express();
 
 const PORT = process.env.PORT || 8080;
 
-app.get("/", (req, res) => {
-  res.send("SHFantasy Backend is live 🚀");
+app.use(express.json());
+
+// Health Check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", service: "SHFantasy" });
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
+// Test Route
+app.get("/api/test", (req, res) => {
+  res.json({ message: "API working 🚀" });
 });
 
 app.listen(PORT, () => {
