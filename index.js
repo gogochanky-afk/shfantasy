@@ -1,7 +1,16 @@
-const http = require("http");
+const express = require("express");
+const app = express();
 
-const port = process.env.PORT || 8080;
-http.createServer((req, res) => {
-  res.writeHead(200, {"Content-Type":"text/plain"});
-  res.end("SHFantasy is live ✅\n");
-}).listen(port);
+const PORT = process.env.PORT || 8080;
+
+app.get("/", (req, res) => {
+  res.send("SHFantasy Backend is live 🚀");
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
