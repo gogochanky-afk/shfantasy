@@ -1,28 +1,26 @@
 const express = require("express");
-
 const app = express();
 
 app.use(express.json());
 
-// Cloud Run uses PORT env. Keep fallback 8080 for local.
+// Cloud Run uses PORT env
 const PORT = process.env.PORT || 8080;
 
-// Optional: set DATA_MODE in Cloud Run env: LIVE or DEMO
+// FORCE DEMO MODE FOR ALPHA STABILITY
 const DATA_MODE = process.env.DATA_MODE || "DEMO";
 
 /**
- * Root route - avoids "Cannot GET /"
- * If you later host a frontend separately, you can keep this as a simple status page.
+ * Root route
  */
 app.get("/", (req, res) => {
   res
     .status(200)
     .type("text/plain")
-    .send(`SHFantasy Backend is live 🚀\nDATA_MODE: ${DATA_MODE}\n`);
+    .send(`SHFantasy Backend is live 🚀\nDATA_MODE=${DATA_MODE}`);
 });
 
 /**
- * Health check - quick verification for Cloud Run
+ * Health Check
  */
 app.get("/api/health", (req, res) => {
   res.status(200).json({
@@ -43,19 +41,16 @@ app.get("/api/test", (req, res) => {
 });
 
 /**
- * Pools endpoint (STUB)
- * This prevents frontend from crashing with "Cannot GET /api/pools".
- * Manus can later replace this with real logic (DB + today/tomorrow filtering).
+ * Pools STUB (safe for frontend)
  */
 app.get("/api/pools", (req, res) => {
   res.status(200).json({
     data_mode: DATA_MODE,
     pools: [],
-    note: "STUB endpoint. Replace with real pools service.",
+    note: "Backend stub active. Replace with real pools service.",
   });
 });
 
-// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} (DATA_MODE=${DATA_MODE})`);
+  console.log(`Server running on port ${PORT}`);
 });
