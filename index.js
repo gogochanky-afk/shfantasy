@@ -1,63 +1,85 @@
 const express = require("express");
-const app = express();
+const path = require("path");
 
+const app = express();
 app.use(express.json());
 
-// Cloud Run uses PORT env. Keep fallback for local runs.
+// Cloud Run uses PORT env
 const PORT = process.env.PORT || 8080;
 
 // DATA_MODE: "demo" | "live"
-// For ALPHA stability, you can default to "demo" when not set.
-// If you want to FORCE demo regardless of env, uncomment the FORCE line below.
 const DATA_MODE = process.env.DATA_MODE || "demo";
-// const DATA_MODE = "demo"; // FORCE DEMO MODE (optional)
 
 /**
- * Root route - avoids "Cannot GET /"
- * If you later host a frontend separately, keep this for quick status checks.
- */
-app.get("/", (req, res) => {
-  res
-    .status(200)
-    .type("text/plain")
-    .send(`SHFantasy Backend is live 🚀\nDATA_MODE=${DATA_MODE}\n`);
-});
-
-/**
- * Health check - quick verification for Cloud Run
+ * API health check (used by frontend + monitoring)
  */
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    service: "SHFantasy",
+  res.json({
+    ok: true,
+    service: "shfantasy",
     data_mode: DATA_MODE,
+    ts: new Date().toISOString(),
   });
 });
 
 /**
- * Test endpoint
+ * Simple homepage (temporary UI)
  */
-app.get("/api/test", (req, res) => {
-  res.status(200).json({
-    message: "API working 🚀",
-    data_mode: DATA_MODE,
-  });
+app.get("/", (req, res) => {
+  res.status(200).type("html").send(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SHFantasy</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Arial; background:#0b0b0b; color:#f5f5f5; padding:24px; }
+    .box { max-width:720px; margin:0 auto; }
+    .card { border:1px solid #222; border-radius:12px; padding:16px; margin:12px 0; background:#111; }
+    a { color:#7dd3fc; text-decoration:none; }
+    .muted { color:#aaa; font-size:14px; }
+    button { padding:10px 14px; border-radius:10px; border:1px solid #333; background:#161616; color:#fff; }
+    pre { white-space:pre-wrap; word-break:break-word; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>SHFantasy ✅</h1>
+    <div class="muted">Backend is live • DATA_MODE=<b>${DATA_MODE}</b></div>
+
+    <div class="card">
+      <h3>Health Status</h3>
+      <button onclick="checkHealth()">Check /api/health</button>
+      <pre id="out" class="muted"></pre>
+    </div>
+
+    <div class="card">
+      <h3>Next</h3>
+      <div>1) We’ll add a real frontend (React/Vite) later.</div>
+      <div>2) Keep everything on Cloud Run for stability.</div>
+      <div class="muted">Tip: open <a href="/api/health">/api/health</a> to verify.</div>
+    </div>
+  </div>
+
+<script>
+async function checkHealth(){
+  const out = document.getElementById("out");
+  out.textContent = "checking...";
+  try{
+    const r = await fetch("/api/health");
+    const j = await r.json();
+    out.textContent = JSON.stringify(j, null, 2);
+  }catch(e){
+    out.textContent = "error: " + e.message;
+  }
+}
+</script>
+</body>
+</html>
+  `);
 });
 
-/**
- * Pools endpoint (STUB)
- * This prevents frontend from crashing if it accidentally calls this service.
- * Your real app should have its own pools service / routes.
- */
-app.get("/api/pools", (req, res) => {
-  res.status(200).json({
-    data_mode: DATA_MODE,
-    pools: [],
-    note: "Backend stub active. Replace with real pools endpoint when ready.",
-  });
-});
-
-// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} (DATA_MODE=${DATA_MODE})`);
+  console.log(`SHFantasy listening on ${PORT}`);
 });
