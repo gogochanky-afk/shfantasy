@@ -1,26 +1,56 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+  default_logs_bucket_behavior: REGIONAL_USER_OWNED_BUCKET
+
+substitutions:
+  _REGION: asia-east1
+  _SERVICE: shfantasy
+  _REPO: cloud-run-source-deploy
+
 steps:
-  # Build the container image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/shfantasy', '.']
-  
-  # Push the container image to Container Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/shfantasy']
-  
-  # Deploy container image to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  # 1) Install frontend deps
+  - name: "node:20"
+    entrypoint: npm
+    args: ["ci"]
+    dir: "frontend"
+
+  # 2) Build frontend (make sure it outputs to frontend/dist)
+  - name: "node:20"
+    entrypoint: npm
+    args: ["run", "build"]
+    dir: "frontend"
+
+  # 3) Build Docker image (root Dockerfile must COPY frontend/dist into runtime)
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA",
+        "."
+      ]
+
+  # 4) Push image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "push",
+        "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA"
+      ]
+
+  # 5) Deploy to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: gcloud
     args:
-      - 'run'
-      - 'deploy'
-      - 'shfantasy'
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/shfantasy'
-      - '--region'
-      - 'asia-east1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-
-images:
-  - 'gcr.io/$PROJECT_ID/shfantasy'
+      [
+        "run",
+        "deploy",
+        "${_SERVICE}",
+        "--image",
+        "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA",
+        "--region",
+        "${_REGION}",
+        "--platform",
+        "managed",
+        "--allow-unauthenticated"
+      ]
