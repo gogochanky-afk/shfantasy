@@ -1,28 +1,32 @@
-FROM node:18-alpine
-
+# ========= 1) Build frontend =========
+FROM node:20-slim AS build
 WORKDIR /app
 
-# Install pnpm and git
-RUN npm install -g pnpm && apk add --no-cache git
-
-# Copy backend package.json
-COPY package.json ./
-
-# Install backend deps
-RUN npm install
-
-# Copy frontend package.json
-COPY frontend/package.json ./frontend/
+RUN corepack enable
 
 # Install frontend deps
-RUN cd frontend && pnpm install
+COPY frontend/package.json frontend/pnpm-lock.yaml* ./frontend/
+WORKDIR /app/frontend
+RUN pnpm install --frozen-lockfile || pnpm install
 
-# Copy everything
-COPY . .
+# Copy frontend source and build
+COPY frontend/ ./
+RUN pnpm build
 
-# Build frontend
-RUN cd frontend && pnpm run build
+# ========= 2) Runtime (backend + static dist) =========
+FROM node:20-slim
+WORKDIR /app
 
+# Backend deps
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev || npm install
+
+# Backend code
+COPY index.js ./
+
+# Frontend dist
+COPY --from=build /app/frontend/dist ./frontend/dist
+
+ENV PORT=8080
 EXPOSE 8080
-
-CMD ["npm", "start"]
+CMD ["node", "index.js"]
