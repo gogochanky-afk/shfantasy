@@ -3,6 +3,37 @@ import './App.css';
 
 const API_BASE = '';
 
+// ============ Helper Functions ============
+// Get remaining seconds from pool (prioritize lock_in, fallback to lock_at)
+function getRemainingSeconds(pool) {
+  if (!pool) return 0;
+  
+  // Priority 1: Use lock_in if available (DEMO mode)
+  if (typeof pool.lock_in === 'number') {
+    return Math.max(0, pool.lock_in);
+  }
+  
+  // Priority 2: Calculate from lock_at if valid ISO string
+  if (pool.lock_at) {
+    const lockTime = new Date(pool.lock_at);
+    if (!isNaN(lockTime.getTime())) {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((lockTime.getTime() - now) / 1000));
+      return remaining;
+    }
+  }
+  
+  return 0;
+}
+
+// Format seconds to mm:ss
+function formatMMSS(seconds) {
+  if (typeof seconds !== 'number' || isNaN(seconds)) return '--:--';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 // ============ Home Page ============
 function HomePage() {
   const [pools, setPools] = useState([]);
@@ -33,8 +64,8 @@ function HomePage() {
         setDataMode(data.data_mode || 'demo');
         // Calculate cycle_remaining_s from first OPEN pool
         const openPool = data.pools.find((p) => p.status === 'OPEN');
-        if (openPool && openPool.lock_in) {
-          setCycleRemaining(openPool.lock_in);
+        if (openPool) {
+          setCycleRemaining(getRemainingSeconds(openPool));
         }
       } else {
         setError('Failed to fetch pools');
@@ -47,9 +78,7 @@ function HomePage() {
 
   const formatTime = (seconds) => {
     if (seconds === null) return '--:--';
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return formatMMSS(seconds);
   };
 
   const isWarning = cycleRemaining !== null && cycleRemaining <= 30;
@@ -86,11 +115,24 @@ function HomePage() {
 }
 
 function PoolCard({ pool }) {
+  const [remaining, setRemaining] = useState(getRemainingSeconds(pool));
+
+  useEffect(() => {
+    // Reset countdown when pool changes
+    setRemaining(getRemainingSeconds(pool));
+    
+    // Update countdown every second
+    const interval = setInterval(() => {
+      setRemaining((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [pool]);
+
   const handleClick = () => {
     window.location.hash = `#/pool/${pool.pool_id}`;
   };
 
-  const remaining = pool.lock_in || 0;
   const isLocked = pool.status === 'LOCKED' || pool.status === 'CLOSED';
 
   return (
@@ -104,8 +146,7 @@ function PoolCard({ pool }) {
         <span>{pool.away?.abbr || 'AWAY'}</span>
       </div>
       <div className="pool-info">
-        <div>Lock: {lockTime.toLocaleTimeString()}</div>
-        {!isLocked && <div className="countdown">{Math.floor(remaining / 60)}m {remaining % 60}s</div>}
+        <div>Locks in: {formatMMSS(remaining)}</div>
       </div>
       {!isLocked && <button className="btn-primary">Enter Pool</button>}
       {isLocked && <div className="locked-text">🔒 Locked</div>}
