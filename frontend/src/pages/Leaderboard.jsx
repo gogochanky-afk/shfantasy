@@ -87,9 +87,16 @@ export default function Leaderboard() {
     setExpandedRows(newExpanded);
   };
 
+  // Simulate hot streak data (client-side only for demo)
+  const getHotStreak = (username) => {
+    // Simple hash to generate consistent streak for demo
+    const hash = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return hash % 7 >= 4 ? (hash % 5) + 3 : 0; // 3-7 streak or 0
+  };
+
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0b0b0b", color: "#fff", padding: "20px" }}>
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a0a0f 0%, #12131a 100%)", color: "#fff", padding: "80px 20px 20px" }}>
         <p>Loading...</p>
       </div>
     );
@@ -97,7 +104,7 @@ export default function Leaderboard() {
 
   if (error) {
     return (
-      <div style={{ minHeight: "100vh", background: "#0b0b0b", color: "#fff", padding: "20px" }}>
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a0a0f 0%, #12131a 100%)", color: "#fff", padding: "80px 20px 20px" }}>
         <div style={{ background: "#2a1a1a", border: "1px solid #ff4444", padding: "15px", borderRadius: "8px" }}>
           <p>⚠️ {error}</p>
         </div>
@@ -120,7 +127,7 @@ export default function Leaderboard() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0b0b0b", color: "#fff", padding: "20px" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0a0a0f 0%, #12131a 100%)", color: "#fff", padding: "80px 20px 20px" }}>
       <header style={{ marginBottom: "30px", borderBottom: "1px solid #333", paddingBottom: "15px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <h1 style={{ fontSize: "2rem", fontWeight: "bold" }}>🏆 Leaderboard</h1>
@@ -212,13 +219,41 @@ export default function Leaderboard() {
                 </thead>
                 <tbody>
                   {leaderboard.rows.map((row) => {
+                    const hotStreak = getHotStreak(row.username);
+                    const isTop3 = row.rank <= 3;
+                    const glowColor = row.rank === 1 ? 'rgba(255, 215, 0, 0.15)' : row.rank === 2 ? 'rgba(192, 192, 192, 0.15)' : row.rank === 3 ? 'rgba(205, 127, 50, 0.15)' : 'transparent';
+                    
                     return (
-                      <tr key={row.entry_id} style={{ borderBottom: "1px solid #333" }}>
+                      <tr 
+                        key={row.entry_id} 
+                        style={{ 
+                          borderBottom: "1px solid #333",
+                          background: isTop3 ? glowColor : 'transparent',
+                          animation: isTop3 ? 'glowPulse 5s infinite' : 'none',
+                        }}
+                      >
                         <td style={{ padding: "15px" }}>
                           {row.rank === 1 ? "🥇" : row.rank === 2 ? "🥈" : row.rank === 3 ? "🥉" : `#${row.rank}`}
                         </td>
-                        <td style={{ padding: "15px" }}>
-                          {row.username}
+                        <td style={{ padding: "15px", display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span>{row.username}</span>
+                          {hotStreak >= 3 && (
+                            <span style={{ 
+                              fontSize: "0.75rem", 
+                              background: "rgba(255, 102, 0, 0.2)",
+                              border: "1px solid #ff6600",
+                              color: "#ff6600",
+                              padding: "2px 8px",
+                              borderRadius: "4px",
+                              fontWeight: "bold",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              animation: "flamePulse 1.5s infinite"
+                            }}>
+                              🔥 HOT STREAK x{hotStreak}
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: "15px", textAlign: "right", fontWeight: "bold", color: "#4ade80" }}>
                           {row.score.toFixed(1)}

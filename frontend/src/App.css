@@ -197,3 +197,33 @@
     width: 100%;
   }
 }
+
+/* PHASE G1 - CSS Animations */
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+  }
+}
+
+@keyframes flamePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* Mobile responsive adjustments for glass cards */
+@media (max-width: 768px) {
+  .glass-card {
+    padding: 20px;
+    margin: 10px;
+  }
+}

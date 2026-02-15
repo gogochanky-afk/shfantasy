@@ -8,6 +8,9 @@ import MyEntries from './pages/MyEntries';
 import HowItWorks from './pages/HowItWorks';
 import Leaderboard from './pages/Leaderboard';
 
+// Components
+import GlobalCountdownBar from './components/GlobalCountdownBar';
+
 function HomePage() {
   const [healthStatus, setHealthStatus] = useState({ loading: true, ok: false, data: null });
   const [nextPool, setNextPool] = useState(null);
@@ -156,6 +159,7 @@ function HomePage() {
 export default function App() {
   return (
     <BrowserRouter>
+      <GlobalCountdownBar />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/arena" element={<Arena />} />

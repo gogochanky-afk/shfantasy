@@ -134,9 +134,9 @@ export default function Arena() {
   return (
     <div style={{ 
       minHeight: "100vh", 
-      background: "#0b0b0b", 
+      background: "linear-gradient(135deg, #0a0a0f 0%, #12131a 100%)", 
       color: "#fff", 
-      padding: "20px" 
+      padding: "80px 20px 20px" // Top padding for global countdown bar
     }}>
       <header style={{ 
         marginBottom: "30px", 
@@ -163,7 +163,16 @@ export default function Arena() {
         </nav>
       </header>
 
-      <main>
+      <main style={{
+        maxWidth: "1200px",
+        margin: "0 auto",
+        background: "rgba(255, 255, 255, 0.05)",
+        backdropFilter: "blur(10px)",
+        border: "1px solid rgba(0, 255, 255, 0.2)",
+        borderRadius: "16px",
+        padding: "30px",
+        boxShadow: "0 0 40px rgba(0, 255, 255, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4)",
+      }}>
         {loading && <p>Loading pools...</p>}
         {error && (
           <div style={{ 
@@ -209,12 +218,15 @@ export default function Arena() {
               </div>
             )}
 
-            {/* Pool Info */}
+            {/* Pool Info - Glass Card */}
             <div style={{ 
-              background: "#1a1a1a", 
-              padding: "20px", 
-              borderRadius: "8px", 
-              marginBottom: "30px" 
+              background: "rgba(255, 255, 255, 0.03)", 
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(0, 255, 255, 0.15)",
+              padding: "24px", 
+              borderRadius: "12px", 
+              marginBottom: "30px",
+              boxShadow: "0 0 20px rgba(0, 255, 255, 0.1)"
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <h2 style={{ fontSize: "1.5rem" }}>
@@ -222,30 +234,51 @@ export default function Arena() {
                 </h2>
                 {isLocked ? (
                   <div style={{ 
-                    background: "#ff4444", 
-                    color: "#fff",
-                    padding: "6px 16px", 
-                    borderRadius: "4px",
-                    fontSize: "0.9rem",
-                    fontWeight: "bold"
+                    background: "rgba(255, 68, 68, 0.2)",
+                    border: "1px solid #ff4444",
+                    color: "#ff4444",
+                    padding: "8px 18px", 
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    fontWeight: "bold",
+                    boxShadow: "0 0 15px rgba(255, 68, 68, 0.3)"
                   }}>
                     🔒 LOCKED
                   </div>
                 ) : (
                   <div style={{ 
-                    background: lockingSoon ? "#ff9800" : "#4ade80", 
-                    color: lockingSoon ? "#fff" : "#000",
-                    padding: "6px 16px", 
-                    borderRadius: "4px",
-                    fontSize: "0.9rem",
-                    fontWeight: "bold"
+                    background: lockingSoon ? "rgba(255, 152, 0, 0.2)" : "rgba(74, 222, 128, 0.2)",
+                    border: lockingSoon ? "1px solid #ff9800" : "1px solid #4ade80",
+                    color: lockingSoon ? "#ff9800" : "#4ade80",
+                    padding: "8px 18px", 
+                    borderRadius: "8px",
+                    fontSize: "0.95rem",
+                    fontWeight: "bold",
+                    boxShadow: lockingSoon ? "0 0 15px rgba(255, 152, 0, 0.3)" : "0 0 15px rgba(74, 222, 128, 0.3)"
                   }}>
                     {lockingSoon ? "⚠️ Locking soon" : "⏱️"} {timeRemaining}
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem" }}>
+              <div style={{ 
+                display: "flex", 
+                gap: "20px", 
+                color: "#888", 
+                fontSize: "0.9rem",
+                marginTop: "15px"
+              }}>
                 <span>Lock Time: {new Date(selectedPool.lock_time).toLocaleString()}</span>
+              </div>
+              <div style={{ 
+                marginTop: "20px", 
+                padding: "15px", 
+                background: "rgba(0, 255, 255, 0.05)",
+                border: "1px solid rgba(0, 255, 255, 0.2)",
+                borderRadius: "8px",
+                textAlign: "center"
+              }}>
+                <div style={{ fontSize: "0.85rem", color: "#888", marginBottom: "5px" }}>Prize Pool</div>
+                <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#00ffff" }}>$1,000</div>
               </div>
             </div>
 
