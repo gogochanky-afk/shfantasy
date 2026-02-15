@@ -4,8 +4,8 @@
  */
 
 // This will be set by the build process or environment
-export const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
-export const BUILD_ID = import.meta.env.VITE_BUILD_ID || 'local';
+export const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.1';
+export const BUILD_ID = import.meta.env.VITE_BUILD_ID || 'fix-invalid-date-nan';
 
 /**
  * Log version information to console

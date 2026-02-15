@@ -214,7 +214,7 @@ export default function Arena() {
                 >
                   {pools.map((pool) => (
                     <option key={pool.pool_id} value={pool.pool_id}>
-                      {pool.home.abbr} vs {pool.away.abbr} - {formatLockTime(pool.lock_time)}
+                      {pool.home?.abbr || pool.home_abbr || 'TBD'} vs {pool.away?.abbr || pool.away_abbr || 'TBD'} - {formatLockTime(pool.lock_time)}
                     </option>
                   ))}
                 </select>

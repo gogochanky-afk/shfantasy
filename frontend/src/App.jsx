@@ -10,8 +10,9 @@ function getRemainingSeconds(pool) {
   if (!pool) return 0;
   
   // Priority 1: Use lock_in if available (DEMO mode)
-  if (typeof pool.lock_in === 'number') {
-    return Math.max(0, pool.lock_in);
+  // lock_in is already in seconds, use directly
+  if (typeof pool.lock_in === 'number' && pool.lock_in >= 0) {
+    return Math.max(0, Math.floor(pool.lock_in));
   }
   
   // Priority 2: Calculate from lock_at if valid ISO string
@@ -142,9 +143,9 @@ function PoolCard({ pool }) {
         <span className={`status-badge ${pool.status.toLowerCase()}`}>{pool.status}</span>
       </div>
       <div className="pool-matchup">
-        <span>{pool.home?.abbr || 'HOME'}</span>
+        <span>{pool.home?.abbr || pool.home_abbr || 'TBD'}</span>
         <span className="vs">vs</span>
-        <span>{pool.away?.abbr || 'AWAY'}</span>
+        <span>{pool.away?.abbr || pool.away_abbr || 'TBD'}</span>
       </div>
       <div className="pool-info">
         <div>Locks in: {formatMMSS(remaining)}</div>
@@ -409,7 +410,7 @@ function MyEntriesPage() {
               >
                 {pools.map((pool) => (
                   <option key={pool.pool_id} value={pool.pool_id}>
-                    {pool.home?.abbr} vs {pool.away?.abbr} ({pool.status})
+                    {pool.home?.abbr || pool.home_abbr || 'TBD'} vs {pool.away?.abbr || pool.away_abbr || 'TBD'} ({pool.status})
                   </option>
                 ))}
               </select>

@@ -178,11 +178,15 @@ export default function Leaderboard() {
                 fontSize: "1rem",
               }}
             >
-              {pools.map((pool) => (
-                <option key={pool.pool_id} value={pool.pool_id}>
-                  {pool.home.abbr} vs {pool.away.abbr} - {new Date(pool.lock_time).toLocaleString()}
-                </option>
-              ))}
+              {pools.map((pool) => {
+                const lockTime = pool.lock_time ? new Date(pool.lock_time) : null;
+                const lockTimeStr = lockTime && !isNaN(lockTime.getTime()) ? lockTime.toLocaleString() : 'TBD';
+                return (
+                  <option key={pool.pool_id} value={pool.pool_id}>
+                    {pool.home?.abbr || pool.home_abbr || 'TBD'} vs {pool.away?.abbr || pool.away_abbr || 'TBD'} - {lockTimeStr}
+                  </option>
+                );
+              })}
             </select>
           </div>
         )}
