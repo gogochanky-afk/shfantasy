@@ -48,18 +48,23 @@ export default function Leaderboard() {
       });
   };
 
-  // Auto-refresh every 60 seconds
+  // Auto-refresh: 5s when LOCKED, 60s otherwise
   useEffect(() => {
     if (!selectedPool) return;
 
+    // Determine refresh interval based on pool status
+    const isLocked = selectedPool.status === 'LOCKED';
+    const refreshDuration = isLocked ? 5 : 60; // 5s when locked, 60s otherwise
+
     // Initial fetch
     fetchData();
+    setNextRefreshIn(refreshDuration);
 
     // Countdown timer
     const countdownInterval = setInterval(() => {
       setNextRefreshIn((prev) => {
         if (prev <= 1) {
-          return 60;
+          return refreshDuration;
         }
         return prev - 1;
       });
@@ -68,8 +73,8 @@ export default function Leaderboard() {
     // Auto-refresh interval
     const refreshInterval = setInterval(() => {
       fetchData();
-      setNextRefreshIn(60);
-    }, 60 * 1000);
+      setNextRefreshIn(refreshDuration);
+    }, refreshDuration * 1000);
 
     return () => {
       clearInterval(countdownInterval);
