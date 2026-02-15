@@ -11,6 +11,8 @@ export default function Arena() {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [dataMode, setDataMode] = useState("unknown");
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [isLocked, setIsLocked] = useState(false);
 
   // Fetch pools
   useEffect(() => {
@@ -31,6 +33,31 @@ export default function Arena() {
         setLoading(false);
       });
   }, []);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!selectedPool) return;
+
+    const updateTimer = () => {
+      const now = new Date();
+      const lockTime = new Date(selectedPool.lock_time);
+      const diff = lockTime - now;
+
+      if (diff <= 0) {
+        setIsLocked(true);
+        setTimeRemaining("LOCKED");
+      } else {
+        setIsLocked(false);
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        setTimeRemaining(`${minutes}m ${seconds}s`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [selectedPool]);
 
   // Fetch roster when pool changes
   useEffect(() => {
@@ -54,6 +81,8 @@ export default function Arena() {
   }, [selectedPool]);
 
   const togglePlayer = (player) => {
+    if (isLocked) return; // Disable selection when locked
+
     if (selectedPlayers.find((p) => p.id === player.id)) {
       setSelectedPlayers(selectedPlayers.filter((p) => p.id !== player.id));
     } else {
@@ -64,7 +93,7 @@ export default function Arena() {
   };
 
   const totalCost = selectedPlayers.reduce((sum, p) => sum + p.price, 0);
-  const isValid = selectedPlayers.length === 5 && totalCost <= 10;
+  const isValid = selectedPlayers.length === 5 && totalCost <= 10 && !isLocked;
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -181,12 +210,36 @@ export default function Arena() {
               borderRadius: "8px", 
               marginBottom: "30px" 
             }}>
-              <h2 style={{ fontSize: "1.5rem", marginBottom: "10px" }}>
-                {selectedPool.home.abbr} vs {selectedPool.away.abbr}
-              </h2>
-              <div style={{ display: "flex", gap: "20px", color: "#888" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <h2 style={{ fontSize: "1.5rem" }}>
+                  {selectedPool.home.abbr} vs {selectedPool.away.abbr}
+                </h2>
+                {isLocked ? (
+                  <div style={{ 
+                    background: "#ff4444", 
+                    color: "#fff",
+                    padding: "6px 16px", 
+                    borderRadius: "4px",
+                    fontSize: "0.9rem",
+                    fontWeight: "bold"
+                  }}>
+                    🔒 LOCKED
+                  </div>
+                ) : (
+                  <div style={{ 
+                    background: "#4ade80", 
+                    color: "#000",
+                    padding: "6px 16px", 
+                    borderRadius: "4px",
+                    fontSize: "0.9rem",
+                    fontWeight: "bold"
+                  }}>
+                    ⏱️ {timeRemaining}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem" }}>
                 <span>Lock Time: {new Date(selectedPool.lock_time).toLocaleString()}</span>
-                <span>Status: {selectedPool.status}</span>
               </div>
             </div>
 
@@ -262,7 +315,7 @@ export default function Arena() {
                   cursor: isValid && !submitting ? "pointer" : "not-allowed",
                 }}
               >
-                {submitting ? "Submitting..." : "Submit Entry"}
+                {submitting ? "Submitting..." : isLocked ? "Pool Locked" : "Submit Entry"}
               </button>
 
               {!isValid && selectedPlayers.length > 0 && (
@@ -271,8 +324,19 @@ export default function Arena() {
                   marginTop: "10px", 
                   fontSize: "0.9rem" 
                 }}>
-                  {selectedPlayers.length !== 5 && "Select exactly 5 players. "}
-                  {totalCost > 10 && "Total cost exceeds salary cap."}
+                  {isLocked && "Pool is locked. "}
+                  {!isLocked && selectedPlayers.length !== 5 && "Select exactly 5 players. "}
+                  {!isLocked && totalCost > 10 && "Total cost exceeds salary cap."}
+                </p>
+              )}
+              
+              {isLocked && selectedPlayers.length === 0 && (
+                <p style={{ 
+                  color: "#ff4444", 
+                  marginTop: "10px", 
+                  fontSize: "0.9rem" 
+                }}>
+                  🔒 This pool is locked. No new entries allowed.
                 </p>
               )}
             </div>
@@ -298,7 +362,8 @@ export default function Arena() {
                         border: isSelected ? "2px solid #4ade80" : "1px solid #333",
                         padding: "15px",
                         borderRadius: "8px",
-                        cursor: "pointer",
+                        cursor: isLocked ? "not-allowed" : "pointer",
+                        opacity: isLocked ? 0.5 : 1,
                         transition: "all 0.2s",
                       }}
                     >

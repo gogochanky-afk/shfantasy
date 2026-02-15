@@ -149,9 +149,34 @@ export default function Leaderboard() {
               borderRadius: "8px", 
               marginBottom: "30px" 
             }}>
-              <h2 style={{ fontSize: "1.5rem", marginBottom: "10px" }}>
-                {selectedPool.home.abbr} vs {selectedPool.away.abbr}
-              </h2>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <h2 style={{ fontSize: "1.5rem" }}>
+                  {selectedPool.home.abbr} vs {selectedPool.away.abbr}
+                </h2>
+                {new Date() > new Date(selectedPool.lock_time) ? (
+                  <div style={{ 
+                    background: "#ff4444", 
+                    color: "#fff",
+                    padding: "6px 16px", 
+                    borderRadius: "4px",
+                    fontSize: "0.9rem",
+                    fontWeight: "bold"
+                  }}>
+                    🔒 LOCKED
+                  </div>
+                ) : (
+                  <div style={{ 
+                    background: "#4ade80", 
+                    color: "#000",
+                    padding: "6px 16px", 
+                    borderRadius: "4px",
+                    fontSize: "0.9rem",
+                    fontWeight: "bold"
+                  }}>
+                    🟢 LIVE
+                  </div>
+                )}
+              </div>
               <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem" }}>
                 <span>Updated: {new Date(leaderboard.updated_at).toLocaleString()}</span>
                 <span>Entries: {leaderboard.rows.length}</span>

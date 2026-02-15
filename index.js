@@ -37,6 +37,9 @@ function seedDemoPools() {
   const milId = getOrCreateTeam("MIL", "Milwaukee Bucks");
   const bosId = getOrCreateTeam("BOS", "Boston Celtics");
 
+  // Demo pools lock 5 minutes after server start (for testing)
+  const lockTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
   const demoPools = [
     {
       pool_id: `${today}_demo-game-1`,
@@ -44,7 +47,7 @@ function seedDemoPools() {
       sr_game_id: "demo-game-1",
       home_team_id: lalId,
       away_team_id: gswId,
-      lock_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      lock_time: lockTime,
       status: "open",
     },
     {
@@ -53,7 +56,7 @@ function seedDemoPools() {
       sr_game_id: "demo-game-2",
       home_team_id: milId,
       away_team_id: bosId,
-      lock_time: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+      lock_time: lockTime,
       status: "open",
     },
     {
@@ -62,7 +65,7 @@ function seedDemoPools() {
       sr_game_id: "demo-game-3",
       home_team_id: gswId,
       away_team_id: milId,
-      lock_time: new Date(Date.now() + 26 * 60 * 60 * 1000).toISOString(),
+      lock_time: lockTime,
       status: "open",
     },
   ];
@@ -251,6 +254,16 @@ app.post("/api/entries", (req, res) => {
       return res.status(400).json({
         ok: false,
         error: "Pool not found",
+      });
+    }
+
+    // Validation: pool not locked
+    const now = new Date();
+    const lockTime = new Date(pool.lock_time);
+    if (now > lockTime) {
+      return res.status(400).json({
+        ok: false,
+        error: "Pool locked",
       });
     }
 
