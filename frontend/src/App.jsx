@@ -6,6 +6,7 @@ import './App.css';
 import Arena from './pages/Arena';
 import MyEntries from './pages/MyEntries';
 import HowItWorks from './pages/HowItWorks';
+import Leaderboard from './pages/Leaderboard';
 
 function HomePage() {
   const [healthStatus, setHealthStatus] = useState({ loading: true, ok: false, data: null });
@@ -58,8 +59,11 @@ function HomePage() {
           <Link to="/arena" className="btn btn-primary">
             ⚡ Enter Arena
           </Link>
+          <Link to="/leaderboard" className="btn btn-secondary">
+            🏆 Leaderboard
+          </Link>
           <Link to="/my-entries" className="btn btn-secondary">
-            🏆 My Entries
+            📋 My Entries
           </Link>
           <Link to="/how-it-works" className="btn btn-secondary">
             📖 How It Works
@@ -98,6 +102,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/arena" element={<Arena />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/my-entries" element={<MyEntries />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
       </Routes>

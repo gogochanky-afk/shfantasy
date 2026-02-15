@@ -368,6 +368,95 @@ app.get("/api/entries", (req, res) => {
 });
 
 /**
+ * API: Get leaderboard for a pool
+ */
+app.get("/api/leaderboard", (req, res) => {
+  try {
+    let { pool_id } = req.query;
+
+    // If no pool_id provided, use first available pool
+    if (!pool_id) {
+      const pools = getTodayTomorrowPools();
+      if (pools.length === 0) {
+        return res.json({
+          ok: true,
+          pool_id: null,
+          data_mode: DATA_MODE,
+          updated_at: new Date().toISOString(),
+          rows: [],
+        });
+      }
+      pool_id = pools[0].pool_id;
+    }
+
+    // Get all entries for this pool
+    const allEntries = getAllEntries();
+    const poolEntries = allEntries.filter((e) => e.pool_id === pool_id);
+
+    // Get pool info for roster
+    const pools = getTodayTomorrowPools();
+    const pool = pools.find((p) => p.pool_id === pool_id);
+
+    if (!pool) {
+      return res.status(404).json({
+        ok: false,
+        error: "Pool not found",
+      });
+    }
+
+    // Get roster for player names
+    const roster = getOrGenerateRoster(pool_id, pool.home.abbr, pool.away.abbr);
+
+    // Build leaderboard rows
+    const rows = poolEntries.map((entry) => {
+      const players = entry.player_ids.map((pid) => {
+        const player = roster.players.find((p) => p.id === pid);
+        return player ? player.name : "Unknown";
+      });
+
+      // Calculate projected_score (demo: sum of player prices * 10)
+      const projectedScore = entry.total_cost * 10 + Math.random() * 20;
+
+      return {
+        entry_id: entry.entry_id,
+        username: `demo_user_${entry.entry_id.split("-")[1]}`,
+        total_cost: entry.total_cost,
+        projected_score: Math.round(projectedScore * 10) / 10,
+        players,
+        created_at: entry.created_at,
+      };
+    });
+
+    // Sort by projected_score desc, then created_at asc
+    rows.sort((a, b) => {
+      if (b.projected_score !== a.projected_score) {
+        return b.projected_score - a.projected_score;
+      }
+      return new Date(a.created_at) - new Date(b.created_at);
+    });
+
+    // Add rank
+    rows.forEach((row, index) => {
+      row.rank = index + 1;
+    });
+
+    res.json({
+      ok: true,
+      pool_id,
+      data_mode: DATA_MODE,
+      updated_at: new Date().toISOString(),
+      rows,
+    });
+  } catch (error) {
+    console.error("[API] Error fetching leaderboard:", error);
+    res.status(500).json({
+      ok: false,
+      error: "Failed to fetch leaderboard",
+    });
+  }
+});
+
+/**
  * Serve React frontend (static files from frontend/dist)
  */
 const frontendPath = path.join(__dirname, "frontend", "dist");
