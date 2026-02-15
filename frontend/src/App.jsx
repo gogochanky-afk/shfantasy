@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import './App.css';
+import { getVersionString } from './utils/version';
 
 const API_BASE = '';
 
@@ -449,7 +450,24 @@ function App() {
     return <HomePage />;
   };
 
-  return <div className="app">{renderPage()}</div>;
+  return (
+    <div className="app">
+      {renderPage()}
+      <footer style={{
+        position: 'fixed',
+        bottom: 0,
+        right: 0,
+        padding: '8px 12px',
+        fontSize: '0.75rem',
+        color: '#666',
+        background: 'rgba(0, 0, 0, 0.5)',
+        borderTopLeftRadius: '8px',
+        zIndex: 999
+      }}>
+        {getVersionString()}
+      </footer>
+    </div>
+  );
 }
 
 export default App;

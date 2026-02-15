@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getRemainingSeconds, formatRemainingTime } from '../utils/timeUtils';
 
 export default function GlobalCountdownBar() {
   const [pool, setPool] = useState(null);
@@ -30,19 +31,11 @@ export default function GlobalCountdownBar() {
     if (!pool) return;
 
     const updateCountdown = () => {
-      const now = new Date();
-      const lockTime = new Date(pool.lock_time);
-      const diff = lockTime - now;
-
-      if (diff <= 0) {
-        setCountdown('LOCKED');
-        setIsUrgent(false);
-      } else {
-        const minutes = Math.floor(diff / 60000);
-        const seconds = Math.floor((diff % 60000) / 1000);
-        setCountdown(`${minutes}:${seconds.toString().padStart(2, '0')}`);
-        setIsUrgent(diff <= 30000); // <= 30 seconds
-      }
+      const remainingSeconds = getRemainingSeconds(pool);
+      const formatted = formatRemainingTime(remainingSeconds);
+      
+      setCountdown(formatted);
+      setIsUrgent(remainingSeconds > 0 && remainingSeconds <= 30);
     };
 
     updateCountdown();

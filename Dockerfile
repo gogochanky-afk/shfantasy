@@ -2,8 +2,8 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm and git
+RUN npm install -g pnpm && apk add --no-cache git
 
 # Copy package files
 COPY package*.json ./
@@ -16,8 +16,12 @@ RUN cd frontend && pnpm install
 # Copy source code
 COPY . .
 
-# Build frontend
-RUN cd frontend && pnpm run build
+# Get git commit hash and build frontend with version info
+RUN cd frontend && \
+    export VITE_BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
+    export VITE_APP_VERSION="1.0.0" && \
+    echo "Building with BUILD_ID=$VITE_BUILD_ID" && \
+    pnpm run build
 
 # Expose port
 EXPOSE 8080

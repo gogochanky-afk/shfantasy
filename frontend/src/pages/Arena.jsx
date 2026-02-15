@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getRemainingSeconds, formatRemainingTimeWithUnits } from "../utils/timeUtils";
 
 export default function Arena() {
   const navigate = useNavigate();
@@ -41,23 +42,12 @@ export default function Arena() {
     if (!selectedPool) return;
 
     const updateTimer = () => {
-      const now = new Date();
-      const lockTime = new Date(selectedPool.lock_time);
-      const diff = lockTime - now;
-
-      if (diff <= 0) {
-        setIsLocked(true);
-        setTimeRemaining("LOCKED");
-        setLockingSoon(false);
-      } else {
-        setIsLocked(false);
-        const minutes = Math.floor(diff / 60000);
-        const seconds = Math.floor((diff % 60000) / 1000);
-        setTimeRemaining(`${minutes}m ${seconds}s`);
-        
-        // "Locking soon" when <= 2 minutes
-        setLockingSoon(diff <= 2 * 60 * 1000);
-      }
+      const remainingSeconds = getRemainingSeconds(selectedPool);
+      const formatted = formatRemainingTimeWithUnits(remainingSeconds);
+      
+      setTimeRemaining(formatted);
+      setIsLocked(remainingSeconds === 0);
+      setLockingSoon(remainingSeconds > 0 && remainingSeconds <= 120); // <= 2 minutes
     };
 
     updateTimer();
@@ -128,6 +118,19 @@ export default function Arena() {
     } catch (err) {
       alert(`Failed to submit: ${err.message}`);
       setSubmitting(false);
+    }
+  };
+
+  // Safe date formatting
+  const formatLockTime = (lockTime) => {
+    try {
+      const date = new Date(lockTime);
+      if (isNaN(date.getTime())) {
+        return '--:--';
+      }
+      return date.toLocaleString();
+    } catch {
+      return '--:--';
     }
   };
 
@@ -211,7 +214,7 @@ export default function Arena() {
                 >
                   {pools.map((pool) => (
                     <option key={pool.pool_id} value={pool.pool_id}>
-                      {pool.home.abbr} vs {pool.away.abbr} - {new Date(pool.lock_time).toLocaleString()}
+                      {pool.home.abbr} vs {pool.away.abbr} - {formatLockTime(pool.lock_time)}
                     </option>
                   ))}
                 </select>
@@ -267,7 +270,7 @@ export default function Arena() {
                 fontSize: "0.9rem",
                 marginTop: "15px"
               }}>
-                <span>Lock Time: {new Date(selectedPool.lock_time).toLocaleString()}</span>
+                <span>Lock Time: {formatLockTime(selectedPool.lock_time)}</span>
               </div>
               <div style={{ 
                 marginTop: "20px", 
@@ -301,97 +304,68 @@ export default function Arena() {
                 }}>
                   <span>Players: {selectedPlayers.length}/5</span>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "0.8rem", color: "#888", marginBottom: "2px" }}>
-                      Remaining Credits
-                    </div>
-                    <div style={{ 
-                      fontSize: "2rem", 
-                      fontWeight: "bold",
-                      color: totalCost > 10 ? "#ff4444" : "#4ade80" 
-                    }}>
-                      {10 - totalCost}
+                    <div>Cost: ${totalCost.toFixed(1)}/10</div>
+                    <div style={{ fontSize: "0.85rem", color: totalCost > 10 ? "#ff4444" : "#888" }}>
+                      {totalCost > 10 ? "⚠️ Over budget!" : ""}
                     </div>
                   </div>
                 </div>
-                <div style={{ 
-                  height: "8px", 
-                  background: "#333", 
-                  borderRadius: "4px", 
-                  overflow: "hidden" 
-                }}>
+                
+                {selectedPlayers.length > 0 && (
                   <div style={{ 
-                    height: "100%", 
-                    width: `${(totalCost / 10) * 100}%`, 
-                    background: totalCost > 10 ? "#ff4444" : "#4ade80",
-                    transition: "width 0.3s" 
-                  }} />
-                </div>
+                    marginTop: "15px", 
+                    padding: "15px", 
+                    background: "#0a0a0f", 
+                    borderRadius: "8px",
+                    border: "1px solid #333"
+                  }}>
+                    {selectedPlayers.map((player) => (
+                      <div 
+                        key={player.id} 
+                        style={{ 
+                          display: "flex", 
+                          justifyContent: "space-between", 
+                          padding: "8px 0",
+                          borderBottom: "1px solid #222"
+                        }}
+                      >
+                        <span>{player.name}</span>
+                        <span style={{ color: "#00ffff", fontWeight: "bold" }}>${player.price}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-
-              {selectedPlayers.length > 0 && (
-                <div style={{ marginBottom: "15px" }}>
-                  {selectedPlayers.map((p) => (
-                    <div 
-                      key={p.id} 
-                      style={{ 
-                        display: "flex", 
-                        justifyContent: "space-between", 
-                        padding: "8px 0", 
-                        borderBottom: "1px solid #333" 
-                      }}
-                    >
-                      <span>{p.name} ({p.team})</span>
-                      <span>${p.price}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <button
                 onClick={handleSubmit}
                 disabled={!isValid || submitting}
                 style={{
                   width: "100%",
-                  padding: "12px",
-                  background: isValid && !submitting ? "#4ade80" : "#333",
+                  padding: "15px",
+                  background: isValid && !submitting
+                    ? "linear-gradient(135deg, #00ffff 0%, #0080ff 100%)"
+                    : "#333",
                   color: isValid && !submitting ? "#000" : "#666",
                   border: "none",
                   borderRadius: "8px",
-                  fontSize: "1rem",
+                  fontSize: "1.1rem",
                   fontWeight: "bold",
                   cursor: isValid && !submitting ? "pointer" : "not-allowed",
+                  transition: "all 0.3s",
+                  boxShadow: isValid && !submitting
+                    ? "0 0 20px rgba(0, 255, 255, 0.4)"
+                    : "none",
                 }}
               >
                 {submitting ? "Submitting..." : isLocked ? "Pool Locked" : "Submit Entry"}
               </button>
-
-              {!isValid && selectedPlayers.length > 0 && (
-                <p style={{ 
-                  color: "#ff4444", 
-                  marginTop: "10px", 
-                  fontSize: "0.9rem" 
-                }}>
-                  {isLocked && "Pool is locked. "}
-                  {!isLocked && selectedPlayers.length !== 5 && "Select exactly 5 players. "}
-                  {!isLocked && totalCost > 10 && "Total cost exceeds salary cap."}
-                </p>
-              )}
-              
-              {isLocked && selectedPlayers.length === 0 && (
-                <p style={{ 
-                  color: "#ff4444", 
-                  marginTop: "10px", 
-                  fontSize: "0.9rem" 
-                }}>
-                  🔒 This pool is locked. No new entries allowed.
-                </p>
-              )}
             </div>
 
-            {/* Available Players */}
+            {/* Player Roster */}
             <div>
               <h3 style={{ fontSize: "1.2rem", marginBottom: "15px" }}>
-                Available Players ({roster.mode})
+                Available Players
               </h3>
               <div style={{ 
                 display: "grid", 
@@ -405,32 +379,39 @@ export default function Arena() {
                       key={player.id}
                       onClick={() => togglePlayer(player)}
                       style={{
-                        background: isSelected ? "#2a4a2a" : "#1a1a1a",
-                        border: isSelected ? "2px solid #4ade80" : "1px solid #333",
+                        background: isSelected ? "rgba(0, 255, 255, 0.1)" : "#1a1a1a",
+                        border: isSelected ? "2px solid #00ffff" : "1px solid #333",
                         padding: "15px",
                         borderRadius: "8px",
                         cursor: isLocked ? "not-allowed" : "pointer",
+                        transition: "all 0.3s",
                         opacity: isLocked ? 0.5 : 1,
-                        transition: "all 0.2s",
+                        boxShadow: isSelected ? "0 0 15px rgba(0, 255, 255, 0.3)" : "none",
                       }}
                     >
                       <div style={{ 
                         display: "flex", 
                         justifyContent: "space-between", 
-                        marginBottom: "8px" 
+                        alignItems: "center",
+                        marginBottom: "10px"
                       }}>
-                        <span style={{ fontWeight: "bold" }}>{player.name}</span>
-                        <span style={{ 
-                          background: "#333", 
-                          padding: "2px 8px", 
-                          borderRadius: "4px", 
-                          fontSize: "0.9rem" 
+                        <div style={{ fontWeight: "bold", fontSize: "1rem" }}>{player.name}</div>
+                        <div style={{ 
+                          background: "#00ffff", 
+                          color: "#000", 
+                          padding: "4px 10px", 
+                          borderRadius: "4px",
+                          fontWeight: "bold",
+                          fontSize: "0.9rem"
                         }}>
                           ${player.price}
-                        </span>
+                        </div>
                       </div>
-                      <div style={{ color: "#888", fontSize: "0.9rem" }}>
-                        {player.team} • {player.position}
+                      <div style={{ fontSize: "0.85rem", color: "#888" }}>
+                        {player.team}
+                      </div>
+                      <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "5px" }}>
+                        Avg: {player.avg_points} pts
                       </div>
                     </div>
                   );
