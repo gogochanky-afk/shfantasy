@@ -1,5 +1,8 @@
 const express = require("express");
 const path = require("path");
+const { fetchTodayTomorrowGames } = require("./lib/sportradar");
+const { getOrCreateTeam, upsertPool, getTodayTomorrowPools, saveEntry, getAllEntries } = require("./lib/db");
+const { getOrGenerateRoster } = require("./lib/roster");
 
 const app = express();
 app.use(express.json());
@@ -7,39 +10,73 @@ app.use(express.json());
 // Cloud Run uses PORT env
 const PORT = process.env.PORT || 8080;
 
-// DATA_MODE: "demo" | "live"
-const DATA_MODE = process.env.DATA_MODE || "demo";
+// DATA_MODE: "hybrid" (default), "demo", "live"
+const DATA_MODE = process.env.DATA_MODE || "hybrid";
 
-// In-memory storage for demo entries
-const entries = [];
-let entryIdCounter = 1;
-
-// Demo players data
-const DEMO_PLAYERS = [
-  { id: "p1", name: "LeBron James", team: "LAL", position: "SF", cost: 4 },
-  { id: "p2", name: "Stephen Curry", team: "GSW", position: "PG", cost: 4 },
-  { id: "p3", name: "Giannis Antetokounmpo", team: "MIL", position: "PF", cost: 4 },
-  { id: "p4", name: "Luka Doncic", team: "DAL", position: "PG", cost: 4 },
-  { id: "p5", name: "Nikola Jokic", team: "DEN", position: "C", cost: 4 },
-  { id: "p6", name: "Jayson Tatum", team: "BOS", position: "SF", cost: 3 },
-  { id: "p7", name: "Kevin Durant", team: "PHX", position: "SF", cost: 3 },
-  { id: "p8", name: "Joel Embiid", team: "PHI", position: "C", cost: 3 },
-  { id: "p9", name: "Damian Lillard", team: "MIL", position: "PG", cost: 3 },
-  { id: "p10", name: "Anthony Davis", team: "LAL", position: "PF", cost: 3 },
-  { id: "p11", name: "Devin Booker", team: "PHX", position: "SG", cost: 2 },
-  { id: "p12", name: "Ja Morant", team: "MEM", position: "PG", cost: 2 },
-  { id: "p13", name: "Trae Young", team: "ATL", position: "PG", cost: 2 },
-  { id: "p14", name: "Zion Williamson", team: "NOP", position: "PF", cost: 2 },
-  { id: "p15", name: "Bam Adebayo", team: "MIA", position: "C", cost: 2 },
-  { id: "p16", name: "De'Aaron Fox", team: "SAC", position: "PG", cost: 1 },
-  { id: "p17", name: "Tyrese Haliburton", team: "IND", position: "PG", cost: 1 },
-  { id: "p18", name: "Paolo Banchero", team: "ORL", position: "PF", cost: 1 },
-  { id: "p19", name: "Franz Wagner", team: "ORL", position: "SF", cost: 1 },
-  { id: "p20", name: "Cade Cunningham", team: "DET", position: "PG", cost: 1 },
-];
+console.log(`Starting SHFantasy server...`);
+console.log(`DATA_MODE=${DATA_MODE}`);
+console.log(`TZ=${process.env.TZ || "UTC"}`);
 
 /**
- * API health check (used by frontend + monitoring)
+ * Sync pools from Sportradar (called on startup and periodically)
+ */
+async function syncPools() {
+  if (DATA_MODE === "demo") {
+    console.log("[Sync] Skipping pool sync in demo mode");
+    return;
+  }
+
+  try {
+    console.log("[Sync] Fetching games from Sportradar...");
+    const games = await fetchTodayTomorrowGames();
+
+    if (games.length === 0) {
+      console.log("[Sync] No games found, using existing pools");
+      return;
+    }
+
+    for (const game of games) {
+      const homeTeamId = getOrCreateTeam(
+        game.home_team.alias,
+        game.home_team.name,
+        game.home_team.id
+      );
+      const awayTeamId = getOrCreateTeam(
+        game.away_team.alias,
+        game.away_team.name,
+        game.away_team.id
+      );
+
+      const date = game.scheduled.split("T")[0];
+      const poolId = `${date}_${game.sr_game_id}`;
+
+      upsertPool({
+        pool_id: poolId,
+        date,
+        sr_game_id: game.sr_game_id,
+        home_team_id: homeTeamId,
+        away_team_id: awayTeamId,
+        lock_time: game.scheduled,
+        status: game.status === "scheduled" ? "open" : "locked",
+      });
+
+      console.log(`[Sync] Upserted pool: ${poolId}`);
+    }
+
+    console.log(`[Sync] Successfully synced ${games.length} pools`);
+  } catch (error) {
+    console.error("[Sync] Error syncing pools:", error.message);
+  }
+}
+
+// Sync pools on startup
+syncPools();
+
+// Sync pools every 30 minutes
+setInterval(syncPools, 30 * 60 * 1000);
+
+/**
+ * API health check
  */
 app.get("/api/health", (req, res) => {
   res.json({
@@ -51,108 +88,222 @@ app.get("/api/health", (req, res) => {
 });
 
 /**
- * API: Get available pools with players
+ * API: Get available pools
  */
 app.get("/api/pools", (req, res) => {
-  res.json({
-    ok: true,
-    pools: [
-      {
-        id: "demo-pool-1",
-        name: "NBA Daily Blitz",
-        entry_fee: 5,
-        prize_pool: 100,
-        entries: entries.length,
-        max_entries: 50,
-        salary_cap: 10,
-        required_players: 5,
-        start_time: new Date().toISOString(),
-        players: DEMO_PLAYERS,
-      },
-    ],
-    data_mode: DATA_MODE,
-  });
+  try {
+    const pools = getTodayTomorrowPools();
+
+    if (pools.length === 0) {
+      console.log("[API] No pools in DB, falling back to demo");
+      return res.json({
+        ok: true,
+        data_mode: DATA_MODE === "demo" ? "demo" : "demo_fallback",
+        pools: [{
+          pool_id: "demo-pool-1",
+          date: new Date().toISOString().split("T")[0],
+          home: { abbr: "LAL", name: "Los Angeles Lakers" },
+          away: { abbr: "GSW", name: "Golden State Warriors" },
+          lock_time: new Date().toISOString(),
+          status: "open",
+        }],
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      ok: true,
+      data_mode: DATA_MODE,
+      pools: pools.map((p) => ({
+        pool_id: p.pool_id,
+        date: p.date,
+        home: { abbr: p.home.abbr, name: p.home.name },
+        away: { abbr: p.away.abbr, name: p.away.name },
+        lock_time: p.lock_time,
+        status: p.status,
+      })),
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[API] Error fetching pools:", error);
+    res.status(500).json({
+      ok: false,
+      error: "Failed to fetch pools",
+      data_mode: "error",
+    });
+  }
+});
+
+/**
+ * API: Get roster for a pool
+ */
+app.get("/api/roster", (req, res) => {
+  const { pool_id } = req.query;
+
+  if (!pool_id) {
+    return res.status(400).json({
+      ok: false,
+      error: "pool_id is required",
+    });
+  }
+
+  try {
+    // Get pool info
+    const pools = getTodayTomorrowPools();
+    const pool = pools.find((p) => p.pool_id === pool_id);
+
+    if (!pool) {
+      return res.status(404).json({
+        ok: false,
+        error: "Pool not found",
+      });
+    }
+
+    // Get or generate roster
+    const roster = getOrGenerateRoster(pool_id, pool.home.abbr, pool.away.abbr);
+
+    res.json({
+      ok: true,
+      ...roster,
+    });
+  } catch (error) {
+    console.error("[API] Error fetching roster:", error);
+    res.status(500).json({
+      ok: false,
+      error: "Failed to fetch roster",
+    });
+  }
+});
+
+/**
+ * API: Submit entry
+ */
+app.post("/api/entries", (req, res) => {
+  const { pool_id, player_ids } = req.body;
+
+  try {
+    // Validation: pool exists
+    const pools = getTodayTomorrowPools();
+    const pool = pools.find((p) => p.pool_id === pool_id);
+
+    if (!pool) {
+      return res.status(400).json({
+        ok: false,
+        error: "Pool not found",
+      });
+    }
+
+    // Validation: exactly 5 players
+    if (!player_ids || player_ids.length !== 5) {
+      return res.status(400).json({
+        ok: false,
+        error: "Must select exactly 5 players",
+      });
+    }
+
+    // Get roster
+    const roster = getOrGenerateRoster(pool_id, pool.home.abbr, pool.away.abbr);
+    const players = roster.players;
+
+    // Validation: all players exist
+    const selectedPlayers = player_ids.map((pid) =>
+      players.find((p) => p.id === pid)
+    );
+
+    if (selectedPlayers.some((p) => !p)) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid player ID",
+      });
+    }
+
+    // Validation: total cost <= 10
+    const totalCost = selectedPlayers.reduce((sum, p) => sum + p.price, 0);
+    if (totalCost > 10) {
+      return res.status(400).json({
+        ok: false,
+        error: `Total cost ${totalCost} exceeds salary cap of 10`,
+      });
+    }
+
+    // Create entry
+    const entryId = `entry-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const entry = {
+      entry_id: entryId,
+      pool_id,
+      player_ids,
+      total_cost: totalCost,
+      status: "active",
+      score: 0,
+      rank: null,
+    };
+
+    saveEntry(entry);
+
+    res.json({
+      ok: true,
+      entry_id: entryId,
+      entry,
+    });
+  } catch (error) {
+    console.error("[API] Error creating entry:", error);
+    res.status(500).json({
+      ok: false,
+      error: "Failed to create entry",
+    });
+  }
 });
 
 /**
  * API: Get user entries
  */
 app.get("/api/entries", (req, res) => {
-  res.json({
-    ok: true,
-    entries: entries.map((entry) => ({
-      ...entry,
-      players: entry.player_ids.map((pid) =>
-        DEMO_PLAYERS.find((p) => p.id === pid)
-      ),
-      total_cost: entry.player_ids.reduce((sum, pid) => {
-        const player = DEMO_PLAYERS.find((p) => p.id === pid);
-        return sum + (player ? player.cost : 0);
-      }, 0),
-    })),
-    data_mode: DATA_MODE,
-  });
-});
+  try {
+    const entries = getAllEntries();
 
-/**
- * API: Submit new entry
- */
-app.post("/api/entries", (req, res) => {
-  const { pool_id, player_ids } = req.body;
+    // Enrich entries with pool and player info
+    const enrichedEntries = entries.map((entry) => {
+      const pools = getTodayTomorrowPools();
+      const pool = pools.find((p) => p.pool_id === entry.pool_id);
 
-  // Validation: pool exists
-  if (pool_id !== "demo-pool-1") {
-    return res.status(400).json({
+      if (!pool) {
+        return {
+          ...entry,
+          pool_name: "Unknown Pool",
+          players: [],
+        };
+      }
+
+      const roster = getOrGenerateRoster(entry.pool_id, pool.home.abbr, pool.away.abbr);
+      const players = entry.player_ids.map((pid) =>
+        roster.players.find((p) => p.id === pid)
+      ).filter(Boolean);
+
+      return {
+        id: entry.entry_id,
+        pool_id: entry.pool_id,
+        pool_name: `${pool.home.abbr} vs ${pool.away.abbr}`,
+        players,
+        total_cost: entry.total_cost,
+        status: entry.status,
+        score: entry.score,
+        rank: entry.rank,
+        created_at: entry.created_at,
+      };
+    });
+
+    res.json({
+      ok: true,
+      entries: enrichedEntries,
+      data_mode: DATA_MODE,
+    });
+  } catch (error) {
+    console.error("[API] Error fetching entries:", error);
+    res.status(500).json({
       ok: false,
-      error: "Pool not found",
+      error: "Failed to fetch entries",
     });
   }
-
-  // Validation: exactly 5 players
-  if (!player_ids || player_ids.length !== 5) {
-    return res.status(400).json({
-      ok: false,
-      error: "Must select exactly 5 players",
-    });
-  }
-
-  // Validation: all players exist
-  const players = player_ids.map((pid) => DEMO_PLAYERS.find((p) => p.id === pid));
-  if (players.some((p) => !p)) {
-    return res.status(400).json({
-      ok: false,
-      error: "Invalid player ID",
-    });
-  }
-
-  // Validation: total cost <= 10
-  const totalCost = players.reduce((sum, p) => sum + p.cost, 0);
-  if (totalCost > 10) {
-    return res.status(400).json({
-      ok: false,
-      error: `Total cost ${totalCost} exceeds salary cap of 10`,
-    });
-  }
-
-  // Create entry
-  const entry = {
-    id: `entry-${entryIdCounter++}`,
-    pool_id,
-    pool_name: "NBA Daily Blitz",
-    player_ids,
-    status: "active",
-    score: 0,
-    rank: null,
-    created_at: new Date().toISOString(),
-  };
-
-  entries.push(entry);
-
-  res.json({
-    ok: true,
-    entry_id: entry.id,
-    entry,
-  });
 });
 
 /**
@@ -170,5 +321,5 @@ app.get("*", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`SHFantasy listening on ${PORT}`);
-  console.log(`DATA_MODE=${DATA_MODE}`);
+  console.log(`Frontend path: ${frontendPath}`);
 });

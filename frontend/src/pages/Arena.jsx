@@ -3,23 +3,26 @@ import { Link, useNavigate } from "react-router-dom";
 
 export default function Arena() {
   const navigate = useNavigate();
-  const [pools, setPools] = useState(null);
+  const [pools, setPools] = useState([]);
+  const [selectedPool, setSelectedPool] = useState(null);
+  const [roster, setRoster] = useState(null);
+  const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedPool, setSelectedPool] = useState(null);
-  const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [dataMode, setDataMode] = useState("unknown");
 
+  // Fetch pools
   useEffect(() => {
     fetch("/api/pools")
-      .then((res) => {
-        if (!res.ok) throw new Error("API not ready");
-        return res.json();
-      })
+      .then((res) => res.json())
       .then((data) => {
-        setPools(data);
-        if (data.pools && data.pools.length > 0) {
+        if (data.ok && data.pools.length > 0) {
+          setPools(data.pools);
           setSelectedPool(data.pools[0]);
+          setDataMode(data.data_mode);
+        } else {
+          setError("No pools available");
         }
         setLoading(false);
       })
@@ -28,6 +31,27 @@ export default function Arena() {
         setLoading(false);
       });
   }, []);
+
+  // Fetch roster when pool changes
+  useEffect(() => {
+    if (!selectedPool) return;
+
+    setRoster(null);
+    setSelectedPlayers([]);
+
+    fetch(`/api/roster?pool_id=${selectedPool.pool_id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok) {
+          setRoster(data);
+        } else {
+          setError("Failed to load roster");
+        }
+      })
+      .catch((err) => {
+        setError(err.message);
+      });
+  }, [selectedPool]);
 
   const togglePlayer = (player) => {
     if (selectedPlayers.find((p) => p.id === player.id)) {
@@ -39,7 +63,7 @@ export default function Arena() {
     }
   };
 
-  const totalCost = selectedPlayers.reduce((sum, p) => sum + p.cost, 0);
+  const totalCost = selectedPlayers.reduce((sum, p) => sum + p.price, 0);
   const isValid = selectedPlayers.length === 5 && totalCost <= 10;
 
   const handleSubmit = async () => {
@@ -51,7 +75,7 @@ export default function Arena() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pool_id: selectedPool.id,
+          pool_id: selectedPool.pool_id,
           player_ids: selectedPlayers.map((p) => p.id),
         }),
       });
@@ -84,13 +108,19 @@ export default function Arena() {
         borderBottom: "1px solid #333", 
         paddingBottom: "15px" 
       }}>
-        <h1 style={{ 
-          fontSize: "2rem", 
-          fontWeight: "bold", 
-          marginBottom: "10px" 
-        }}>
-          🏀 Arena
-        </h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+          <h1 style={{ fontSize: "2rem", fontWeight: "bold" }}>🏀 Arena</h1>
+          <div style={{ 
+            background: dataMode === "demo" ? "#444" : "#2a4a2a", 
+            color: dataMode === "demo" ? "#aaa" : "#4ade80",
+            padding: "4px 12px", 
+            borderRadius: "4px",
+            fontSize: "0.9rem",
+            fontWeight: "bold"
+          }}>
+            {dataMode.toUpperCase()}
+          </div>
+        </div>
         <nav style={{ display: "flex", gap: "15px" }}>
           <Link to="/" style={{ color: "#888", textDecoration: "none" }}>Home</Link>
           <Link to="/my-entries" style={{ color: "#888", textDecoration: "none" }}>My Entries</Link>
@@ -107,13 +137,43 @@ export default function Arena() {
             padding: "15px", 
             borderRadius: "8px" 
           }}>
-            <p>⚠️ API not ready</p>
-            <p style={{ color: "#ff4444" }}>{error}</p>
+            <p>⚠️ {error}</p>
           </div>
         )}
         
-        {selectedPool && (
+        {selectedPool && roster && (
           <div>
+            {/* Pool Selector */}
+            {pools.length > 1 && (
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{ display: "block", marginBottom: "8px", color: "#888" }}>
+                  Select Pool:
+                </label>
+                <select
+                  value={selectedPool.pool_id}
+                  onChange={(e) => {
+                    const pool = pools.find((p) => p.pool_id === e.target.value);
+                    setSelectedPool(pool);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    background: "#1a1a1a",
+                    color: "#fff",
+                    border: "1px solid #333",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                  }}
+                >
+                  {pools.map((pool) => (
+                    <option key={pool.pool_id} value={pool.pool_id}>
+                      {pool.home.abbr} vs {pool.away.abbr} - {new Date(pool.lock_time).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Pool Info */}
             <div style={{ 
               background: "#1a1a1a", 
@@ -122,12 +182,11 @@ export default function Arena() {
               marginBottom: "30px" 
             }}>
               <h2 style={{ fontSize: "1.5rem", marginBottom: "10px" }}>
-                {selectedPool.name}
+                {selectedPool.home.abbr} vs {selectedPool.away.abbr}
               </h2>
               <div style={{ display: "flex", gap: "20px", color: "#888" }}>
-                <span>Entry Fee: ${selectedPool.entry_fee}</span>
-                <span>Prize Pool: ${selectedPool.prize_pool}</span>
-                <span>Entries: {selectedPool.entries}/{selectedPool.max_entries}</span>
+                <span>Lock Time: {new Date(selectedPool.lock_time).toLocaleString()}</span>
+                <span>Status: {selectedPool.status}</span>
               </div>
             </div>
 
@@ -182,7 +241,7 @@ export default function Arena() {
                       }}
                     >
                       <span>{p.name} ({p.team})</span>
-                      <span>${p.cost}</span>
+                      <span>${p.price}</span>
                     </div>
                   ))}
                 </div>
@@ -221,14 +280,14 @@ export default function Arena() {
             {/* Available Players */}
             <div>
               <h3 style={{ fontSize: "1.2rem", marginBottom: "15px" }}>
-                Available Players
+                Available Players ({roster.mode})
               </h3>
               <div style={{ 
                 display: "grid", 
                 gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", 
                 gap: "15px" 
               }}>
-                {selectedPool.players.map((player) => {
+                {roster.players.map((player) => {
                   const isSelected = selectedPlayers.find((p) => p.id === player.id);
                   return (
                     <div
@@ -255,7 +314,7 @@ export default function Arena() {
                           borderRadius: "4px", 
                           fontSize: "0.9rem" 
                         }}>
-                          ${player.cost}
+                          ${player.price}
                         </span>
                       </div>
                       <div style={{ color: "#888", fontSize: "0.9rem" }}>
