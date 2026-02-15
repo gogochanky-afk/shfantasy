@@ -1,172 +1,419 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 
-// Pages
-import Arena from './pages/Arena';
-import MyEntries from './pages/MyEntries';
-import HowItWorks from './pages/HowItWorks';
-import Leaderboard from './pages/Leaderboard';
+const API_BASE = '';
 
-// Components
-import GlobalCountdownBar from './components/GlobalCountdownBar';
-
+// ============ Home Page ============
 function HomePage() {
-  const [healthStatus, setHealthStatus] = useState({ loading: true, ok: false, data: null });
-  const [nextPool, setNextPool] = useState(null);
-  const [countdown, setCountdown] = useState(null);
+  const [pools, setPools] = useState([]);
+  const [cycleRemaining, setCycleRemaining] = useState(null);
+  const [dataMode, setDataMode] = useState('');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        const response = await fetch('/api/health');
-        const data = await response.json();
-        setHealthStatus({ loading: false, ok: response.ok, data });
-      } catch (error) {
-        setHealthStatus({ loading: false, ok: false, data: { error: error.message } });
-      }
-    };
-
-    checkHealth();
-    const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch next pool
-  useEffect(() => {
-    const fetchPools = async () => {
-      try {
-        const response = await fetch('/api/pools');
-        const data = await response.json();
-        if (data.ok && data.pools.length > 0) {
-          // Find first OPEN pool
-          const openPool = data.pools.find((p) => p.status === 'OPEN');
-          setNextPool(openPool || data.pools[0]);
-        }
-      } catch (error) {
-        console.error('Error fetching pools:', error);
-      }
-    };
-
     fetchPools();
-    const interval = setInterval(fetchPools, 30000);
+    const interval = setInterval(fetchPools, 30000); // Refresh every 30s
     return () => clearInterval(interval);
   }, []);
 
-  // Countdown timer
   useEffect(() => {
-    if (!nextPool) return;
-
-    const updateCountdown = () => {
-      const now = new Date();
-      const lockTime = new Date(nextPool.lock_time);
-      const diff = lockTime - now;
-
-      if (diff <= 0) {
-        setCountdown('LOCKED');
-      } else {
-        const minutes = Math.floor(diff / 60000);
-        const seconds = Math.floor((diff % 60000) / 1000);
-        setCountdown(`${minutes}:${seconds.toString().padStart(2, '0')}`);
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
+    if (cycleRemaining === null) return;
+    const interval = setInterval(() => {
+      setCycleRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
     return () => clearInterval(interval);
-  }, [nextPool]);
+  }, [cycleRemaining]);
+
+  const fetchPools = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/pools`);
+      const data = await res.json();
+      if (data.ok) {
+        setPools(data.pools || []);
+        setDataMode(data.data_mode || 'demo');
+        // Calculate cycle_remaining_s from first OPEN pool
+        const openPool = data.pools.find((p) => p.status === 'OPEN');
+        if (openPool && openPool.lock_time) {
+          const lockTime = new Date(openPool.lock_time).getTime();
+          const now = Date.now();
+          const remaining = Math.max(0, Math.floor((lockTime - now) / 1000));
+          setCycleRemaining(remaining);
+        }
+      } else {
+        setError('Failed to fetch pools');
+      }
+    } catch (err) {
+      setError('Network error');
+      console.error(err);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (seconds === null) return '--:--';
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const isWarning = cycleRemaining !== null && cycleRemaining <= 30;
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1 className="title">SHFantasy</h1>
-        <div className="status">
-          {healthStatus.loading ? (
-            <span className="status-badge loading">Checking...</span>
-          ) : healthStatus.ok ? (
-            <span className="status-badge online">● Online</span>
-          ) : (
-            <span className="status-badge offline">● Offline</span>
-          )}
+    <div className="page">
+      {/* Sticky Countdown Bar */}
+      <div className={`sticky-bar ${isWarning ? 'warning' : ''}`}>
+        <div className="sticky-content">
+          <span>🔥 Next Game Starts In: {formatTime(cycleRemaining)}</span>
+          <span className="data-mode">DATA: {dataMode.toUpperCase()}</span>
         </div>
-      </header>
+      </div>
 
-      <main className="main">
-        <div className="hero">
-          <h2 className="hero-title">Welcome to SHFantasy</h2>
-          <p className="hero-subtitle">
-            NBA Daily Fantasy Sports - Pick your lineup, compete for prizes
-          </p>
-          {healthStatus.data && (
-            <div className="data-mode">
-              DATA MODE: <strong>{healthStatus.data.data_mode?.toUpperCase() || 'UNKNOWN'}</strong>
-            </div>
-          )}
-          {nextPool && (
-            <div className="next-pool" style={{ marginTop: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.9rem', color: '#888', marginBottom: '5px' }}>Next Pool:</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '5px' }}>
-                {nextPool.home.abbr} vs {nextPool.away.abbr}
-              </div>
-              <div style={{ fontSize: '1rem', color: countdown === 'LOCKED' ? '#ff4444' : '#4ade80' }}>
-                {countdown === 'LOCKED' ? '🔒 LOCKED' : `⏱️ Locks in ${countdown}`}
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="container">
+        <h1 className="title">SHFantasy Alpha</h1>
+        <p className="subtitle">Pick 5 Players. Stay Under $10. Win Big.</p>
 
-        <div className="actions">
-          <Link to="/arena" className="btn btn-primary">
-            ⚡ Enter Arena
-          </Link>
-          <Link to="/leaderboard" className="btn btn-secondary">
-            🏆 Leaderboard
-          </Link>
-          <Link to="/my-entries" className="btn btn-secondary">
-            📋 My Entries
-          </Link>
-          <Link to="/how-it-works" className="btn btn-secondary">
-            📖 How It Works
-          </Link>
-        </div>
-
-        <div className="info-cards">
-          <div className="card">
-            <div className="card-number">1</div>
-            <h3>Choose a Pool</h3>
-            <p>Select from today's NBA games</p>
+        {error && (
+          <div className="error-box">
+            {error} - <button onClick={fetchPools}>Retry</button>
           </div>
-          <div className="card">
-            <div className="card-number">2</div>
-            <h3>Build Your Lineup</h3>
-            <p>Pick 5 players within salary cap</p>
-          </div>
-          <div className="card">
-            <div className="card-number">3</div>
-            <h3>Win Prizes</h3>
-            <p>Top scores share the prize pool</p>
-          </div>
-        </div>
-      </main>
+        )}
 
-      <footer className="footer">
-        <p>© 2026 SHFantasy - Powered by Cloud Run</p>
-      </footer>
+        <div className="pool-grid">
+          {pools.length === 0 && !error && <p>Loading pools...</p>}
+          {pools.map((pool) => (
+            <PoolCard key={pool.pool_id} pool={pool} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-export default function App() {
+function PoolCard({ pool }) {
+  const handleClick = () => {
+    window.location.hash = `#/pool/${pool.pool_id}`;
+  };
+
+  const lockTime = new Date(pool.lock_time);
+  const now = new Date();
+  const remaining = Math.max(0, Math.floor((lockTime - now) / 1000));
+  const isLocked = pool.status === 'LOCKED' || pool.status === 'CLOSED';
+
   return (
-    <BrowserRouter>
-      <GlobalCountdownBar />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/arena" element={<Arena />} />
-        <Route path="/leaderboard" element={<Leaderboard />} />
-        <Route path="/my-entries" element={<MyEntries />} />
-        <Route path="/how-it-works" element={<HowItWorks />} />
-      </Routes>
-    </BrowserRouter>
+    <div className={`pool-card ${isLocked ? 'locked' : ''}`} onClick={!isLocked ? handleClick : null}>
+      <div className="pool-header">
+        <span className={`status-badge ${pool.status.toLowerCase()}`}>{pool.status}</span>
+      </div>
+      <div className="pool-matchup">
+        <span>{pool.home?.abbr || 'HOME'}</span>
+        <span className="vs">vs</span>
+        <span>{pool.away?.abbr || 'AWAY'}</span>
+      </div>
+      <div className="pool-info">
+        <div>Lock: {lockTime.toLocaleTimeString()}</div>
+        {!isLocked && <div className="countdown">{Math.floor(remaining / 60)}m {remaining % 60}s</div>}
+      </div>
+      {!isLocked && <button className="btn-primary">Enter Pool</button>}
+      {isLocked && <div className="locked-text">🔒 Locked</div>}
+    </div>
   );
 }
+
+// ============ Pool Page ============
+function PoolPage({ poolId }) {
+  const [roster, setRoster] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [pool, setPool] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    fetchRoster();
+  }, [poolId]);
+
+  const fetchRoster = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/api/roster?pool_id=${poolId}`);
+      const data = await res.json();
+      if (data.ok) {
+        setRoster(data.players || []);
+        setPool({ pool_id: data.pool_id, mode: data.mode });
+      } else {
+        setError('Failed to fetch roster');
+      }
+    } catch (err) {
+      setError('Network error');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const togglePlayer = (player) => {
+    if (selected.find((p) => p.id === player.id)) {
+      setSelected(selected.filter((p) => p.id !== player.id));
+    } else {
+      if (selected.length < 5) {
+        setSelected([...selected, player]);
+      }
+    }
+  };
+
+  const totalCost = selected.reduce((sum, p) => sum + p.price, 0);
+  const canSubmit = selected.length === 5 && totalCost <= 10;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/entries?user_id=demo_user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pool_id: poolId,
+          lineup: selected.map((p) => ({ player_id: p.id })),
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSuccess(true);
+      } else {
+        alert(`Error: ${data.error || 'Submission failed'}`);
+      }
+    } catch (err) {
+      alert('Network error');
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="page"><div className="container">Loading roster...</div></div>;
+  if (error) return <div className="page"><div className="container"><div className="error-box">{error}</div></div></div>;
+  if (success) {
+    return (
+      <div className="page">
+        <div className="container">
+          <div className="success-box">
+            <h2>✅ Entry Submitted!</h2>
+            <p>Your lineup has been saved.</p>
+            <button className="btn-primary" onClick={() => (window.location.hash = '#/myentries')}>
+              View My Entries
+            </button>
+            <button className="btn-secondary" onClick={() => (window.location.hash = '#/')}>
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page">
+      <div className="container">
+        <button className="btn-back" onClick={() => (window.location.hash = '#/')}>
+          ← Back
+        </button>
+        <h1 className="title">Select Your Lineup</h1>
+        <div className="cap-bar">
+          <span>Selected: {selected.length}/5</span>
+          <span className={totalCost > 10 ? 'cap-exceeded' : ''}>
+            Cost: ${totalCost}/10
+          </span>
+        </div>
+        {totalCost > 10 && <div className="warning-text">⚠️ Cap exceeded! Remove players.</div>}
+
+        <div className="roster-grid">
+          {roster.map((player) => {
+            const isSelected = selected.find((p) => p.id === player.id);
+            return (
+              <div
+                key={player.id}
+                className={`player-card ${isSelected ? 'selected' : ''}`}
+                onClick={() => togglePlayer(player)}
+              >
+                <div className="player-header">
+                  <span className="player-name">{player.name}</span>
+                  <span className="player-price">${player.price}</span>
+                </div>
+                <div className="player-info">
+                  <span className="player-team">{player.team}</span>
+                  <span className="player-pos">{player.position}</span>
+                </div>
+                {player.injury_status && <div className="injury-tag">{player.injury_status}</div>}
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          className="btn-submit"
+          disabled={!canSubmit || submitting}
+          onClick={handleSubmit}
+        >
+          {submitting ? 'Submitting...' : canSubmit ? 'Submit Lineup' : 'Select 5 Players'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============ My Entries Page ============
+function MyEntriesPage() {
+  const [tab, setTab] = useState('entries'); // 'entries' or 'leaderboard'
+  const [entries, setEntries] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [selectedPool, setSelectedPool] = useState(null);
+  const [pools, setPools] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPools();
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'entries') {
+      fetchEntries();
+    } else if (tab === 'leaderboard' && selectedPool) {
+      fetchLeaderboard(selectedPool);
+    }
+  }, [tab, selectedPool]);
+
+  const fetchPools = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/pools`);
+      const data = await res.json();
+      if (data.ok && data.pools.length > 0) {
+        setPools(data.pools);
+        setSelectedPool(data.pools[0].pool_id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchEntries = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/api/entries?user_id=demo_user`);
+      const data = await res.json();
+      if (data.ok) {
+        setEntries(data.entries || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchLeaderboard = async (poolId) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/api/leaderboard?pool_id=${poolId}`);
+      const data = await res.json();
+      if (data.ok) {
+        setLeaderboard(data.rows || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="page">
+      <div className="container">
+        <button className="btn-back" onClick={() => (window.location.hash = '#/')}>
+          ← Back
+        </button>
+        <h1 className="title">My Dashboard</h1>
+
+        <div className="tabs">
+          <button className={tab === 'entries' ? 'tab active' : 'tab'} onClick={() => setTab('entries')}>
+            My Entries
+          </button>
+          <button className={tab === 'leaderboard' ? 'tab active' : 'tab'} onClick={() => setTab('leaderboard')}>
+            Leaderboard
+          </button>
+        </div>
+
+        {tab === 'entries' && (
+          <div>
+            {loading && <p>Loading...</p>}
+            {!loading && entries.length === 0 && <p>No entries yet. Go enter a pool!</p>}
+            {!loading && entries.map((entry) => (
+              <div key={entry.entry_id} className="entry-card">
+                <div className="entry-header">
+                  <span>Entry #{entry.entry_id.slice(-8)}</span>
+                  <span>${entry.total_cost}</span>
+                </div>
+                <div className="entry-info">
+                  <div>Pool: {entry.pool_id}</div>
+                  <div>Players: {entry.player_ids?.length || 0}</div>
+                  <div className="entry-time">{new Date(entry.created_at).toLocaleString()}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'leaderboard' && (
+          <div>
+            {pools.length > 0 && (
+              <select
+                className="pool-select"
+                value={selectedPool}
+                onChange={(e) => setSelectedPool(e.target.value)}
+              >
+                {pools.map((pool) => (
+                  <option key={pool.pool_id} value={pool.pool_id}>
+                    {pool.home?.abbr} vs {pool.away?.abbr} ({pool.status})
+                  </option>
+                ))}
+              </select>
+            )}
+            {loading && <p>Loading...</p>}
+            {!loading && leaderboard.length === 0 && <p>No entries yet for this pool.</p>}
+            {!loading && leaderboard.map((row, idx) => (
+              <div key={row.entry_id} className="leaderboard-row">
+                <span className="rank">#{idx + 1}</span>
+                <span className="username">{row.username}</span>
+                <span className="score">{row.projected_score.toFixed(1)} pts</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============ Main App ============
+function App() {
+  const [route, setRoute] = useState(window.location.hash || '#/');
+
+  useEffect(() => {
+    const handleHashChange = () => setRoute(window.location.hash || '#/');
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const renderPage = () => {
+    if (route === '#/' || route === '') return <HomePage />;
+    if (route.startsWith('#/pool/')) {
+      const poolId = route.split('/')[2];
+      return <PoolPage poolId={poolId} />;
+    }
+    if (route === '#/myentries') return <MyEntriesPage />;
+    return <HomePage />;
+  };
+
+  return <div className="app">{renderPage()}</div>;
+}
+
+export default App;
