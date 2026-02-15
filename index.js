@@ -1,9 +1,8 @@
 const express = require("express");
 const path = require("path");
-const { fetchTodayTomorrowGames } = require("./lib/sportradar");
 const { getOrCreateTeam, upsertPool, getTodayTomorrowPools, saveEntry, getAllEntries } = require("./lib/db");
 const { getOrGenerateRoster } = require("./lib/roster");
-const { runScoringTick, getActiveHotStreaks } = require("./lib/scoring");
+const { startPoolMaintenance } = require("./lib/poolMaintenance");
 
 const app = express();
 app.use(express.json());
@@ -82,63 +81,7 @@ function seedDemoPools() {
 // Seed demo pools on startup
 seedDemoPools();
 
-/**
- * Sync pools from Sportradar (called on startup and periodically)
- */
-async function syncPools() {
-  if (DATA_MODE === "demo") {
-    console.log("[Sync] Skipping pool sync in demo mode");
-    return;
-  }
-
-  try {
-    console.log("[Sync] Fetching games from Sportradar...");
-    const games = await fetchTodayTomorrowGames();
-
-    if (games.length === 0) {
-      console.log("[Sync] No games found, using existing pools");
-      return;
-    }
-
-    for (const game of games) {
-      const homeTeamId = getOrCreateTeam(
-        game.home_team.alias,
-        game.home_team.name,
-        game.home_team.id
-      );
-      const awayTeamId = getOrCreateTeam(
-        game.away_team.alias,
-        game.away_team.name,
-        game.away_team.id
-      );
-
-      const date = game.scheduled.split("T")[0];
-      const poolId = `${date}_${game.sr_game_id}`;
-
-      upsertPool({
-        pool_id: poolId,
-        date,
-        sr_game_id: game.sr_game_id,
-        home_team_id: homeTeamId,
-        away_team_id: awayTeamId,
-        lock_time: game.scheduled,
-        status: game.status === "scheduled" ? "open" : "locked",
-      });
-
-      console.log(`[Sync] Upserted pool: ${poolId}`);
-    }
-
-    console.log(`[Sync] Successfully synced ${games.length} pools`);
-  } catch (error) {
-    console.error("[Sync] Error syncing pools:", error.message);
-  }
-}
-
-// Sync pools on startup
-syncPools();
-
-// Sync pools every 30 minutes
-setInterval(syncPools, 30 * 60 * 1000);
+// Pool auto-maintenance will handle pool creation
 
 /**
  * API health check
@@ -156,22 +99,46 @@ app.get("/api/health", (req, res) => {
  * API: Get available pools
  */
 app.get("/api/pools", (req, res) => {
+  const { db } = require("./lib/db");
+  
   try {
-    const pools = getTodayTomorrowPools();
+    // Get all pools, ordered by status (OPEN first, then LOCKED, then CLOSED)
+    // Limit to 10 most recent pools
+    const pools = db
+      .prepare(
+        `
+      SELECT 
+        p.pool_id,
+        p.date,
+        p.sr_game_id,
+        p.lock_time,
+        p.status,
+        h.abbr as home_abbr,
+        h.name as home_name,
+        a.abbr as away_abbr,
+        a.name as away_name
+      FROM pools p
+      LEFT JOIN nba_teams h ON p.home_team_id = h.id
+      LEFT JOIN nba_teams a ON p.away_team_id = a.id
+      ORDER BY 
+        CASE p.status
+          WHEN 'OPEN' THEN 1
+          WHEN 'LOCKED' THEN 2
+          WHEN 'CLOSED' THEN 3
+          ELSE 4
+        END,
+        p.lock_time DESC
+      LIMIT 10
+    `
+      )
+      .all();
 
     if (pools.length === 0) {
-      console.log("[API] No pools in DB, falling back to demo");
+      console.log("[API] No pools in DB (should not happen with auto-maintenance)");
       return res.json({
         ok: true,
-        data_mode: DATA_MODE === "demo" ? "demo" : "demo_fallback",
-        pools: [{
-          pool_id: "demo-pool-1",
-          date: new Date().toISOString().split("T")[0],
-          home: { abbr: "LAL", name: "Los Angeles Lakers" },
-          away: { abbr: "GSW", name: "Golden State Warriors" },
-          lock_time: new Date().toISOString(),
-          status: "open",
-        }],
+        data_mode: DATA_MODE,
+        pools: [],
         updated_at: new Date().toISOString(),
       });
     }
@@ -182,8 +149,8 @@ app.get("/api/pools", (req, res) => {
       pools: pools.map((p) => ({
         pool_id: p.pool_id,
         date: p.date,
-        home: { abbr: p.home.abbr, name: p.home.name },
-        away: { abbr: p.away.abbr, name: p.away.name },
+        home: { abbr: p.home_abbr, name: p.home_name },
+        away: { abbr: p.away_abbr, name: p.away_name },
         lock_time: p.lock_time,
         status: p.status,
       })),
@@ -282,10 +249,26 @@ app.get("/api/roster", (req, res) => {
 app.post("/api/entries", (req, res) => {
   const { pool_id, player_ids } = req.body;
 
+  const { db } = require("./lib/db");
+  
   try {
     // Validation: pool exists
-    const pools = getTodayTomorrowPools();
-    const pool = pools.find((p) => p.pool_id === pool_id);
+    const pool = db
+      .prepare(
+        `
+      SELECT 
+        p.pool_id,
+        p.status,
+        p.lock_time,
+        h.abbr as home_abbr,
+        a.abbr as away_abbr
+      FROM pools p
+      LEFT JOIN nba_teams h ON p.home_team_id = h.id
+      LEFT JOIN nba_teams a ON p.away_team_id = a.id
+      WHERE p.pool_id = ?
+    `
+      )
+      .get(pool_id);
 
     if (!pool) {
       return res.status(400).json({
@@ -294,11 +277,20 @@ app.post("/api/entries", (req, res) => {
       });
     }
 
-    // Validation: pool not locked
+    // Validation: pool status must be OPEN
+    if (pool.status !== "OPEN") {
+      return res.status(409).json({
+        ok: false,
+        error: "POOL_LOCKED",
+        lock_at: pool.lock_time,
+      });
+    }
+
+    // Validation: lock_time not passed
     const now = new Date();
     const lockTime = new Date(pool.lock_time);
     if (now > lockTime) {
-      return res.status(403).json({
+      return res.status(409).json({
         ok: false,
         error: "POOL_LOCKED",
         lock_at: pool.lock_time,
@@ -314,7 +306,7 @@ app.post("/api/entries", (req, res) => {
     }
 
     // Get roster
-    const roster = getOrGenerateRoster(pool_id, pool.home.abbr, pool.away.abbr);
+    const roster = getOrGenerateRoster(pool_id, pool.home_abbr, pool.away_abbr);
     const players = roster.players;
 
     // Validation: all players exist
@@ -506,89 +498,110 @@ app.get("/api/leaderboard", (req, res) => {
   try {
     let { pool_id } = req.query;
 
-    // If no pool_id provided, use first available pool
+    // If no pool_id provided, use first OPEN or LOCKED pool
     if (!pool_id) {
-      const pools = getTodayTomorrowPools();
-      if (pools.length === 0) {
+      const pool = db
+        .prepare(
+          `
+        SELECT pool_id 
+        FROM pools 
+        WHERE status IN ('OPEN', 'LOCKED') 
+        ORDER BY 
+          CASE status
+            WHEN 'OPEN' THEN 1
+            WHEN 'LOCKED' THEN 2
+          END,
+          lock_time DESC
+        LIMIT 1
+      `
+        )
+        .get();
+
+      if (!pool) {
         return res.json({
           ok: true,
           pool_id: null,
           data_mode: DATA_MODE,
           updated_at: new Date().toISOString(),
           rows: [],
-          hot_streaks: [],
         });
       }
-      pool_id = pools[0].pool_id;
+      pool_id = pool.pool_id;
     }
 
-    // Try to get cached leaderboard
-    const cache = db
-      .prepare("SELECT rows_json, updated_at FROM leaderboard_cache WHERE pool_id = ?")
+    // Get pool status
+    const pool = db
+      .prepare("SELECT status, lock_time FROM pools WHERE pool_id = ?")
       .get(pool_id);
 
-    let rows = [];
-    let updated_at = new Date().toISOString();
+    if (!pool) {
+      return res.status(404).json({
+        ok: false,
+        error: "Pool not found",
+      });
+    }
 
-    if (cache) {
-      rows = JSON.parse(cache.rows_json);
-      updated_at = cache.updated_at;
-    } else {
-      // No cache, build leaderboard from entries directly
-      const entries = db
-        .prepare(
-          `
-        SELECT 
-          e.entry_id,
-          e.username,
-          e.player_ids,
-          e.total_cost,
-          e.created_at,
-          COALESCE(es.points_total, 0) as points_total,
-          COALESCE(es.hot_streak_bonus_total, 0) as hot_streak_bonus_total
-        FROM entries e
-        LEFT JOIN entry_scores es ON e.entry_id = es.entry_id
-        WHERE e.pool_id = ?
-        ORDER BY (COALESCE(es.points_total, 0) + COALESCE(es.hot_streak_bonus_total, 0)) DESC, e.created_at ASC
-      `
-        )
-        .all(pool_id);
+    // Get all entries for this pool
+    const entries = db
+      .prepare(
+        `
+      SELECT 
+        entry_id,
+        username,
+        player_ids,
+        total_cost,
+        created_at
+      FROM entries
+      WHERE pool_id = ?
+    `
+      )
+      .all(pool_id);
 
-      rows = entries.map((entry, index) => ({
-        rank: index + 1,
+    // Generate deterministic demo scores
+    // For LOCKED pools: scores change every minute but are consistent per entry
+    const now = new Date();
+    const minuteTick = Math.floor(now.getTime() / (60 * 1000)); // Changes every minute
+
+    const rows = entries.map((entry, index) => {
+      let score = 0;
+
+      if (pool.status === "LOCKED") {
+        // Demo: base score + minute_tick * small_delta
+        // Use entry_id as seed for consistency
+        const seed = parseInt(entry.entry_id.split("-")[1] || "0", 10);
+        const baseScore = (seed % 50) + 20; // 20-70 base
+        const delta = ((seed + minuteTick) % 10) - 5; // -5 to +5 per minute
+        score = baseScore + delta * 0.5;
+      }
+
+      return {
+        rank: 0, // Will be set after sorting
         entry_id: entry.entry_id,
         username: entry.username,
         total_cost: entry.total_cost,
-        points_total: entry.points_total,
-        hot_streak_bonus_total: entry.hot_streak_bonus_total,
-        total_score: entry.points_total + entry.hot_streak_bonus_total,
+        score: Math.max(0, score), // Never negative
         players: JSON.parse(entry.player_ids),
         created_at: entry.created_at,
-      }));
-    }
+      };
+    });
 
-    // Get active hot streaks
-    const hot_streaks = getActiveHotStreaks(pool_id);
+    // Sort by score DESC, then created_at ASC
+    rows.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(a.created_at) - new Date(b.created_at);
+    });
 
-    // Get pool info for roster (to enrich hot_streaks with player names)
-    const pools = getTodayTomorrowPools();
-    const pool = pools.find((p) => p.pool_id === pool_id);
-
-    if (pool) {
-      const roster = getOrGenerateRoster(pool_id, pool.home.abbr, pool.away.abbr);
-      hot_streaks.forEach((streak) => {
-        const player = roster.players.find((p) => p.id === streak.player_id);
-        streak.player_name = player ? player.name : "Unknown";
-      });
-    }
+    // Assign ranks
+    rows.forEach((row, index) => {
+      row.rank = index + 1;
+    });
 
     res.json({
       ok: true,
       pool_id,
       data_mode: DATA_MODE,
-      updated_at,
+      updated_at: now.toISOString(),
       rows,
-      hot_streaks,
     });
   } catch (error) {
     console.error("[API] Error fetching leaderboard:", error);
@@ -616,14 +629,6 @@ app.listen(PORT, () => {
   console.log(`SHFantasy listening on ${PORT}`);
   console.log(`Frontend path: ${frontendPath}`);
 
-  // Start scoring engine (60s interval)
-  console.log("[Scoring] Starting 60s interval engine...");
-  setInterval(() => {
-    runScoringTick();
-  }, 60 * 1000); // 60 seconds
-
-  // Run first tick immediately
-  setTimeout(() => {
-    runScoringTick();
-  }, 5000); // Wait 5s for DB to settle
+  // Start pool auto-maintenance
+  startPoolMaintenance();
 });

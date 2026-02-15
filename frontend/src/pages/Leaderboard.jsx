@@ -5,7 +5,7 @@ export default function Leaderboard() {
   const [pools, setPools] = useState([]);
   const [selectedPool, setSelectedPool] = useState(null);
   const [leaderboard, setLeaderboard] = useState(null);
-  const [gameStatus, setGameStatus] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dataMode, setDataMode] = useState("unknown");
@@ -32,20 +32,15 @@ export default function Leaderboard() {
       });
   }, []);
 
-  // Fetch leaderboard and game status
+  // Fetch leaderboard
   const fetchData = () => {
     if (!selectedPool) return;
 
-    Promise.all([
-      fetch(`/api/leaderboard?pool_id=${selectedPool.pool_id}`).then((r) => r.json()),
-      fetch(`/api/games/status?poolId=${selectedPool.pool_id}`).then((r) => r.json()),
-    ])
-      .then(([leaderboardData, statusData]) => {
+    fetch(`/api/leaderboard?pool_id=${selectedPool.pool_id}`)
+      .then((r) => r.json())
+      .then((leaderboardData) => {
         if (leaderboardData.ok) {
           setLeaderboard(leaderboardData);
-        }
-        if (statusData.ok) {
-          setGameStatus(statusData);
         }
       })
       .catch((err) => {
@@ -110,25 +105,19 @@ export default function Leaderboard() {
     );
   }
 
-  const statusBadge = gameStatus?.status === "live" ? (
+  const statusBadge = selectedPool?.status === "OPEN" ? (
     <div style={{ background: "#4ade80", color: "#000", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
       🟢 LIVE
     </div>
-  ) : gameStatus?.status === "final" ? (
-    <div style={{ background: "#888", color: "#fff", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
-      ✓ FINAL
-    </div>
-  ) : gameStatus?.status === "scheduled" ? (
-    <div style={{ background: "#ff9800", color: "#fff", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
-      ⏱️ SCHEDULED
-    </div>
-  ) : (
+  ) : selectedPool?.status === "LOCKED" ? (
     <div style={{ background: "#ff4444", color: "#fff", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
       🔒 LOCKED
     </div>
+  ) : (
+    <div style={{ background: "#888", color: "#fff", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
+      ✓ CLOSED
+    </div>
   );
-
-  const hotStreaks = leaderboard?.hot_streaks || [];
 
   return (
     <div style={{ minHeight: "100vh", background: "#0b0b0b", color: "#fff", padding: "20px" }}>
@@ -197,9 +186,6 @@ export default function Leaderboard() {
             </div>
             <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem", marginBottom: "10px" }}>
               <span>Lock Time: {new Date(selectedPool.lock_time).toLocaleString()}</span>
-              {gameStatus?.period && (
-                <span>Q{gameStatus.period} - {gameStatus.clock}</span>
-              )}
             </div>
             <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem" }}>
               <span>Last updated: {leaderboard?.updated_at ? new Date(leaderboard.updated_at).toLocaleTimeString() : "N/A"}</span>
@@ -208,45 +194,7 @@ export default function Leaderboard() {
           </div>
         )}
 
-        {/* Hot Streak Section */}
-        {hotStreaks.length > 0 && (
-          <div style={{ background: "#2a1a1a", border: "2px solid #ff6600", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}>
-            <h3 style={{ fontSize: "1.2rem", marginBottom: "15px", color: "#ff6600" }}>
-              🔥 Hot Streak Now
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {hotStreaks.slice(0, 3).map((streak, index) => {
-                const minutes = Math.floor(streak.ends_in_seconds / 60);
-                const seconds = streak.ends_in_seconds % 60;
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      background: "#1a1a1a",
-                      padding: "12px",
-                      borderRadius: "6px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: "bold", color: "#ff6600" }}>
-                        {streak.player_name || streak.player_id}
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: "#888" }}>
-                        {streak.multiplier}x multiplier • {streak.trigger_note}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: "0.9rem", color: "#ff6600" }}>
-                      Ends in {minutes}:{String(seconds).padStart(2, "0")}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+
 
         {/* Leaderboard Table */}
         {leaderboard && leaderboard.rows.length > 0 ? (
@@ -259,32 +207,23 @@ export default function Leaderboard() {
                     <th style={{ padding: "15px", textAlign: "left", color: "#888" }}>Rank</th>
                     <th style={{ padding: "15px", textAlign: "left", color: "#888" }}>Username</th>
                     <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Score</th>
-                    <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Bonus</th>
-                    <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Total</th>
                     <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Cost</th>
                   </tr>
                 </thead>
                 <tbody>
                   {leaderboard.rows.map((row) => {
-                    const hasHotStreak = row.players.some((pid) =>
-                      hotStreaks.some((s) => s.player_id === pid)
-                    );
                     return (
                       <tr key={row.entry_id} style={{ borderBottom: "1px solid #333" }}>
                         <td style={{ padding: "15px" }}>
                           {row.rank === 1 ? "🥇" : row.rank === 2 ? "🥈" : row.rank === 3 ? "🥉" : `#${row.rank}`}
                         </td>
                         <td style={{ padding: "15px" }}>
-                          {row.username} {hasHotStreak && <span style={{ color: "#ff6600" }}>🔥</span>}
-                        </td>
-                        <td style={{ padding: "15px", textAlign: "right" }}>{row.points_total.toFixed(1)}</td>
-                        <td style={{ padding: "15px", textAlign: "right", color: "#ff6600" }}>
-                          {row.hot_streak_bonus_total > 0 ? `+${row.hot_streak_bonus_total.toFixed(1)}` : "-"}
+                          {row.username}
                         </td>
                         <td style={{ padding: "15px", textAlign: "right", fontWeight: "bold", color: "#4ade80" }}>
-                          {row.total_score.toFixed(1)}
+                          {row.score.toFixed(1)}
                         </td>
-                        <td style={{ padding: "15px", textAlign: "right" }}>{row.total_cost}</td>
+                        <td style={{ padding: "15px", textAlign: "right" }}>{row.total_cost}/10</td>
                       </tr>
                     );
                   })}

@@ -10,6 +10,8 @@ import Leaderboard from './pages/Leaderboard';
 
 function HomePage() {
   const [healthStatus, setHealthStatus] = useState({ loading: true, ok: false, data: null });
+  const [nextPool, setNextPool] = useState(null);
+  const [countdown, setCountdown] = useState(null);
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -26,6 +28,50 @@ function HomePage() {
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch next pool
+  useEffect(() => {
+    const fetchPools = async () => {
+      try {
+        const response = await fetch('/api/pools');
+        const data = await response.json();
+        if (data.ok && data.pools.length > 0) {
+          // Find first OPEN pool
+          const openPool = data.pools.find((p) => p.status === 'OPEN');
+          setNextPool(openPool || data.pools[0]);
+        }
+      } catch (error) {
+        console.error('Error fetching pools:', error);
+      }
+    };
+
+    fetchPools();
+    const interval = setInterval(fetchPools, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!nextPool) return;
+
+    const updateCountdown = () => {
+      const now = new Date();
+      const lockTime = new Date(nextPool.lock_time);
+      const diff = lockTime - now;
+
+      if (diff <= 0) {
+        setCountdown('LOCKED');
+      } else {
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        setCountdown(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [nextPool]);
 
   return (
     <div className="app">
@@ -51,6 +97,17 @@ function HomePage() {
           {healthStatus.data && (
             <div className="data-mode">
               DATA MODE: <strong>{healthStatus.data.data_mode?.toUpperCase() || 'UNKNOWN'}</strong>
+            </div>
+          )}
+          {nextPool && (
+            <div className="next-pool" style={{ marginTop: '20px', padding: '15px', background: '#1a1a1a', borderRadius: '8px' }}>
+              <div style={{ fontSize: '0.9rem', color: '#888', marginBottom: '5px' }}>Next Pool:</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '5px' }}>
+                {nextPool.home.abbr} vs {nextPool.away.abbr}
+              </div>
+              <div style={{ fontSize: '1rem', color: countdown === 'LOCKED' ? '#ff4444' : '#4ade80' }}>
+                {countdown === 'LOCKED' ? '🔒 LOCKED' : `⏱️ Locks in ${countdown}`}
+              </div>
             </div>
           )}
         </div>
