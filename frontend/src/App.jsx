@@ -33,11 +33,8 @@ function HomePage() {
         setDataMode(data.data_mode || 'demo');
         // Calculate cycle_remaining_s from first OPEN pool
         const openPool = data.pools.find((p) => p.status === 'OPEN');
-        if (openPool && openPool.lock_time) {
-          const lockTime = new Date(openPool.lock_time).getTime();
-          const now = Date.now();
-          const remaining = Math.max(0, Math.floor((lockTime - now) / 1000));
-          setCycleRemaining(remaining);
+        if (openPool && openPool.lock_in) {
+          setCycleRemaining(openPool.lock_in);
         }
       } else {
         setError('Failed to fetch pools');
@@ -93,9 +90,7 @@ function PoolCard({ pool }) {
     window.location.hash = `#/pool/${pool.pool_id}`;
   };
 
-  const lockTime = new Date(pool.lock_time);
-  const now = new Date();
-  const remaining = Math.max(0, Math.floor((lockTime - now) / 1000));
+  const remaining = pool.lock_in || 0;
   const isLocked = pool.status === 'LOCKED' || pool.status === 'CLOSED';
 
   return (
