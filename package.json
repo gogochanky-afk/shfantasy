@@ -4,8 +4,8 @@
   "description": "SHFantasy - NBA Daily Fantasy Sports",
   "main": "index.js",
   "scripts": {
+    "build": "cd frontend && pnpm install && pnpm run build && cd ..",
     "start": "node index.js",
-    "build": "cd frontend && pnpm install && pnpm run build",
     "dev": "node index.js"
   },
   "dependencies": {
