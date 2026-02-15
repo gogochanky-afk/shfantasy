@@ -5,8 +5,10 @@ export default function MyEntries() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchEntries = () => {
+    setRefreshing(true);
     fetch("/api/entries")
       .then((res) => {
         if (!res.ok) throw new Error("API not ready");
@@ -15,11 +17,17 @@ export default function MyEntries() {
       .then((data) => {
         setEntries(data.entries || []);
         setLoading(false);
+        setRefreshing(false);
       })
       .catch((err) => {
         setError(err.message);
         setLoading(false);
+        setRefreshing(false);
       });
+  };
+
+  useEffect(() => {
+    fetchEntries();
   }, []);
 
   return (
@@ -34,23 +42,37 @@ export default function MyEntries() {
         borderBottom: "1px solid #333", 
         paddingBottom: "15px" 
       }}>
-        <h1 style={{ 
-          fontSize: "2rem", 
-          fontWeight: "bold", 
-          marginBottom: "10px" 
-        }}>
-          📋 My Entries
-        </h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+          <h1 style={{ fontSize: "2rem", fontWeight: "bold" }}>
+            📋 My Entries
+          </h1>
+          <button
+            onClick={fetchEntries}
+            disabled={refreshing}
+            style={{
+              padding: "8px 16px",
+              background: refreshing ? "#444" : "#4ade80",
+              color: refreshing ? "#888" : "#000",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "0.9rem",
+              fontWeight: "bold",
+              cursor: refreshing ? "not-allowed" : "pointer",
+            }}
+          >
+            {refreshing ? "Refreshing..." : "🔄 Refresh"}
+          </button>
+        </div>
         <nav style={{ display: "flex", gap: "15px" }}>
           <Link to="/" style={{ color: "#888", textDecoration: "none" }}>Home</Link>
           <Link to="/arena" style={{ color: "#888", textDecoration: "none" }}>Arena</Link>
+          <Link to="/leaderboard" style={{ color: "#888", textDecoration: "none" }}>Leaderboard</Link>
           <Link to="/how-it-works" style={{ color: "#888", textDecoration: "none" }}>How It Works</Link>
         </nav>
       </header>
 
       <main>
         {loading && <p>Loading entries...</p>}
-        
         {error && (
           <div style={{ 
             background: "#2a1a1a", 
@@ -58,8 +80,7 @@ export default function MyEntries() {
             padding: "15px", 
             borderRadius: "8px" 
           }}>
-            <p>⚠️ API not ready</p>
-            <p style={{ color: "#ff4444" }}>{error}</p>
+            <p>⚠️ {error}</p>
           </div>
         )}
         
@@ -73,19 +94,19 @@ export default function MyEntries() {
             <p style={{ fontSize: "1.2rem", marginBottom: "20px" }}>
               No entries yet
             </p>
-            <Link 
-              to="/arena" 
-              style={{ 
+            <Link
+              to="/arena"
+              style={{
                 display: "inline-block",
-                padding: "12px 24px",
                 background: "#4ade80",
                 color: "#000",
-                textDecoration: "none",
+                padding: "12px 24px",
                 borderRadius: "8px",
-                fontWeight: "bold"
+                textDecoration: "none",
+                fontWeight: "bold",
               }}
             >
-              Enter a Pool
+              Enter Arena
             </Link>
           </div>
         )}
@@ -94,7 +115,7 @@ export default function MyEntries() {
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             {entries.map((entry) => (
               <div 
-                key={entry.id} 
+                key={entry.id}
                 style={{ 
                   background: "#1a1a1a", 
                   padding: "20px", 
@@ -102,74 +123,121 @@ export default function MyEntries() {
                   border: "1px solid #333"
                 }}
               >
-                {/* Entry Header */}
                 <div style={{ 
                   display: "flex", 
                   justifyContent: "space-between", 
+                  alignItems: "center",
                   marginBottom: "15px",
                   paddingBottom: "15px",
                   borderBottom: "1px solid #333"
                 }}>
                   <div>
-                    <h3 style={{ fontSize: "1.2rem", marginBottom: "5px" }}>
+                    <h3 style={{ fontSize: "1.3rem", marginBottom: "5px" }}>
                       {entry.pool_name}
                     </h3>
                     <p style={{ color: "#888", fontSize: "0.9rem" }}>
-                      {new Date(entry.created_at).toLocaleString()}
+                      Submitted: {new Date(entry.created_at).toLocaleString()}
                     </p>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ 
-                      background: "#2a4a2a", 
-                      color: "#4ade80", 
-                      padding: "4px 12px", 
-                      borderRadius: "4px",
-                      fontSize: "0.9rem",
-                      marginBottom: "5px"
-                    }}>
-                      {entry.status}
+                    <div style={{ fontSize: "0.8rem", color: "#888", marginBottom: "5px" }}>
+                      Total Score
                     </div>
-                    <p style={{ color: "#888", fontSize: "0.9rem" }}>
-                      Score: {entry.score}
-                    </p>
+                    <div style={{ 
+                      fontSize: "2rem", 
+                      fontWeight: "bold",
+                      color: "#4ade80"
+                    }}>
+                      {entry.total_score.toFixed(1)}
+                    </div>
+                    {entry.hot_streak_bonus_total > 0 && (
+                      <div style={{ fontSize: "0.8rem", color: "#ff6600" }}>
+                        🔥 +{entry.hot_streak_bonus_total.toFixed(1)} bonus
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Players List */}
-                <div>
-                  <h4 style={{ 
-                    fontSize: "1rem", 
-                    marginBottom: "10px", 
-                    color: "#888" 
+                <div style={{ 
+                  display: "grid", 
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
+                  gap: "10px",
+                  marginBottom: "15px"
+                }}>
+                  <div style={{ 
+                    background: "#222", 
+                    padding: "12px", 
+                    borderRadius: "6px" 
                   }}>
-                    Lineup (Total Cost: ${entry.total_cost})
+                    <div style={{ fontSize: "0.8rem", color: "#888", marginBottom: "5px" }}>
+                      Base Points
+                    </div>
+                    <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
+                      {entry.points_total.toFixed(1)}
+                    </div>
+                  </div>
+                  <div style={{ 
+                    background: "#222", 
+                    padding: "12px", 
+                    borderRadius: "6px" 
+                  }}>
+                    <div style={{ fontSize: "0.8rem", color: "#888", marginBottom: "5px" }}>
+                      Total Cost
+                    </div>
+                    <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
+                      {entry.total_cost}/10
+                    </div>
+                  </div>
+                  <div style={{ 
+                    background: "#222", 
+                    padding: "12px", 
+                    borderRadius: "6px" 
+                  }}>
+                    <div style={{ fontSize: "0.8rem", color: "#888", marginBottom: "5px" }}>
+                      Last Updated
+                    </div>
+                    <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
+                      {new Date(entry.updated_at).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 style={{ fontSize: "1rem", marginBottom: "10px", color: "#888" }}>
+                    Your Lineup:
                   </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {entry.players.map((player) => (
+                  <div style={{ 
+                    display: "grid", 
+                    gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", 
+                    gap: "10px" 
+                  }}>
+                    {entry.players.map((player, idx) => (
                       <div 
-                        key={player.id} 
+                        key={idx}
                         style={{ 
-                          display: "flex", 
+                          background: "#222", 
+                          padding: "10px", 
+                          borderRadius: "6px",
+                          display: "flex",
                           justifyContent: "space-between",
-                          padding: "10px",
-                          background: "#0f0f0f",
-                          borderRadius: "6px"
+                          alignItems: "center"
                         }}
                       >
                         <div>
-                          <span style={{ fontWeight: "bold" }}>{player.name}</span>
-                          <span style={{ color: "#888", marginLeft: "10px" }}>
-                            {player.team} • {player.position}
-                          </span>
+                          <div style={{ fontWeight: "bold", fontSize: "0.9rem" }}>
+                            {player.name}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#888" }}>
+                            {player.position} • {player.team}
+                          </div>
                         </div>
-                        <span style={{ 
-                          background: "#333", 
-                          padding: "2px 8px", 
-                          borderRadius: "4px",
-                          fontSize: "0.9rem"
+                        <div style={{ 
+                          fontSize: "0.9rem", 
+                          color: "#4ade80",
+                          fontWeight: "bold"
                         }}>
-                          ${player.cost}
-                        </span>
+                          ${player.price}
+                        </div>
                       </div>
                     ))}
                   </div>

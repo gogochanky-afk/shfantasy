@@ -3,6 +3,7 @@ const path = require("path");
 const { fetchTodayTomorrowGames } = require("./lib/sportradar");
 const { getOrCreateTeam, upsertPool, getTodayTomorrowPools, saveEntry, getAllEntries } = require("./lib/db");
 const { getOrGenerateRoster } = require("./lib/roster");
+const { runScoringTick, getActiveHotStreaks } = require("./lib/scoring");
 
 const app = express();
 app.use(express.json());
@@ -37,8 +38,8 @@ function seedDemoPools() {
   const milId = getOrCreateTeam("MIL", "Milwaukee Bucks");
   const bosId = getOrCreateTeam("BOS", "Boston Celtics");
 
-  // Demo pools lock 5 minutes after server start (for testing)
-  const lockTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  // Demo pools lock 10 minutes after server start (for testing)
+  const lockTime = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
   const demoPools = [
     {
@@ -199,6 +200,42 @@ app.get("/api/pools", (req, res) => {
 });
 
 /**
+ * API: Get players for a pool (alias for /api/roster)
+ */
+app.get("/api/pools/:poolId/players", (req, res) => {
+  const { poolId } = req.params;
+
+  try {
+    // Get pool info
+    const pools = getTodayTomorrowPools();
+    const pool = pools.find((p) => p.pool_id === poolId);
+
+    if (!pool) {
+      return res.status(404).json({
+        ok: false,
+        error: "Pool not found",
+      });
+    }
+
+    // Get roster
+    const roster = getOrGenerateRoster(poolId, pool.home.abbr, pool.away.abbr);
+
+    res.json({
+      ok: true,
+      pool_id: poolId,
+      players: roster.players,
+      updated_at: roster.updated_at,
+    });
+  } catch (error) {
+    console.error("[API] Error fetching players:", error);
+    res.status(500).json({
+      ok: false,
+      error: "Failed to fetch players",
+    });
+  }
+});
+
+/**
  * API: Get roster for a pool
  */
 app.get("/api/roster", (req, res) => {
@@ -261,9 +298,10 @@ app.post("/api/entries", (req, res) => {
     const now = new Date();
     const lockTime = new Date(pool.lock_time);
     if (now > lockTime) {
-      return res.status(400).json({
+      return res.status(403).json({
         ok: false,
-        error: "Pool locked",
+        error: "POOL_LOCKED",
+        lock_at: pool.lock_time,
       });
     }
 
@@ -332,10 +370,12 @@ app.post("/api/entries", (req, res) => {
  * API: Get user entries
  */
 app.get("/api/entries", (req, res) => {
+  const { db } = require("./lib/db");
+  
   try {
     const entries = getAllEntries();
 
-    // Enrich entries with pool and player info
+    // Enrich entries with pool, player info, and live scores
     const enrichedEntries = entries.map((entry) => {
       const pools = getTodayTomorrowPools();
       const pool = pools.find((p) => p.pool_id === entry.pool_id);
@@ -345,6 +385,9 @@ app.get("/api/entries", (req, res) => {
           ...entry,
           pool_name: "Unknown Pool",
           players: [],
+          points_total: 0,
+          hot_streak_bonus_total: 0,
+          updated_at: null,
         };
       }
 
@@ -353,6 +396,11 @@ app.get("/api/entries", (req, res) => {
         roster.players.find((p) => p.id === pid)
       ).filter(Boolean);
 
+      // Get live scores from entry_scores
+      const liveScore = db
+        .prepare("SELECT points_total, hot_streak_bonus_total, updated_at FROM entry_scores WHERE entry_id = ?")
+        .get(entry.entry_id);
+
       return {
         id: entry.entry_id,
         pool_id: entry.pool_id,
@@ -360,8 +408,10 @@ app.get("/api/entries", (req, res) => {
         players,
         total_cost: entry.total_cost,
         status: entry.status,
-        score: entry.score,
-        rank: entry.rank,
+        points_total: liveScore?.points_total || 0,
+        hot_streak_bonus_total: liveScore?.hot_streak_bonus_total || 0,
+        total_score: (liveScore?.points_total || 0) + (liveScore?.hot_streak_bonus_total || 0),
+        updated_at: liveScore?.updated_at || entry.created_at,
         created_at: entry.created_at,
       };
     });
@@ -381,9 +431,78 @@ app.get("/api/entries", (req, res) => {
 });
 
 /**
+ * API: Get game status for a pool
+ */
+app.get("/api/games/status", (req, res) => {
+  try {
+    let { poolId } = req.query;
+
+    // If no poolId provided, use first available pool
+    if (!poolId) {
+      const pools = getTodayTomorrowPools();
+      if (pools.length === 0) {
+        return res.json({
+          ok: true,
+          status: "unknown",
+          lock_at: null,
+          updated_at: new Date().toISOString(),
+          period: null,
+          clock: null,
+        });
+      }
+      poolId = pools[0].pool_id;
+    }
+
+    // Get pool info
+    const pools = getTodayTomorrowPools();
+    const pool = pools.find((p) => p.pool_id === poolId);
+
+    if (!pool) {
+      return res.status(404).json({
+        ok: false,
+        error: "Pool not found",
+      });
+    }
+
+    // Demo period/clock (placeholder)
+    const now = new Date();
+    const lockTime = new Date(pool.lock_time);
+    const timeSinceLock = now - lockTime;
+
+    let period = null;
+    let clock = null;
+
+    if (pool.status === "live") {
+      // Demo: simulate quarters
+      const minutesSinceLock = Math.floor(timeSinceLock / 60000);
+      period = Math.min(Math.floor(minutesSinceLock / 12) + 1, 4);
+      const minutesInQuarter = minutesSinceLock % 12;
+      clock = `${11 - minutesInQuarter}:${String(60 - ((timeSinceLock / 1000) % 60)).padStart(2, "0").slice(0, 2)}`;
+    }
+
+    res.json({
+      ok: true,
+      status: pool.status,
+      lock_at: pool.lock_time,
+      updated_at: new Date().toISOString(),
+      period,
+      clock,
+    });
+  } catch (error) {
+    console.error("[API] Error fetching game status:", error);
+    res.status(500).json({
+      ok: false,
+      error: "Failed to fetch game status",
+    });
+  }
+});
+
+/**
  * API: Get leaderboard for a pool
  */
 app.get("/api/leaderboard", (req, res) => {
+  const { db } = require("./lib/db");
+  
   try {
     let { pool_id } = req.query;
 
@@ -397,68 +516,79 @@ app.get("/api/leaderboard", (req, res) => {
           data_mode: DATA_MODE,
           updated_at: new Date().toISOString(),
           rows: [],
+          hot_streaks: [],
         });
       }
       pool_id = pools[0].pool_id;
     }
 
-    // Get all entries for this pool
-    const allEntries = getAllEntries();
-    const poolEntries = allEntries.filter((e) => e.pool_id === pool_id);
+    // Try to get cached leaderboard
+    const cache = db
+      .prepare("SELECT rows_json, updated_at FROM leaderboard_cache WHERE pool_id = ?")
+      .get(pool_id);
 
-    // Get pool info for roster
+    let rows = [];
+    let updated_at = new Date().toISOString();
+
+    if (cache) {
+      rows = JSON.parse(cache.rows_json);
+      updated_at = cache.updated_at;
+    } else {
+      // No cache, build leaderboard from entries directly
+      const entries = db
+        .prepare(
+          `
+        SELECT 
+          e.entry_id,
+          e.username,
+          e.player_ids,
+          e.total_cost,
+          e.created_at,
+          COALESCE(es.points_total, 0) as points_total,
+          COALESCE(es.hot_streak_bonus_total, 0) as hot_streak_bonus_total
+        FROM entries e
+        LEFT JOIN entry_scores es ON e.entry_id = es.entry_id
+        WHERE e.pool_id = ?
+        ORDER BY (COALESCE(es.points_total, 0) + COALESCE(es.hot_streak_bonus_total, 0)) DESC, e.created_at ASC
+      `
+        )
+        .all(pool_id);
+
+      rows = entries.map((entry, index) => ({
+        rank: index + 1,
+        entry_id: entry.entry_id,
+        username: entry.username,
+        total_cost: entry.total_cost,
+        points_total: entry.points_total,
+        hot_streak_bonus_total: entry.hot_streak_bonus_total,
+        total_score: entry.points_total + entry.hot_streak_bonus_total,
+        players: JSON.parse(entry.player_ids),
+        created_at: entry.created_at,
+      }));
+    }
+
+    // Get active hot streaks
+    const hot_streaks = getActiveHotStreaks(pool_id);
+
+    // Get pool info for roster (to enrich hot_streaks with player names)
     const pools = getTodayTomorrowPools();
     const pool = pools.find((p) => p.pool_id === pool_id);
 
-    if (!pool) {
-      return res.status(404).json({
-        ok: false,
-        error: "Pool not found",
+    if (pool) {
+      const roster = getOrGenerateRoster(pool_id, pool.home.abbr, pool.away.abbr);
+      hot_streaks.forEach((streak) => {
+        const player = roster.players.find((p) => p.id === streak.player_id);
+        streak.player_name = player ? player.name : "Unknown";
       });
     }
-
-    // Get roster for player names
-    const roster = getOrGenerateRoster(pool_id, pool.home.abbr, pool.away.abbr);
-
-    // Build leaderboard rows
-    const rows = poolEntries.map((entry) => {
-      const players = entry.player_ids.map((pid) => {
-        const player = roster.players.find((p) => p.id === pid);
-        return player ? player.name : "Unknown";
-      });
-
-      // Calculate projected_score (demo: sum of player prices * 10)
-      const projectedScore = entry.total_cost * 10 + Math.random() * 20;
-
-      return {
-        entry_id: entry.entry_id,
-        username: `demo_user_${entry.entry_id.split("-")[1]}`,
-        total_cost: entry.total_cost,
-        projected_score: Math.round(projectedScore * 10) / 10,
-        players,
-        created_at: entry.created_at,
-      };
-    });
-
-    // Sort by projected_score desc, then created_at asc
-    rows.sort((a, b) => {
-      if (b.projected_score !== a.projected_score) {
-        return b.projected_score - a.projected_score;
-      }
-      return new Date(a.created_at) - new Date(b.created_at);
-    });
-
-    // Add rank
-    rows.forEach((row, index) => {
-      row.rank = index + 1;
-    });
 
     res.json({
       ok: true,
       pool_id,
       data_mode: DATA_MODE,
-      updated_at: new Date().toISOString(),
+      updated_at,
       rows,
+      hot_streaks,
     });
   } catch (error) {
     console.error("[API] Error fetching leaderboard:", error);
@@ -485,4 +615,15 @@ app.get("*", (req, res) => {
 app.listen(PORT, () => {
   console.log(`SHFantasy listening on ${PORT}`);
   console.log(`Frontend path: ${frontendPath}`);
+
+  // Start scoring engine (60s interval)
+  console.log("[Scoring] Starting 60s interval engine...");
+  setInterval(() => {
+    runScoringTick();
+  }, 60 * 1000); // 60 seconds
+
+  // Run first tick immediately
+  setTimeout(() => {
+    runScoringTick();
+  }, 5000); // Wait 5s for DB to settle
 });

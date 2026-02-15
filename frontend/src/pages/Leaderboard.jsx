@@ -5,9 +5,11 @@ export default function Leaderboard() {
   const [pools, setPools] = useState([]);
   const [selectedPool, setSelectedPool] = useState(null);
   const [leaderboard, setLeaderboard] = useState(null);
+  const [gameStatus, setGameStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dataMode, setDataMode] = useState("unknown");
+  const [nextRefreshIn, setNextRefreshIn] = useState(60);
   const [expandedRows, setExpandedRows] = useState(new Set());
 
   // Fetch pools
@@ -30,27 +32,54 @@ export default function Leaderboard() {
       });
   }, []);
 
-  // Fetch leaderboard when pool changes
+  // Fetch leaderboard and game status
+  const fetchData = () => {
+    if (!selectedPool) return;
+
+    Promise.all([
+      fetch(`/api/leaderboard?pool_id=${selectedPool.pool_id}`).then((r) => r.json()),
+      fetch(`/api/games/status?poolId=${selectedPool.pool_id}`).then((r) => r.json()),
+    ])
+      .then(([leaderboardData, statusData]) => {
+        if (leaderboardData.ok) {
+          setLeaderboard(leaderboardData);
+        }
+        if (statusData.ok) {
+          setGameStatus(statusData);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching data:", err);
+      });
+  };
+
+  // Auto-refresh every 60 seconds
   useEffect(() => {
     if (!selectedPool) return;
 
-    setLeaderboard(null);
-    setLoading(true);
+    // Initial fetch
+    fetchData();
 
-    fetch(`/api/leaderboard?pool_id=${selectedPool.pool_id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.ok) {
-          setLeaderboard(data);
-        } else {
-          setError("Failed to load leaderboard");
+    // Countdown timer
+    const countdownInterval = setInterval(() => {
+      setNextRefreshIn((prev) => {
+        if (prev <= 1) {
+          return 60;
         }
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
+        return prev - 1;
       });
+    }, 1000);
+
+    // Auto-refresh interval
+    const refreshInterval = setInterval(() => {
+      fetchData();
+      setNextRefreshIn(60);
+    }, 60 * 1000);
+
+    return () => {
+      clearInterval(countdownInterval);
+      clearInterval(refreshInterval);
+    };
   }, [selectedPool]);
 
   const toggleRow = (entryId) => {
@@ -63,18 +92,47 @@ export default function Leaderboard() {
     setExpandedRows(newExpanded);
   };
 
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0b0b0b", color: "#fff", padding: "20px" }}>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0b0b0b", color: "#fff", padding: "20px" }}>
+        <div style={{ background: "#2a1a1a", border: "1px solid #ff4444", padding: "15px", borderRadius: "8px" }}>
+          <p>⚠️ {error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const statusBadge = gameStatus?.status === "live" ? (
+    <div style={{ background: "#4ade80", color: "#000", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
+      🟢 LIVE
+    </div>
+  ) : gameStatus?.status === "final" ? (
+    <div style={{ background: "#888", color: "#fff", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
+      ✓ FINAL
+    </div>
+  ) : gameStatus?.status === "scheduled" ? (
+    <div style={{ background: "#ff9800", color: "#fff", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
+      ⏱️ SCHEDULED
+    </div>
+  ) : (
+    <div style={{ background: "#ff4444", color: "#fff", padding: "6px 16px", borderRadius: "4px", fontSize: "0.9rem", fontWeight: "bold" }}>
+      🔒 LOCKED
+    </div>
+  );
+
+  const hotStreaks = leaderboard?.hot_streaks || [];
+
   return (
-    <div style={{ 
-      minHeight: "100vh", 
-      background: "#0b0b0b", 
-      color: "#fff", 
-      padding: "20px" 
-    }}>
-      <header style={{ 
-        marginBottom: "30px", 
-        borderBottom: "1px solid #333", 
-        paddingBottom: "15px" 
-      }}>
+    <div style={{ minHeight: "100vh", background: "#0b0b0b", color: "#fff", padding: "20px" }}>
+      <header style={{ marginBottom: "30px", borderBottom: "1px solid #333", paddingBottom: "15px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <h1 style={{ fontSize: "2rem", fontWeight: "bold" }}>🏆 Leaderboard</h1>
           <div style={{ 
@@ -97,291 +155,160 @@ export default function Leaderboard() {
       </header>
 
       <main>
-        {loading && <p>Loading leaderboard...</p>}
-        {error && (
-          <div style={{ 
-            background: "#2a1a1a", 
-            border: "1px solid #ff4444", 
-            padding: "15px", 
-            borderRadius: "8px" 
-          }}>
-            <p>⚠️ {error}</p>
+        {/* Pool Selector */}
+        {pools.length > 1 && (
+          <div style={{ marginBottom: "20px" }}>
+            <label style={{ display: "block", marginBottom: "8px", color: "#888" }}>
+              Select Pool:
+            </label>
+            <select
+              value={selectedPool?.pool_id || ""}
+              onChange={(e) => {
+                const pool = pools.find((p) => p.pool_id === e.target.value);
+                setSelectedPool(pool);
+              }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                background: "#1a1a1a",
+                color: "#fff",
+                border: "1px solid #333",
+                borderRadius: "8px",
+                fontSize: "1rem",
+              }}
+            >
+              {pools.map((pool) => (
+                <option key={pool.pool_id} value={pool.pool_id}>
+                  {pool.home.abbr} vs {pool.away.abbr} - {new Date(pool.lock_time).toLocaleString()}
+                </option>
+              ))}
+            </select>
           </div>
         )}
-        
-        {selectedPool && leaderboard && (
-          <div>
-            {/* Pool Selector */}
-            {pools.length > 1 && (
-              <div style={{ marginBottom: "20px" }}>
-                <label style={{ display: "block", marginBottom: "8px", color: "#888" }}>
-                  Select Pool:
-                </label>
-                <select
-                  value={selectedPool.pool_id}
-                  onChange={(e) => {
-                    const pool = pools.find((p) => p.pool_id === e.target.value);
-                    setSelectedPool(pool);
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    background: "#1a1a1a",
-                    color: "#fff",
-                    border: "1px solid #333",
-                    borderRadius: "8px",
-                    fontSize: "1rem",
-                  }}
-                >
-                  {pools.map((pool) => (
-                    <option key={pool.pool_id} value={pool.pool_id}>
-                      {pool.home.abbr} vs {pool.away.abbr} - {new Date(pool.lock_time).toLocaleString()}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
-            {/* Pool Info */}
-            <div style={{ 
-              background: "#1a1a1a", 
-              padding: "20px", 
-              borderRadius: "8px", 
-              marginBottom: "30px" 
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <h2 style={{ fontSize: "1.5rem" }}>
-                  {selectedPool.home.abbr} vs {selectedPool.away.abbr}
-                </h2>
-                {new Date() > new Date(selectedPool.lock_time) ? (
-                  <div style={{ 
-                    background: "#ff4444", 
-                    color: "#fff",
-                    padding: "6px 16px", 
-                    borderRadius: "4px",
-                    fontSize: "0.9rem",
-                    fontWeight: "bold"
-                  }}>
-                    🔒 LOCKED
-                  </div>
-                ) : (
-                  <div style={{ 
-                    background: "#4ade80", 
-                    color: "#000",
-                    padding: "6px 16px", 
-                    borderRadius: "4px",
-                    fontSize: "0.9rem",
-                    fontWeight: "bold"
-                  }}>
-                    🟢 LIVE
-                  </div>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem" }}>
-                <span>Updated: {new Date(leaderboard.updated_at).toLocaleString()}</span>
-                <span>Entries: {leaderboard.rows.length}</span>
-              </div>
+        {/* Pool Info */}
+        {selectedPool && (
+          <div style={{ background: "#1a1a1a", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+              <h2 style={{ fontSize: "1.5rem" }}>
+                {selectedPool.home.abbr} vs {selectedPool.away.abbr}
+              </h2>
+              {statusBadge}
             </div>
+            <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem", marginBottom: "10px" }}>
+              <span>Lock Time: {new Date(selectedPool.lock_time).toLocaleString()}</span>
+              {gameStatus?.period && (
+                <span>Q{gameStatus.period} - {gameStatus.clock}</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "20px", color: "#888", fontSize: "0.9rem" }}>
+              <span>Last updated: {leaderboard?.updated_at ? new Date(leaderboard.updated_at).toLocaleTimeString() : "N/A"}</span>
+              <span>Next refresh in: {nextRefreshIn}s</span>
+            </div>
+          </div>
+        )}
 
-            {/* Leaderboard Table */}
-            {leaderboard.rows.length === 0 ? (
-              <div style={{ 
-                background: "#1a1a1a", 
-                padding: "40px", 
-                borderRadius: "8px", 
-                textAlign: "center" 
-              }}>
-                <p style={{ fontSize: "1.2rem", color: "#888", marginBottom: "10px" }}>
-                  No entries yet
-                </p>
-                <p style={{ color: "#666" }}>
-                  Be the first to enter this pool!
-                </p>
-                <Link to="/arena">
-                  <button style={{
-                    marginTop: "20px",
-                    padding: "12px 24px",
-                    background: "#4ade80",
-                    color: "#000",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontSize: "1rem",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                  }}>
-                    Enter Arena
-                  </button>
-                </Link>
-              </div>
-            ) : (
-              <div style={{ 
-                background: "#1a1a1a", 
-                borderRadius: "8px", 
-                overflow: "hidden" 
-              }}>
-                {/* Desktop Table */}
-                <div style={{ 
-                  display: window.innerWidth > 768 ? "block" : "none",
-                  overflowX: "auto" 
-                }}>
-                  <table style={{ 
-                    width: "100%", 
-                    borderCollapse: "collapse" 
-                  }}>
-                    <thead>
-                      <tr style={{ 
-                        background: "#222", 
-                        borderBottom: "2px solid #333" 
-                      }}>
-                        <th style={{ padding: "15px", textAlign: "left" }}>Rank</th>
-                        <th style={{ padding: "15px", textAlign: "left" }}>Username</th>
-                        <th style={{ padding: "15px", textAlign: "right" }}>Score</th>
-                        <th style={{ padding: "15px", textAlign: "right" }}>Cost</th>
-                        <th style={{ padding: "15px", textAlign: "center" }}>Players</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaderboard.rows.map((row) => (
-                        <tr 
-                          key={row.entry_id}
-                          style={{ 
-                            borderBottom: "1px solid #333",
-                            cursor: "pointer",
-                            background: expandedRows.has(row.entry_id) ? "#1f1f1f" : "transparent"
-                          }}
-                          onClick={() => toggleRow(row.entry_id)}
-                        >
-                          <td style={{ padding: "15px", fontWeight: "bold" }}>
-                            {row.rank === 1 && "🥇"}
-                            {row.rank === 2 && "🥈"}
-                            {row.rank === 3 && "🥉"}
-                            {row.rank > 3 && `#${row.rank}`}
-                          </td>
-                          <td style={{ padding: "15px" }}>{row.username}</td>
-                          <td style={{ 
-                            padding: "15px", 
-                            textAlign: "right",
-                            fontWeight: "bold",
-                            color: "#4ade80"
-                          }}>
-                            {row.projected_score}
-                          </td>
-                          <td style={{ padding: "15px", textAlign: "right" }}>
-                            ${row.total_cost}
-                          </td>
-                          <td style={{ padding: "15px", textAlign: "center" }}>
-                            {expandedRows.has(row.entry_id) ? "▼" : "▶"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  
-                  {/* Expanded Player Details */}
-                  {leaderboard.rows.map((row) => 
-                    expandedRows.has(row.entry_id) && (
-                      <div 
-                        key={`${row.entry_id}-details`}
-                        style={{ 
-                          padding: "20px", 
-                          background: "#1f1f1f",
-                          borderBottom: "1px solid #333"
-                        }}
-                      >
-                        <h4 style={{ marginBottom: "10px", color: "#888" }}>Players:</h4>
-                        <div style={{ 
-                          display: "grid", 
-                          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", 
-                          gap: "10px" 
-                        }}>
-                          {row.players.map((player, idx) => (
-                            <div 
-                              key={idx}
-                              style={{ 
-                                padding: "8px 12px", 
-                                background: "#2a2a2a", 
-                                borderRadius: "4px" 
-                              }}
-                            >
-                              {player}
-                            </div>
-                          ))}
-                        </div>
+        {/* Hot Streak Section */}
+        {hotStreaks.length > 0 && (
+          <div style={{ background: "#2a1a1a", border: "2px solid #ff6600", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}>
+            <h3 style={{ fontSize: "1.2rem", marginBottom: "15px", color: "#ff6600" }}>
+              🔥 Hot Streak Now
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {hotStreaks.slice(0, 3).map((streak, index) => {
+                const minutes = Math.floor(streak.ends_in_seconds / 60);
+                const seconds = streak.ends_in_seconds % 60;
+                return (
+                  <div
+                    key={index}
+                    style={{
+                      background: "#1a1a1a",
+                      padding: "12px",
+                      borderRadius: "6px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: "bold", color: "#ff6600" }}>
+                        {streak.player_name || streak.player_id}
                       </div>
-                    )
-                  )}
-                </div>
-
-                {/* Mobile Cards */}
-                <div style={{ 
-                  display: window.innerWidth <= 768 ? "block" : "none",
-                  padding: "10px"
-                }}>
-                  {leaderboard.rows.map((row) => (
-                    <div 
-                      key={row.entry_id}
-                      style={{ 
-                        background: "#222", 
-                        padding: "15px", 
-                        borderRadius: "8px", 
-                        marginBottom: "10px",
-                        cursor: "pointer"
-                      }}
-                      onClick={() => toggleRow(row.entry_id)}
-                    >
-                      <div style={{ 
-                        display: "flex", 
-                        justifyContent: "space-between", 
-                        marginBottom: "10px" 
-                      }}>
-                        <span style={{ fontWeight: "bold", fontSize: "1.2rem" }}>
-                          {row.rank === 1 && "🥇"}
-                          {row.rank === 2 && "🥈"}
-                          {row.rank === 3 && "🥉"}
-                          {row.rank > 3 && `#${row.rank}`}
-                          {" "}{row.username}
-                        </span>
-                        <span style={{ 
-                          fontWeight: "bold", 
-                          color: "#4ade80",
-                          fontSize: "1.2rem"
-                        }}>
-                          {row.projected_score}
-                        </span>
+                      <div style={{ fontSize: "0.8rem", color: "#888" }}>
+                        {streak.multiplier}x multiplier • {streak.trigger_note}
                       </div>
-                      <div style={{ 
-                        display: "flex", 
-                        justifyContent: "space-between", 
-                        color: "#888",
-                        fontSize: "0.9rem"
-                      }}>
-                        <span>Cost: ${row.total_cost}</span>
-                        <span>{expandedRows.has(row.entry_id) ? "▼ Hide" : "▶ Show"} Players</span>
-                      </div>
-                      
-                      {expandedRows.has(row.entry_id) && (
-                        <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid #333" }}>
-                          {row.players.map((player, idx) => (
-                            <div 
-                              key={idx}
-                              style={{ 
-                                padding: "6px 10px", 
-                                background: "#1a1a1a", 
-                                borderRadius: "4px",
-                                marginBottom: "5px",
-                                fontSize: "0.9rem"
-                              }}
-                            >
-                              {player}
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <div style={{ fontSize: "0.9rem", color: "#ff6600" }}>
+                      Ends in {minutes}:{String(seconds).padStart(2, "0")}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Leaderboard Table */}
+        {leaderboard && leaderboard.rows.length > 0 ? (
+          <div style={{ background: "#1a1a1a", borderRadius: "8px", overflow: "hidden" }}>
+            {/* Desktop Table */}
+            <div style={{ display: "block" }} className="desktop-table">
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#222", borderBottom: "1px solid #333" }}>
+                    <th style={{ padding: "15px", textAlign: "left", color: "#888" }}>Rank</th>
+                    <th style={{ padding: "15px", textAlign: "left", color: "#888" }}>Username</th>
+                    <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Score</th>
+                    <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Bonus</th>
+                    <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Total</th>
+                    <th style={{ padding: "15px", textAlign: "right", color: "#888" }}>Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.rows.map((row) => {
+                    const hasHotStreak = row.players.some((pid) =>
+                      hotStreaks.some((s) => s.player_id === pid)
+                    );
+                    return (
+                      <tr key={row.entry_id} style={{ borderBottom: "1px solid #333" }}>
+                        <td style={{ padding: "15px" }}>
+                          {row.rank === 1 ? "🥇" : row.rank === 2 ? "🥈" : row.rank === 3 ? "🥉" : `#${row.rank}`}
+                        </td>
+                        <td style={{ padding: "15px" }}>
+                          {row.username} {hasHotStreak && <span style={{ color: "#ff6600" }}>🔥</span>}
+                        </td>
+                        <td style={{ padding: "15px", textAlign: "right" }}>{row.points_total.toFixed(1)}</td>
+                        <td style={{ padding: "15px", textAlign: "right", color: "#ff6600" }}>
+                          {row.hot_streak_bonus_total > 0 ? `+${row.hot_streak_bonus_total.toFixed(1)}` : "-"}
+                        </td>
+                        <td style={{ padding: "15px", textAlign: "right", fontWeight: "bold", color: "#4ade80" }}>
+                          {row.total_score.toFixed(1)}
+                        </td>
+                        <td style={{ padding: "15px", textAlign: "right" }}>{row.total_cost}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: "#1a1a1a", padding: "40px", borderRadius: "8px", textAlign: "center" }}>
+            <p style={{ fontSize: "1.2rem", marginBottom: "20px" }}>No entries yet</p>
+            <Link
+              to="/arena"
+              style={{
+                display: "inline-block",
+                background: "#4ade80",
+                color: "#000",
+                padding: "12px 24px",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: "bold",
+              }}
+            >
+              Enter Arena
+            </Link>
           </div>
         )}
       </main>

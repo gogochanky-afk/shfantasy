@@ -35,6 +35,8 @@ export default function Arena() {
   }, []);
 
   // Countdown timer
+  const [lockingSoon, setLockingSoon] = useState(false);
+
   useEffect(() => {
     if (!selectedPool) return;
 
@@ -46,11 +48,15 @@ export default function Arena() {
       if (diff <= 0) {
         setIsLocked(true);
         setTimeRemaining("LOCKED");
+        setLockingSoon(false);
       } else {
         setIsLocked(false);
         const minutes = Math.floor(diff / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
         setTimeRemaining(`${minutes}m ${seconds}s`);
+        
+        // "Locking soon" when <= 2 minutes
+        setLockingSoon(diff <= 2 * 60 * 1000);
       }
     };
 
@@ -227,14 +233,14 @@ export default function Arena() {
                   </div>
                 ) : (
                   <div style={{ 
-                    background: "#4ade80", 
-                    color: "#000",
+                    background: lockingSoon ? "#ff9800" : "#4ade80", 
+                    color: lockingSoon ? "#fff" : "#000",
                     padding: "6px 16px", 
                     borderRadius: "4px",
                     fontSize: "0.9rem",
                     fontWeight: "bold"
                   }}>
-                    ⏱️ {timeRemaining}
+                    {lockingSoon ? "⚠️ Locking soon" : "⏱️"} {timeRemaining}
                   </div>
                 )}
               </div>
@@ -257,14 +263,22 @@ export default function Arena() {
                 <div style={{ 
                   display: "flex", 
                   justifyContent: "space-between", 
-                  marginBottom: "5px" 
+                  alignItems: "center",
+                  marginBottom: "10px" 
                 }}>
                   <span>Players: {selectedPlayers.length}/5</span>
-                  <span style={{ 
-                    color: totalCost > 10 ? "#ff4444" : "#4ade80" 
-                  }}>
-                    Cost: {totalCost}/10
-                  </span>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "0.8rem", color: "#888", marginBottom: "2px" }}>
+                      Remaining Credits
+                    </div>
+                    <div style={{ 
+                      fontSize: "2rem", 
+                      fontWeight: "bold",
+                      color: totalCost > 10 ? "#ff4444" : "#4ade80" 
+                    }}>
+                      {10 - totalCost}
+                    </div>
+                  </div>
                 </div>
                 <div style={{ 
                   height: "8px", 
