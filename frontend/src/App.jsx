@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 
-function App() {
+// Pages
+import Arena from './pages/Arena';
+import MyEntries from './pages/MyEntries';
+import HowItWorks from './pages/HowItWorks';
+
+function HomePage() {
   const [healthStatus, setHealthStatus] = useState({ loading: true, ok: false, data: null });
 
   useEffect(() => {
@@ -49,12 +55,15 @@ function App() {
         </div>
 
         <div className="actions">
-          <button className="btn btn-primary" onClick={() => alert('Arena coming soon!')}>
+          <Link to="/arena" className="btn btn-primary">
             ⚡ Enter Arena
-          </button>
-          <button className="btn btn-secondary" onClick={() => alert('My Entries coming soon!')}>
+          </Link>
+          <Link to="/my-entries" className="btn btn-secondary">
             🏆 My Entries
-          </button>
+          </Link>
+          <Link to="/how-it-works" className="btn btn-secondary">
+            📖 How It Works
+          </Link>
         </div>
 
         <div className="info-cards">
@@ -83,4 +92,15 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/arena" element={<Arena />} />
+        <Route path="/my-entries" element={<MyEntries />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

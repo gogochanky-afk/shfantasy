@@ -23,6 +23,50 @@ app.get("/api/health", (req, res) => {
 });
 
 /**
+ * API: Get available pools
+ */
+app.get("/api/pools", (req, res) => {
+  // TODO: Replace with real data from database
+  res.json({
+    ok: true,
+    pools: [
+      {
+        id: "demo-pool-1",
+        name: "NBA Daily Blitz",
+        entry_fee: 5,
+        prize_pool: 100,
+        entries: 12,
+        max_entries: 50,
+        start_time: new Date().toISOString(),
+      },
+    ],
+    data_mode: DATA_MODE,
+  });
+});
+
+/**
+ * API: Get user entries
+ */
+app.get("/api/entries", (req, res) => {
+  // TODO: Replace with real data from database
+  res.json({
+    ok: true,
+    entries: [
+      {
+        id: "demo-entry-1",
+        pool_id: "demo-pool-1",
+        pool_name: "NBA Daily Blitz",
+        status: "active",
+        score: 0,
+        rank: null,
+        created_at: new Date().toISOString(),
+      },
+    ],
+    data_mode: DATA_MODE,
+  });
+});
+
+/**
  * Serve React frontend (static files from frontend/dist)
  */
 const frontendPath = path.join(__dirname, "frontend", "dist");
