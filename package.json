@@ -1,15 +1,17 @@
 {
   "name": "shfantasy",
   "version": "1.0.0",
-  "description": "SH Fantasy Cloud Run App",
+  "description": "SHFantasy - NBA Daily Fantasy Sports",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
-  },
-  "engines": {
-    "node": "18.x"
+    "start": "node index.js",
+    "build": "cd frontend && pnpm install && pnpm run build",
+    "dev": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
