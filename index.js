@@ -1,33 +1,27 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
-// ---- Boot logs (for Cloud Run logs) ----
-console.log("BOOT: index.js loaded", new Date().toISOString());
+// ---- Boot logs (for Cloud Run logs)
+console.log("BOOT: index.js loaded");
 console.log("BOOT: NODE_ENV=", process.env.NODE_ENV);
 console.log("BOOT: PORT=", port);
 
-// ---- Health + Ping (keep before static) ----
-app.get("/healthz", (req, res) => {
-  res.status(200).json({ ok: true, service: "shfantasy", ts: new Date().toISOString() });
-});
+// ---- Health + Ping
+app.get("/healthz", (req, res) => res.status(200).send("ok"));
+app.get("/ping", (req, res) => res.status(200).json({ ok: true, message: "pong" }));
 
-app.get("/ping", (req, res) => {
-  res.status(200).json({ ok: true, message: "pong" });
-});
-
-// ---- DEMO fallback games generator (today + tomorrow) ----
+// ---- Demo data helpers
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
 function demoGamesFor(dateStr) {
-  // deterministic fake games for the date (so refresh won't "random")
-  // You can replace this later with Sportradar schedule + DB
   const base = dateStr.replaceAll("-", "");
   return [
     {
@@ -51,71 +45,51 @@ function demoGamesFor(dateStr) {
   ];
 }
 
-function getTodayTomorrowGames() {
+function demoPools() {
   const now = new Date();
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-
-  const d1 = isoDate(today);
-  const d2 = isoDate(tomorrow);
-
-  // Later: try LIVE data from DB/Sportradar, if fail -> fallback
-  const mode = "DEMO";
-  const games = [...demoGamesFor(d1), ...demoGamesFor(d2)];
-  return { mode, games };
-}
-
-// ---- Pools generator (deterministic from gameId + date) ----
-function poolsFromGames(games, mode) {
-  // Daily Blitz pool per game (you can change to per-slate later)
-  return games.map((g) => {
-    const poolId = `${g.date}-${g.gameId}`; // deterministic
-    const lockAt = g.startAt; // lock at start time
-    return {
-      id: poolId,
-      name: `Daily Blitz: ${g.away.code} @ ${g.home.code}`,
-      gameId: g.gameId,
-      date: g.date,
-      lockAt,
-      salaryCap: 10,
-      rosterSize: 5,
-      entryFee: 5,
+  return [
+    {
+      id: "demo-1",
+      name: "Demo Pool",
       prize: 100,
-      mode, // DEMO / LIVE
-    };
+      entry: 5,
+      lockAt: now.toISOString(),
+      mode: "DEMO",
+    },
+  ];
+}
+
+// ---- API routes (ensure these exist)
+app.get("/api/games", (req, res) => {
+  const date = (req.query.date && String(req.query.date)) || isoDate(new Date());
+  return res.status(200).json({ ok: true, mode: "DEMO", games: demoGamesFor(date) });
+});
+
+app.get("/api/pools", (req, res) => {
+  return res.status(200).json({ ok: true, mode: "DEMO", pools: demoPools() });
+});
+
+// ---- Serve frontend if built
+const distDir = path.join(__dirname, "frontend", "dist");
+const indexHtml = path.join(distDir, "index.html");
+
+if (fs.existsSync(indexHtml)) {
+  console.log("BOOT: Serving frontend from", distDir);
+
+  app.use(express.static(distDir));
+
+  // SPA fallback
+  app.get("*", (req, res) => {
+    res.sendFile(indexHtml);
+  });
+} else {
+  console.log("BOOT: frontend not built (missing frontend/dist/index.html)");
+
+  app.get("/", (req, res) => {
+    res
+      .status(200)
+      .send("Backend is running (frontend not built). Try /api/games or /api/pools");
   });
 }
 
-// ---- APIs ----
-app.get(["/api/games", "/games"], (req, res) => {
-  const { mode, games } = getTodayTomorrowGames();
-  res.status(200).json({ ok: true, mode, games });
-});
-
-app.get(["/api/pools", "/pools"], (req, res) => {
-  const { mode, games } = getTodayTomorrowGames();
-  const pools = poolsFromGames(games, mode);
-  res.status(200).json({ ok: true, mode, pools });
-});
-
-// ---- Serve frontend if exists ----
-const frontendDist = path.join(__dirname, "dist");
-app.use(express.static(frontendDist));
-
-// SPA fallback (only for non-API routes)
-app.get("*", (req, res) => {
-  if (req.path.startsWith("/api/")) {
-    return res.status(404).json({ ok: false, message: "Not found" });
-  }
-
-  // If dist/index.html exists, serve it; else show backend ok
-  return res.sendFile(path.join(frontendDist, "index.html"), (err) => {
-    if (err) {
-      res.status(200).send("Backend is running (frontend not built). Try /api/games or /api/pools");
-    }
-  });
-});
-
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+app.listen(port, () => console.log(`Server listening on ${port}`));
