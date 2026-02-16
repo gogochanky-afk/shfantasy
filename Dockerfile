@@ -4,11 +4,15 @@
 FROM node:20-alpine AS frontend
 WORKDIR /frontend
 
-RUN corepack enable
+# Ensure pnpm exists
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# Copy manifest + lockfile (lockfile optional via *)
+COPY frontend/package.json ./
+COPY frontend/pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile || pnpm install
 
+# Copy rest + build
 COPY frontend/. .
 RUN pnpm run build
 
@@ -18,16 +22,17 @@ RUN pnpm run build
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
-# install backend deps
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+# Backend deps (lockfile optional via *)
+COPY package.json ./
+COPY pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile --prod || pnpm install --prod
 
-# copy backend source
+# Backend source
 COPY . .
 
-# copy built frontend into backend folder
+# Built frontend dist -> backend path
 COPY --from=frontend /frontend/dist ./frontend/dist
 
 ENV NODE_ENV=production
