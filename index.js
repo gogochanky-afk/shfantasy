@@ -1,193 +1,66 @@
-const express = require("express");
-const path = require("path");
-const fs = require("fs");
-const Database = require("better-sqlite3");
-const { syncSchedule } = require("./scripts/sync-schedule");
+// ===============================
+// Missing API routes (Hotfix)
+// ===============================
 
-const app = express();
-const port = process.env.PORT || 8080;
+// GET /api/pool?id=POOL_ID  (frontend may call this)
+app.get("/api/pool", (req, res) => {
+  const id = req.query.id;
+  if (!id) return res.status(400).json({ ok: false, error: "missing id" });
 
-app.use(express.json());
-
-// ---- Boot logs (for Cloud Run logs)
-console.log("BOOT: index.js loaded");
-console.log("BOOT: NODE_ENV=", process.env.NODE_ENV);
-console.log("BOOT: PORT=", port);
-
-// ---- DB
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "shfantasy.db");
-const db = new Database(DB_PATH);
-
-function ensureSchema() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS games (
-      gameId TEXT PRIMARY KEY,
-      date TEXT NOT NULL,
-      startAt TEXT,
-      status TEXT,
-      homeCode TEXT,
-      homeName TEXT,
-      awayCode TEXT,
-      awayName TEXT,
-      source TEXT,
-      updatedAt TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_games_date ON games(date);
-  `);
-}
-
-ensureSchema();
-
-// ---- Helpers
-function isoDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-
-function demoGamesFor(dateStr) {
-  const base = dateStr.replaceAll("-", "");
-  return [
-    {
-      gameId: `demo-${base}-001`,
-      date: dateStr,
-      home: { teamId: 1, code: "LAL", name: "Lakers" },
-      away: { teamId: 2, code: "GSW", name: "Warriors" },
-      startAt: `${dateStr}T11:00:00.000Z`,
-      status: "scheduled",
-      dataMode: "DEMO",
-    },
-    {
-      gameId: `demo-${base}-002`,
-      date: dateStr,
-      home: { teamId: 3, code: "BOS", name: "Celtics" },
-      away: { teamId: 4, code: "MIA", name: "Heat" },
-      startAt: `${dateStr}T13:30:00.000Z`,
-      status: "scheduled",
-      dataMode: "DEMO",
-    },
-  ];
-}
-
-function getDbGames(dateStr) {
-  const rows = db
-    .prepare(
-      `SELECT gameId, date, startAt, status, homeCode, homeName, awayCode, awayName FROM games WHERE date=? ORDER BY startAt ASC`
-    )
-    .all(dateStr);
-
-  return rows.map((r, idx) => ({
-    gameId: r.gameId,
-    date: r.date,
-    home: { teamId: idx * 2 + 1, code: r.homeCode || "TBD", name: r.homeName || "TBD" },
-    away: { teamId: idx * 2 + 2, code: r.awayCode || "TBD", name: r.awayName || "TBD" },
-    startAt: r.startAt,
-    status: r.status || "scheduled",
-    dataMode: "LIVE",
-  }));
-}
-
-function getTodayTomorrow() {
-  const today = new Date();
-  const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
-  return [isoDate(today), isoDate(tomorrow)];
-}
-
-function buildPoolsFromGames(games) {
-  // Deterministic poolId: {date}-{gameId}
-  return games.map((g) => {
-    const id = `${g.date}-${g.gameId}`;
-    const name = `Daily Blitz: ${g.away.code} @ ${g.home.code}`;
-    return {
-      id,
-      name,
-      gameId: g.gameId,
-      date: g.date,
-      lockAt: g.startAt,
-      salaryCap: 10,
-      rosterSize: 5,
-      entryFee: 5,
-      prize: 100,
-      mode: g.dataMode, // DEMO or LIVE
-    };
-  });
-}
-
-// ---- Health + Ping
-app.get("/healthz", (req, res) => res.status(200).send("ok"));
-app.get("/ping", (req, res) => res.status(200).json({ ok: true, message: "pong" }));
-
-// ---- Admin: trigger schedule sync (use Cloud Scheduler later)
-// Call: /api/admin/sync-schedule?token=YOUR_TOKEN
-app.get("/api/admin/sync-schedule", async (req, res) => {
-  const token = req.query.token;
-  const expected = process.env.SYNC_TOKEN;
-
-  if (!expected) {
-    return res.status(500).json({ ok: false, error: "SYNC_TOKEN not set" });
-  }
-  if (token !== expected) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
-  }
+  // If you already have a function to list pools, reuse it.
+  // Otherwise, fallback: call your existing /api/pools logic if it's in a function.
+  // Minimal approach: if you store pools in DB, query here. If not, return DEMO from your existing generator.
 
   try {
-    const result = await syncSchedule({ dbPath: DB_PATH });
-    return res.status(200).json(result);
+    // --- DEMO fallback (works even without DB pools table)
+    // If you already have demoPoolsFor(...) or similar, replace below accordingly.
+    const dateStr = id.slice(0, 10); // expecting id like "YYYY-MM-DD-..."
+    const pools = (typeof demoPoolsFor === "function") ? demoPoolsFor(dateStr) : [];
+    const pool = pools.find(p => p.id === id);
+
+    if (!pool) return res.status(404).json({ ok: false, error: "pool not found", id });
+    return res.json({ ok: true, mode: "DEMO", pool });
   } catch (e) {
-    console.error("SYNC_SCHEDULE_ERROR:", e);
-    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+    return res.status(500).json({ ok: false, error: String(e) });
   }
 });
 
-// ---- API: games (DB first; fallback DEMO)
-app.get("/api/games", (req, res) => {
-  const [d1, d2] = getTodayTomorrow();
-
-  const live1 = getDbGames(d1);
-  const live2 = getDbGames(d2);
-
-  const hasLive = live1.length + live2.length > 0;
-  const games = hasLive
-    ? [...live1, ...live2]
-    : [...demoGamesFor(d1), ...demoGamesFor(d2)];
-
-  return res.status(200).json({
-    ok: true,
-    mode: hasLive ? "LIVE" : "DEMO",
-    games,
-  });
+// GET /api/pool/:id  (nice to have)
+app.get("/api/pool/:id", (req, res) => {
+  const id = req.params.id;
+  req.query.id = id;
+  return app._router.handle(req, res, () => {});
 });
 
-// ---- API: pools (built from /api/games logic)
-app.get("/api/pools", (req, res) => {
-  const [d1, d2] = getTodayTomorrow();
-
-  const live1 = getDbGames(d1);
-  const live2 = getDbGames(d2);
-
-  const hasLive = live1.length + live2.length > 0;
-  const games = hasLive
-    ? [...live1, ...live2]
-    : [...demoGamesFor(d1), ...demoGamesFor(d2)];
-
-  const pools = buildPoolsFromGames(games);
-
-  return res.status(200).json({
-    ok: true,
-    mode: hasLive ? "LIVE" : "DEMO",
-    pools,
-  });
+// GET /api/admin/sync-schedule  (manual trigger from browser)
+app.get("/api/admin/sync-schedule", async (req, res) => {
+  try {
+    // If you imported syncSchedule already:
+    // const { syncSchedule } = require("./scripts/sync-schedule");
+    if (typeof syncSchedule !== "function") {
+      return res.status(501).json({ ok: false, error: "syncSchedule() not wired in index.js" });
+    }
+    const result = await syncSchedule({ dryRun: false });
+    return res.json({ ok: true, result });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e) });
+  }
 });
 
-// ---- Serve frontend (if built)
-const distPath = path.join(__dirname, "frontend", "dist");
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
-} else {
-  app.get("/", (req, res) => {
-    res.status(200).send("Backend is running (frontend not built). Try /api/games or /api/pools");
+// GET /api/tokens (so Tokens page can show something real)
+app.get("/api/tokens", (req, res) => {
+  // DEMO wallet: later we bind to user auth + DB
+  return res.json({
+    ok: true,
+    mode: "DEMO",
+    wallet: {
+      balance: 1200,
+      currency: "CREDITS",
+      updatedAt: new Date().toISOString(),
+      history: [
+        { ts: new Date(Date.now() - 86400000).toISOString(), type: "DAILY_BONUS", delta: +50, note: "Login bonus" },
+        { ts: new Date(Date.now() - 3600000).toISOString(), type: "ENTRY_FEE", delta: -5, note: "Entered Daily Blitz" },
+      ],
+    },
   });
-}
-
-app.listen(port, () => {
-  console.log(`BOOT: Server listening on ${port}`);
 });
