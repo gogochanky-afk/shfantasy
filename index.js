@@ -7,21 +7,28 @@ const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
-// ---- Boot logs (Cloud Run Logs Explorer 會見到)
 console.log("BOOT: index.js loaded");
 console.log("BOOT: NODE_ENV=", process.env.NODE_ENV);
 console.log("BOOT: PORT=", port);
-console.log("BOOT: CWD=", process.cwd());
-console.log("BOOT: __dirname=", __dirname);
 
-// ---- Health + Ping
-app.get("/healthz", (req, res) => res.status(200).json({ ok: true, service: "shfantasy" }));
-app.get("/api/ping", (req, res) => res.status(200).json({ ok: true, message: "pong" }));
+/* ================================
+   Health + Ping
+================================ */
+app.get("/healthz", (req, res) => {
+  res.status(200).json({ ok: true });
+});
 
-// ---- Demo helpers
+app.get("/ping", (req, res) => {
+  res.status(200).json({ ok: true, message: "pong" });
+});
+
+/* ================================
+   Demo Helpers
+================================ */
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
+
 function demoGamesFor(dateStr) {
   const base = dateStr.replaceAll("-", "");
   return [
@@ -46,79 +53,75 @@ function demoGamesFor(dateStr) {
   ];
 }
 
-// ---- API: games/pools (DEMO)
+function demoPoolsFor(games) {
+  return games.map((g) => ({
+    id: `${g.date}-${g.gameId}`,
+    name: `Daily Blitz: ${g.away.code} @ ${g.home.code}`,
+    gameId: g.gameId,
+    date: g.date,
+    lockAt: g.startAt,
+    salaryCap: 10,
+    rosterSize: 5,
+    entryFee: 5,
+    prize: 100,
+    mode: "DEMO",
+  }));
+}
+
+/* ================================
+   API
+================================ */
 app.get("/api/games", (req, res) => {
   const today = new Date();
-  const tomorrow = new Date(Date.now() + 86400000);
-  const t1 = isoDate(today);
-  const t2 = isoDate(tomorrow);
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+
+  const dates = [isoDate(today), isoDate(tomorrow)];
+  const games = dates.flatMap((d) => demoGamesFor(d));
+
   res.json({
     ok: true,
     mode: "DEMO",
-    games: [...demoGamesFor(t1), ...demoGamesFor(t2)],
+    games,
   });
 });
 
 app.get("/api/pools", (req, res) => {
-  const lockAt = new Date(Date.now() + 3600 * 1000).toISOString();
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+
+  const dates = [isoDate(today), isoDate(tomorrow)];
+  const games = dates.flatMap((d) => demoGamesFor(d));
+  const pools = demoPoolsFor(games);
+
   res.json({
     ok: true,
     mode: "DEMO",
-    pools: [{ id: "demo-1", name: "Demo Pool", prize: 100, entry: 5, lockAt, mode: "DEMO" }],
+    pools,
   });
 });
 
-// ================================
-// FRONTEND STATIC (Vite dist)
-// ================================
-const distDir = path.join(__dirname, "frontend", "dist");
-const indexHtml = path.join(distDir, "index.html");
+/* ================================
+   Serve Frontend (IMPORTANT)
+================================ */
+const frontendDist = path.join(__dirname, "frontend", "dist");
 
-// ✅ Debug endpoint：用嚟「證據式」確認 dist 有冇入到 container
-app.get("/api/debug/dist", (req, res) => {
-  const existsDist = fs.existsSync(distDir);
-  const existsIndex = fs.existsSync(indexHtml);
+if (fs.existsSync(frontendDist)) {
+  console.log("Serving frontend from:", frontendDist);
 
-  let files = [];
-  try {
-    if (existsDist) files = fs.readdirSync(distDir).slice(0, 200);
-  } catch (e) {
-    files = [`ERROR: ${String(e)}`];
-  }
+  app.use(express.static(frontendDist));
 
-  console.log("BOOT: distDir=", distDir, "exists=", existsDist);
-  console.log("BOOT: indexHtml=", indexHtml, "exists=", existsIndex);
-
-  res.json({
-    ok: true,
-    distDir,
-    existsDist,
-    indexHtml,
-    existsIndex,
-    files,
-  });
-});
-
-// ✅ 正常情況：dist 存在就 serve
-if (fs.existsSync(indexHtml)) {
-  console.log("BOOT: Frontend detected ✅ Serving Vite dist");
-  app.use(express.static(distDir));
-
-  // SPA fallback：所有非 /api 路徑都回 index.html
   app.get("*", (req, res) => {
-    if (req.path.startsWith("/api/")) return res.status(404).json({ ok: false, message: "Not found" });
-    return res.sendFile(indexHtml);
+    res.sendFile(path.join(frontendDist, "index.html"));
   });
 } else {
-  console.log("BOOT: Frontend NOT detected ❌ index.html missing");
-  app.get("/", (req, res) => {
-    res
-      .status(200)
-      .send("Backend is running (frontend not built). Try /api/debug/dist or /api/games or /api/pools");
-  });
-  app.get("*", (req, res) => res.status(404).json({ ok: false, message: "Not found" }));
+  console.log("Frontend build not found, API-only mode");
 }
 
+/* ================================
+   Start Server
+================================ */
 app.listen(port, () => {
-  console.log(`BOOT: listening on ${port}`);
+  console.log(`Server running on port ${port}`);
 });
