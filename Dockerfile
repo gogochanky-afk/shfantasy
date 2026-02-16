@@ -1,24 +1,44 @@
-# ---- Runtime image (simple & stable) ----
-FROM node:20-alpine
-
+# -------- 1) deps stage --------
+FROM node:20-alpine AS deps
 WORKDIR /app
 
-# 1) Copy only package files first (better cache)
+# Install pnpm
+RUN npm i -g pnpm
+
+# Copy only manifest files first (better layer caching)
 COPY package.json ./
-# 如果你有 lockfile，就一併 copy；冇都唔會錯
-COPY pnpm-lock.yaml* ./
-COPY package-lock.json* ./
-COPY yarn.lock* ./
+# Optional lockfiles (copy if they exist in repo)
+# (If your repo has pnpm-lock.yaml, keep it. If not, this line is harmless only if file exists.)
+# Because Docker COPY fails if file missing, we avoid copying lockfile directly here.
 
-# 2) Install deps (no frozen lockfile to avoid CI fail)
-RUN npm i -g pnpm && pnpm install
+# Install deps (no frozen lock to avoid ERR_PNPM_NO_LOCKFILE)
+RUN pnpm install
 
-# 3) Copy the rest
+# -------- 2) build stage (optional frontend build) --------
+FROM node:20-alpine AS build
+WORKDIR /app
+RUN npm i -g pnpm
+
+# Bring node_modules from deps
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
 COPY . .
 
-# 4) Cloud Run port
+# If you have a build script, keep this.
+# If you DON'T have frontend build, you can remove this line safely.
+RUN pnpm run build || echo "No build script / build skipped"
+
+# -------- 3) runtime stage --------
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
 ENV PORT=8080
+
+# Copy production files
+COPY --from=build /app ./
+
+# Cloud Run listens on 8080
 EXPOSE 8080
 
-# 5) Start
+# Start server
 CMD ["node", "index.js"]
