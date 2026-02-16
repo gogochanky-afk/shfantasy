@@ -1,14 +1,9 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
-import { logVersion } from './utils/version'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
 
-// Log version information on startup
-logVersion();
-
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
     <App />
-  </StrictMode>,
-)
+  </React.StrictMode>
+);
