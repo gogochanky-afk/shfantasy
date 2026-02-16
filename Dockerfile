@@ -1,34 +1,41 @@
-# ---------- Base ----------
-FROM node:20-alpine AS base
-WORKDIR /app
+# =========================
+# Frontend build (Vite)
+# =========================
+FROM node:20-alpine AS frontend
+WORKDIR /frontend
 
-# Enable corepack (pnpm)
+# Enable pnpm
 RUN corepack enable
 
-# ---------- Deps ----------
-FROM base AS deps
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile || pnpm install
+# Install deps
+COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
 
-# ---------- Build (optional) ----------
-FROM deps AS build
-COPY . .
-# 如果你有前端 build（例如 Vite/React）就會有 dist/ 或 build/
-# 冇就唔會 fail（因為下面用 || true）
-RUN pnpm run build || true
+# Build
+COPY frontend/ ./
+RUN pnpm run build
 
-# ---------- Runtime ----------
+
+# =========================
+# Backend runtime (Express)
+# =========================
 FROM node:20-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production
-ENV PORT=8080
 
-# corepack for pnpm runtime (optional)
 RUN corepack enable
 
-# Copy node_modules + source
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app ./
+# Install backend deps
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile --prod
 
+# Copy backend source
+COPY . .
+
+# Copy built frontend dist into backend container
+COPY --from=frontend /frontend/dist ./frontend/dist
+
+ENV NODE_ENV=production
+ENV PORT=8080
 EXPOSE 8080
+
 CMD ["node", "index.js"]
