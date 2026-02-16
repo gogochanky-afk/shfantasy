@@ -1,116 +1,49 @@
-// index.js - SH Fantasy (Cloud Run)
-// Stable: health, ping, status, demo fallback APIs
-
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
-
-let Database;
-try {
-  Database = require("better-sqlite3");
-} catch (e) {
-  // If better-sqlite3 fails to load (shouldn't in prod), we still run without DB.
-  Database = null;
-}
+const Database = require("better-sqlite3");
+const { syncSchedule } = require("./scripts/sync-schedule");
 
 const app = express();
 const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
-// -----------------------------
-// Boot logs (Cloud Run)
-// -----------------------------
+// ---- Boot logs (for Cloud Run logs)
 console.log("BOOT: index.js loaded");
 console.log("BOOT: NODE_ENV=", process.env.NODE_ENV);
 console.log("BOOT: PORT=", port);
 
-// -----------------------------
-// DB setup (app_meta for status)
-// -----------------------------
+// ---- DB
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "shfantasy.db");
-let db = null;
-let db_ok = false;
+const db = new Database(DB_PATH);
 
-function initDb() {
-  if (!Database) {
-    console.log("DB: better-sqlite3 not available, running without DB.");
-    db = null;
-    db_ok = false;
-    return;
-  }
-  try {
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS app_meta (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      );
-    `);
-
-    // lightweight sanity
-    db.prepare("SELECT 1").get();
-    db_ok = true;
-    console.log("DB: OK ->", DB_PATH);
-  } catch (e) {
-    db_ok = false;
-    db = null;
-    console.error("DB: FAILED ->", e?.message || e);
-  }
+function ensureSchema() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS games (
+      gameId TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      startAt TEXT,
+      status TEXT,
+      homeCode TEXT,
+      homeName TEXT,
+      awayCode TEXT,
+      awayName TEXT,
+      source TEXT,
+      updatedAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_games_date ON games(date);
+  `);
 }
 
-function metaGet(key) {
-  if (!db) return null;
-  try {
-    const row = db.prepare("SELECT value FROM app_meta WHERE key = ?").get(key);
-    return row ? row.value : null;
-  } catch (e) {
-    return null;
-  }
-}
+ensureSchema();
 
-function metaSet(key, value) {
-  if (!db) return false;
-  try {
-    db.prepare(
-      "INSERT INTO app_meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
-    ).run(key, value);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-initDb();
-
-// -----------------------------
-// Frontend static (if exists)
-// -----------------------------
-const frontendDist = path.join(__dirname, "frontend", "dist");
-if (fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
-  console.log("FRONTEND: serving static ->", frontendDist);
-} else {
-  console.log("FRONTEND: dist not found (ok for backend-only)");
-}
-
-// -----------------------------
-// Health + Ping
-// -----------------------------
-app.get("/healthz", (req, res) => res.status(200).send("ok"));
-app.get("/ping", (req, res) => res.status(200).json({ ok: true, message: "pong" }));
-
-// -----------------------------
-// Demo data helpers
-// -----------------------------
+// ---- Helpers
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
 
 function demoGamesFor(dateStr) {
-  // NOTE: these teamIds are DEMO placeholders
   const base = dateStr.replaceAll("-", "");
   return [
     {
@@ -134,8 +67,32 @@ function demoGamesFor(dateStr) {
   ];
 }
 
-function demoPoolsFromGames(games) {
-  // Deterministic pool id = `${date}-${gameId}`
+function getDbGames(dateStr) {
+  const rows = db
+    .prepare(
+      `SELECT gameId, date, startAt, status, homeCode, homeName, awayCode, awayName FROM games WHERE date=? ORDER BY startAt ASC`
+    )
+    .all(dateStr);
+
+  return rows.map((r, idx) => ({
+    gameId: r.gameId,
+    date: r.date,
+    home: { teamId: idx * 2 + 1, code: r.homeCode || "TBD", name: r.homeName || "TBD" },
+    away: { teamId: idx * 2 + 2, code: r.awayCode || "TBD", name: r.awayName || "TBD" },
+    startAt: r.startAt,
+    status: r.status || "scheduled",
+    dataMode: "LIVE",
+  }));
+}
+
+function getTodayTomorrow() {
+  const today = new Date();
+  const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+  return [isoDate(today), isoDate(tomorrow)];
+}
+
+function buildPoolsFromGames(games) {
+  // Deterministic poolId: {date}-{gameId}
   return games.map((g) => {
     const id = `${g.date}-${g.gameId}`;
     const name = `Daily Blitz: ${g.away.code} @ ${g.home.code}`;
@@ -149,107 +106,88 @@ function demoPoolsFromGames(games) {
       rosterSize: 5,
       entryFee: 5,
       prize: 100,
-      mode: "DEMO",
+      mode: g.dataMode, // DEMO or LIVE
     };
   });
 }
 
-// -----------------------------
-// Data mode decision (for now)
-// -----------------------------
-// Today: always DEMO unless you later flip LIVE_MODE=1 and implement real sync.
-// This keeps app stable while we build B/C.
-function getDataMode() {
-  // future: LIVE_MODE=1 will switch to live schedule/roster logic
-  const live = String(process.env.LIVE_MODE || "").trim() === "1";
-  return live ? "LIVE" : "DEMO";
-}
+// ---- Health + Ping
+app.get("/healthz", (req, res) => res.status(200).send("ok"));
+app.get("/ping", (req, res) => res.status(200).json({ ok: true, message: "pong" }));
 
-// -----------------------------
-// STATUS endpoint (Phase A)
-// -----------------------------
-app.get("/api/status", (req, res) => {
-  const mode = getDataMode();
+// ---- Admin: trigger schedule sync (use Cloud Scheduler later)
+// Call: /api/admin/sync-schedule?token=YOUR_TOKEN
+app.get("/api/admin/sync-schedule", async (req, res) => {
+  const token = req.query.token;
+  const expected = process.env.SYNC_TOKEN;
 
-  // these will be populated in Phase B/C by calling metaSet()
-  const lastScheduleSync = metaGet("last_schedule_sync") || null;
-  const lastRosterSync = metaGet("last_roster_sync") || null;
+  if (!expected) {
+    return res.status(500).json({ ok: false, error: "SYNC_TOKEN not set" });
+  }
+  if (token !== expected) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
 
-  res.status(200).json({
-    ok: true,
-    service: "shfantasy",
-    mode,
-    dataMode: mode, // keep both keys for convenience
-    db: {
-      ok: !!db_ok,
-      path: DB_PATH,
-    },
-    sync: {
-      last_schedule_sync: lastScheduleSync,
-      last_roster_sync: lastRosterSync,
-    },
-    now: new Date().toISOString(),
-    version: process.env.K_REVISION || "local",
-  });
+  try {
+    const result = await syncSchedule({ dbPath: DB_PATH });
+    return res.status(200).json(result);
+  } catch (e) {
+    console.error("SYNC_SCHEDULE_ERROR:", e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
 });
 
-// -----------------------------
-// API: Games (today + tomorrow)
-// -----------------------------
+// ---- API: games (DB first; fallback DEMO)
 app.get("/api/games", (req, res) => {
-  // For now DEMO only.
-  // Phase B will replace this with DB-backed real schedule (with fallback to demo).
-  const today = new Date();
-  const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+  const [d1, d2] = getTodayTomorrow();
 
-  const games = [
-    ...demoGamesFor(isoDate(today)),
-    ...demoGamesFor(isoDate(tomorrow)),
-  ];
+  const live1 = getDbGames(d1);
+  const live2 = getDbGames(d2);
 
-  res.status(200).json({
+  const hasLive = live1.length + live2.length > 0;
+  const games = hasLive
+    ? [...live1, ...live2]
+    : [...demoGamesFor(d1), ...demoGamesFor(d2)];
+
+  return res.status(200).json({
     ok: true,
-    mode: "DEMO",
+    mode: hasLive ? "LIVE" : "DEMO",
     games,
   });
 });
 
-// -----------------------------
-// API: Pools (from games)
-// -----------------------------
+// ---- API: pools (built from /api/games logic)
 app.get("/api/pools", (req, res) => {
-  const today = new Date();
-  const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+  const [d1, d2] = getTodayTomorrow();
 
-  const games = [
-    ...demoGamesFor(isoDate(today)),
-    ...demoGamesFor(isoDate(tomorrow)),
-  ];
-  const pools = demoPoolsFromGames(games);
+  const live1 = getDbGames(d1);
+  const live2 = getDbGames(d2);
 
-  res.status(200).json({
+  const hasLive = live1.length + live2.length > 0;
+  const games = hasLive
+    ? [...live1, ...live2]
+    : [...demoGamesFor(d1), ...demoGamesFor(d2)];
+
+  const pools = buildPoolsFromGames(games);
+
+  return res.status(200).json({
     ok: true,
-    mode: "DEMO",
+    mode: hasLive ? "LIVE" : "DEMO",
     pools,
   });
 });
 
-// -----------------------------
-// Root route
-// -----------------------------
-app.get("/", (req, res) => {
-  if (fs.existsSync(frontendDist)) {
-    return res.sendFile(path.join(frontendDist, "index.html"));
-  }
-  // backend-only fallback
-  res
-    .status(200)
-    .send("Backend is running (frontend not built). Try /api/status or /api/games or /api/pools");
-});
+// ---- Serve frontend (if built)
+const distPath = path.join(__dirname, "frontend", "dist");
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
+} else {
+  app.get("/", (req, res) => {
+    res.status(200).send("Backend is running (frontend not built). Try /api/games or /api/pools");
+  });
+}
 
-// -----------------------------
-// Start server
-// -----------------------------
 app.listen(port, () => {
-  console.log(`Server listening on ${port}`);
+  console.log(`BOOT: Server listening on ${port}`);
 });
