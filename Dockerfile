@@ -1,28 +1,37 @@
-# ---------- Base ----------
-FROM node:20-alpine AS base
-WORKDIR /app
+# =========================
+# 1) Frontend build (Vite)
+# =========================
+FROM node:20-alpine AS frontend
+WORKDIR /frontend
+
 RUN corepack enable
 
-# ---------- Install deps ----------
-FROM base AS deps
-COPY package.json pnpm-lock.yaml* ./
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# ---------- Build frontend ----------
-FROM deps AS build
-COPY . .
+COPY frontend/. .
 RUN pnpm run build
 
-# ---------- Runtime ----------
+# =========================
+# 2) Backend runtime (Express)
+# =========================
 FROM node:20-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production
-ENV PORT=8080
 
 RUN corepack enable
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app ./
+# install backend deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
 
+# copy backend source
+COPY . .
+
+# copy built frontend into backend folder
+COPY --from=frontend /frontend/dist ./frontend/dist
+
+ENV NODE_ENV=production
+ENV PORT=8080
 EXPOSE 8080
+
 CMD ["node", "index.js"]
