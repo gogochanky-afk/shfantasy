@@ -1,24 +1,29 @@
-# ===== SHFantasy Stable Cloud Run Dockerfile =====
+# ===== SHFANTASY STABLE CLOUD RUN DOCKERFILE (FULL) =====
 FROM node:20-alpine
 
 WORKDIR /app
 
-# 1) install pnpm
+# Install pnpm
 RUN npm install -g pnpm
 
-# 2) install root deps
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+# Copy package files first for better caching
+COPY package.json ./
+# Copy lockfile only if it exists (won't fail if missing)
+COPY pnpm-lock.yaml* ./
 
-# 3) copy all source
+# Install deps (DO NOT use --frozen-lockfile because lockfile may not exist)
+RUN pnpm install
+
+# Copy all source
 COPY . .
 
-# 4) build frontend if exists
-RUN if [ -d "frontend" ]; then cd frontend && pnpm install --frozen-lockfile && pnpm build; fi
+# Build frontend if exists
+RUN if [ -d "frontend" ]; then \
+      cd frontend && pnpm install && pnpm run build && cd .. ; \
+    fi
 
-# 5) Cloud Run uses PORT env
 ENV PORT=8080
 EXPOSE 8080
 
-# 6) start server
+# Start server (index.js at repo root)
 CMD ["node", "index.js"]
