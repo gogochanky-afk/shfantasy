@@ -1,9 +1,12 @@
-# Use Node 20
+# -----------------------------
+# SH Fantasy Stable Runtime
+# -----------------------------
+
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install deps
+# Install production deps only
 COPY package.json package-lock.json* ./
 RUN npm install --production
 
