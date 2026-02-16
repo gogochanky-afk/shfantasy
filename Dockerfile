@@ -1,26 +1,22 @@
-# ===== STABLE CLOUD RUN DOCKERFILE =====
+# ===== STABLE CLOUD RUN DOCKERFILE (FULL) =====
 FROM node:20-alpine
 
 WORKDIR /app
 
-# 安裝 pnpm
+# Install pnpm
 RUN npm install -g pnpm
 
-# 複製 package files
+# Copy root package files first (better cache)
 COPY package.json pnpm-lock.yaml* ./
 
-# 安裝依賴
+# Install deps
 RUN pnpm install --frozen-lockfile
 
-# 複製全部程式
+# Copy all source
 COPY . .
 
-# 如果有 frontend，建置它
-RUN if [ -d "frontend" ]; then \
-    cd frontend && \
-    pnpm install --frozen-lockfile && \
-    pnpm run build ; \
-    fi
+# Build frontend if exists
+RUN if [ -d "frontend" ]; then cd frontend && pnpm install --frozen-lockfile && pnpm run build; fi
 
 ENV PORT=8080
 EXPOSE 8080
