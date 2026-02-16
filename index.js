@@ -1,3 +1,5 @@
+console.log("BOOT: index.js loaded", new Date().toISOString());
+console.log("BOOT: NODE_ENV=", process.env.NODE_ENV, "PORT=", process.env.PORT);
 const express = require("express");
 const path = require("path");
 
