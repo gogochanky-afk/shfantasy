@@ -1,32 +1,32 @@
-# ========= 1) Build frontend =========
-FROM node:20-slim AS build
+FROM node:18-alpine
+
 WORKDIR /app
 
-RUN corepack enable
+# Install pnpm + git
+RUN npm install -g pnpm && apk add --no-cache git
+
+# Copy package manifests first (better cache)
+COPY package.json package-lock.json* ./
+COPY frontend/package.json ./frontend/
+
+# Install backend deps
+RUN npm install
 
 # Install frontend deps
-COPY frontend/package.json frontend/pnpm-lock.yaml* ./frontend/
-WORKDIR /app/frontend
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN cd frontend && pnpm install
 
-# Copy frontend source and build
-COPY frontend/ ./
-RUN pnpm build
+# Copy source
+COPY . .
 
-# ========= 2) Runtime (backend + static dist) =========
-FROM node:20-slim
-WORKDIR /app
+# Build frontend (Vite)
+RUN cd frontend && \
+    export VITE_BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
+    export VITE_APP_VERSION="1.0.0" && \
+    echo "Building with BUILD_ID=$VITE_BUILD_ID" && \
+    pnpm run build
 
-# Backend deps
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev || npm install
-
-# Backend code
-COPY index.js ./
-
-# Frontend dist
-COPY --from=build /app/frontend/dist ./frontend/dist
-
-ENV PORT=8080
+# Cloud Run uses PORT env var
 EXPOSE 8080
-CMD ["node", "index.js"]
+
+# Start backend
+CMD ["npm", "start"]
