@@ -1,29 +1,22 @@
-# ===== SHFANTASY STABLE CLOUD RUN DOCKERFILE (FULL) =====
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install pnpm
+# install pnpm
 RUN npm install -g pnpm
 
-# Copy package files first for better caching
+# copy package files
 COPY package.json ./
-# Copy lockfile only if it exists (won't fail if missing)
-COPY pnpm-lock.yaml* ./
 
-# Install deps (DO NOT use --frozen-lockfile because lockfile may not exist)
+# install deps (NO frozen-lockfile)
 RUN pnpm install
 
-# Copy all source
+# copy rest of app
 COPY . .
 
-# Build frontend if exists
-RUN if [ -d "frontend" ]; then \
-      cd frontend && pnpm install && pnpm run build && cd .. ; \
-    fi
-
+# expose port
 ENV PORT=8080
 EXPOSE 8080
 
-# Start server (index.js at repo root)
+# start server
 CMD ["node", "index.js"]
