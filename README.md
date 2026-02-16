@@ -1,1 +1,1 @@
-# shfantasy
+# shfantasy game
