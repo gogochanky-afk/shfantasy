@@ -1,30 +1,29 @@
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
 
 const app = express();
 const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
+// ---- Boot logs (Cloud Run logs)
 console.log("BOOT: index.js loaded");
 console.log("BOOT: NODE_ENV=", process.env.NODE_ENV);
 console.log("BOOT: PORT=", port);
 
-/* ================================
-   Health + Ping
-================================ */
-app.get("/healthz", (req, res) => {
-  res.status(200).json({ ok: true });
-});
+// ---- Health + Ping
+app.get("/healthz", (req, res) => res.status(200).send("ok"));
+app.get("/ping", (req, res) => res.status(200).json({ ok: true, message: "pong" }));
 
-app.get("/ping", (req, res) => {
-  res.status(200).json({ ok: true, message: "pong" });
-});
+/**
+ * ============================
+ * DEMO API (keep your existing)
+ * ============================
+ * If you already have /api/games /api/pools logic, keep it.
+ * Below is minimal fallback so frontend can show something.
+ */
 
-/* ================================
-   Demo Helpers
-================================ */
+// --- Demo data helpers
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -53,12 +52,13 @@ function demoGamesFor(dateStr) {
   ];
 }
 
-function demoPoolsFor(games) {
+function demoPoolsFor(dateStr) {
+  const games = demoGamesFor(dateStr);
   return games.map((g) => ({
-    id: `${g.date}-${g.gameId}`,
+    id: `${dateStr}-${g.gameId}`,
     name: `Daily Blitz: ${g.away.code} @ ${g.home.code}`,
     gameId: g.gameId,
-    date: g.date,
+    date: dateStr,
     lockAt: g.startAt,
     salaryCap: 10,
     rosterSize: 5,
@@ -68,60 +68,38 @@ function demoPoolsFor(games) {
   }));
 }
 
-/* ================================
-   API
-================================ */
+// ---- API routes (use your real ones if exist)
 app.get("/api/games", (req, res) => {
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-
-  const dates = [isoDate(today), isoDate(tomorrow)];
-  const games = dates.flatMap((d) => demoGamesFor(d));
-
+  const today = isoDate(new Date());
+  const tomorrow = isoDate(new Date(Date.now() + 24 * 3600 * 1000));
   res.json({
     ok: true,
     mode: "DEMO",
-    games,
+    games: [...demoGamesFor(today), ...demoGamesFor(tomorrow)],
   });
 });
 
 app.get("/api/pools", (req, res) => {
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-
-  const dates = [isoDate(today), isoDate(tomorrow)];
-  const games = dates.flatMap((d) => demoGamesFor(d));
-  const pools = demoPoolsFor(games);
-
+  const today = isoDate(new Date());
+  const tomorrow = isoDate(new Date(Date.now() + 24 * 3600 * 1000));
   res.json({
     ok: true,
     mode: "DEMO",
-    pools,
+    pools: [...demoPoolsFor(today), ...demoPoolsFor(tomorrow)],
   });
 });
 
-/* ================================
-   Serve Frontend (IMPORTANT)
-================================ */
-const frontendDist = path.join(__dirname, "frontend", "dist");
+// ============================
+// Serve Frontend (Vite dist)
+// ============================
+const distPath = path.join(__dirname, "frontend", "dist");
+app.use(express.static(distPath));
 
-if (fs.existsSync(frontendDist)) {
-  console.log("Serving frontend from:", frontendDist);
+// SPA fallback (must be last)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
 
-  app.use(express.static(frontendDist));
-
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendDist, "index.html"));
-  });
-} else {
-  console.log("Frontend build not found, API-only mode");
-}
-
-/* ================================
-   Start Server
-================================ */
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`BOOT: server listening on ${port}`);
 });
