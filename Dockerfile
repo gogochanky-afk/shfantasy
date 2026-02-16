@@ -1,32 +1,24 @@
-FROM node:18-alpine
+# ===== STABLE CLOUD RUN DOCKERFILE =====
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install pnpm + git
-RUN npm install -g pnpm && apk add --no-cache git
+# 安裝 pnpm
+RUN npm install -g pnpm
 
-# Copy package manifests first (better cache)
-COPY package.json package-lock.json* ./
-COPY frontend/package.json ./frontend/
+# 複製 package files
+COPY package.json pnpm-lock.yaml* ./
 
-# Install backend deps
-RUN npm install
+# 安裝依賴
+RUN pnpm install --frozen-lockfile
 
-# Install frontend deps
-RUN cd frontend && pnpm install
-
-# Copy source
+# 複製全部程式
 COPY . .
 
-# Build frontend (Vite)
-RUN cd frontend && \
-    export VITE_BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
-    export VITE_APP_VERSION="1.0.0" && \
-    echo "Building with BUILD_ID=$VITE_BUILD_ID" && \
-    pnpm run build
+# 如果有 frontend，建置（冇都唔會錯）
+RUN if [ -d "frontend" ]; then cd frontend && pnpm install && pnpm run build; fi
 
-# Cloud Run uses PORT env var
+ENV PORT=8080
 EXPOSE 8080
 
-# Start backend
-CMD ["npm", "start"]
+CMD ["node", "index.js"]
