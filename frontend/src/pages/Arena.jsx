@@ -1,84 +1,90 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 export default function Arena() {
   const { id } = useParams();
+  const navigate = useNavigate();
 
-  const [pool, setPool] = useState(null);
   const [players, setPlayers] = useState([]);
   const [selected, setSelected] = useState([]);
   const [salaryUsed, setSalaryUsed] = useState(0);
+  const salaryCap = 10;
 
   useEffect(() => {
     async function load() {
-      const poolRes = await fetch(`/api/pool/${id}`);
-      const poolData = await poolRes.json();
-      setPool(poolData.pool);
-
-      const rosterRes = await fetch("/api/players");
-      const rosterData = await rosterRes.json();
-      setPlayers(rosterData.players || []);
+      const res = await fetch("/api/roster");
+      const data = await res.json();
+      setPlayers(data.players || []);
     }
     load();
-  }, [id]);
+  }, []);
 
-  function togglePlayer(player) {
+  function togglePlayer(p) {
     let updated;
 
-    if (selected.find(p => p.playerId === player.playerId)) {
-      updated = selected.filter(p => p.playerId !== player.playerId);
+    if (selected.find(x => x.playerId === p.playerId)) {
+      updated = selected.filter(x => x.playerId !== p.playerId);
     } else {
-      if (selected.length >= (pool?.rosterSize || 5)) return;
-      updated = [...selected, player];
+      if (selected.length >= 5) return;
+      updated = [...selected, p];
     }
 
-    const totalSalary = updated.reduce((sum, p) => sum + p.price, 0);
-
-    if (totalSalary > (pool?.salaryCap || 10)) return;
+    const total = updated.reduce((sum, x) => sum + x.price, 0);
+    if (total > salaryCap) return;
 
     setSelected(updated);
-    setSalaryUsed(totalSalary);
+    setSalaryUsed(total);
   }
 
-  if (!pool) return <div style={{ padding: 20 }}>Loading...</div>;
+  async function submitEntry() {
+    if (selected.length !== 5) return;
+
+    const res = await fetch("/api/entry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        poolId: id,
+        players: selected,
+        totalSalary: salaryUsed
+      })
+    });
+
+    const data = await res.json();
+    alert("Score: " + data.score);
+    navigate("/leaderboard?pool=" + id);
+  }
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>{pool.name}</h2>
+      <h2>Arena</h2>
 
-      <div style={{ marginBottom: 20 }}>
-        Selected: {selected.length}/{pool.rosterSize}
-        <br />
-        Salary Used: {salaryUsed}/{pool.salaryCap}
+      <div>
+        Salary: {salaryUsed} / {salaryCap}
       </div>
 
-      {players.map(player => (
-        <div
-          key={player.playerId}
-          style={{
-            border: "1px solid #333",
-            padding: 8,
-            marginBottom: 8,
-            cursor: "pointer",
-            background:
-              selected.find(p => p.playerId === player.playerId)
-                ? "#222"
-                : "transparent"
-          }}
-          onClick={() => togglePlayer(player)}
-        >
-          {player.fullName} — ${player.price}
+      <h3>Selected ({selected.length}/5)</h3>
+      {selected.map(p => (
+        <div key={p.playerId}>{p.fullName}</div>
+      ))}
+
+      <h3>All Players</h3>
+      {players.map(p => (
+        <div key={p.playerId}>
+          {p.fullName} (${p.price})
+          <button onClick={() => togglePlayer(p)}>
+            {selected.find(x => x.playerId === p.playerId)
+              ? "Remove"
+              : "Add"}
+          </button>
         </div>
       ))}
 
       <button
-        disabled={
-          selected.length !== pool.rosterSize ||
-          salaryUsed > pool.salaryCap
-        }
+        onClick={submitEntry}
+        disabled={selected.length !== 5}
         style={{ marginTop: 20 }}
       >
-        Submit Lineup
+        Submit Entry
       </button>
     </div>
   );
