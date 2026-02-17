@@ -1,51 +1,62 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Arena() {
-  const [games, setGames] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [players, setPlayers] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [salaryUsed, setSalaryUsed] = useState(0);
+  const salaryCap = 10;
+  const navigate = useNavigate();
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/games");
-        const data = await res.json();
-        setGames(data.games || []);
-      } catch (e) {
-        console.error(e);
-      }
-      setLoading(false);
-    }
-    load();
+    fetch("/api/roster")
+      .then(res => res.json())
+      .then(data => setPlayers(data.players || []));
   }, []);
+
+  function togglePlayer(p) {
+    let updated;
+
+    if (selected.find(x => x.playerId === p.playerId)) {
+      updated = selected.filter(x => x.playerId !== p.playerId);
+    } else {
+      if (selected.length >= 5) return;
+      updated = [...selected, p];
+    }
+
+    const total = updated.reduce((sum, x) => sum + x.salary, 0);
+    if (total > salaryCap) return;
+
+    setSelected(updated);
+    setSalaryUsed(total);
+  }
+
+  function submit() {
+    fetch("/api/entry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        players: selected,
+        totalSalary: salaryUsed
+      })
+    }).then(() => navigate("/leaderboard"));
+  }
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>🔥 SH Fantasy Arena</h1>
-      <p>Mode: DEMO</p>
+      <h2>Pick 5 Players</h2>
+      <div>Salary: {salaryUsed} / {salaryCap}</div>
 
-      {loading && <p>Loading games...</p>}
-
-      {!loading && games.length === 0 && (
-        <p>No games available.</p>
-      )}
-
-      {games.map((g) => (
-        <div
-          key={g.id}
-          style={{
-            border: "1px solid #ddd",
-            padding: 16,
-            marginBottom: 12,
-            borderRadius: 8
-          }}
-        >
-          <h3>
-            {g.homeTeam} vs {g.awayTeam}
-          </h3>
-          <p>Date: {g.date}</p>
-          <p>Status: {g.status}</p>
+      {players.map(p => (
+        <div key={p.playerId} style={{ marginBottom: 8 }}>
+          <button onClick={() => togglePlayer(p)}>
+            {p.name} (${p.salary})
+          </button>
         </div>
       ))}
+
+      <br />
+      <button onClick={submit}>Submit</button>
     </div>
   );
 }
