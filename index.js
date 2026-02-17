@@ -2,12 +2,17 @@ const express = require("express");
 const path = require("path");
 const Database = require("better-sqlite3");
 
+// existing scripts
+const { syncSchedule } = require("./scripts/sync-schedule");
+const { seedPlayers } = require("./scripts/seed-players");
+
 const app = express();
 const port = process.env.PORT || 8080;
 
+// ---------- Basic middleware ----------
 app.use(express.json());
 
-// ---------- Boot logs ----------
+// ---------- Boot logs (Cloud Run logs) ----------
 console.log("BOOT: index.js loaded");
 console.log("BOOT: NODE_ENV =", process.env.NODE_ENV);
 console.log("BOOT: PORT =", port);
@@ -56,104 +61,46 @@ function ensureSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_pools_date ON pools(date);
     CREATE INDEX IF NOT EXISTS idx_pools_gameId ON pools(gameId);
+
+    -- ✅ NEW: teams
+    CREATE TABLE IF NOT EXISTS teams (
+      teamId INTEGER PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL
+    );
+
+    -- ✅ NEW: players
+    CREATE TABLE IF NOT EXISTS players (
+      playerId TEXT PRIMARY KEY,
+      fullName TEXT NOT NULL,
+      pos TEXT,
+      teamId INTEGER,
+      price INTEGER DEFAULT 2,
+      isActive INTEGER DEFAULT 1,
+      updatedAt TEXT
+    );
+
+    -- ✅ NEW: roster snapshots
+    CREATE TABLE IF NOT EXISTS roster_players (
+      date TEXT NOT NULL,
+      teamId INTEGER NOT NULL,
+      playerId TEXT NOT NULL,
+      PRIMARY KEY (date, teamId, playerId)
+    );
+    CREATE INDEX IF NOT EXISTS idx_roster_players_date_team ON roster_players(date, teamId);
   `);
 }
 ensureSchema();
 
-// ---------- DEMO fallback games (always available) ----------
-function demoGamesFor(dateStr) {
-  // fixed teams for now; later we will replace with real schedule source
-  const demo = [
-    {
-      gameId: `demo-${dateStr}-001`,
-      date: dateStr,
-      startAt: new Date(`${dateStr}T11:00:00.000Z`).toISOString(),
-      status: "scheduled",
-      homeCode: "LAL",
-      homeName: "Lakers",
-      awayCode: "GSW",
-      awayName: "Warriors",
-      source: "DEMO",
-    },
-    {
-      gameId: `demo-${dateStr}-002`,
-      date: dateStr,
-      startAt: new Date(`${dateStr}T13:30:00.000Z`).toISOString(),
-      status: "scheduled",
-      homeCode: "BOS",
-      homeName: "Celtics",
-      awayCode: "MIA",
-      awayName: "Heat",
-      source: "DEMO",
-    },
-  ];
-  return demo;
-}
-
-function upsertGames(games) {
-  const nowIso = new Date().toISOString();
-  const stmt = db.prepare(`
-    INSERT INTO games (gameId, date, startAt, status, homeCode, homeName, awayCode, awayName, source, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(gameId) DO UPDATE SET
-      date=excluded.date,
-      startAt=excluded.startAt,
-      status=excluded.status,
-      homeCode=excluded.homeCode,
-      homeName=excluded.homeName,
-      awayCode=excluded.awayCode,
-      awayName=excluded.awayName,
-      source=excluded.source,
-      updatedAt=excluded.updatedAt
-  `);
-
-  let count = 0;
-  const tx = db.transaction(() => {
-    for (const g of games) {
-      stmt.run(
-        g.gameId,
-        g.date,
-        g.startAt || null,
-        g.status || null,
-        g.homeCode || null,
-        g.homeName || null,
-        g.awayCode || null,
-        g.awayName || null,
-        g.source || "DEMO",
-        nowIso
-      );
-      count++;
-    }
-  });
-  tx();
-  return count;
-}
-
-// Ensure games for today+tomorrow exist in DB (fallback to demo if empty)
-function ensureGamesForTodayTomorrow() {
-  const today = isoDate(new Date());
-  const tomorrow = isoDate(addDays(new Date(), 1));
-
-  const existing = db
-    .prepare(`SELECT * FROM games WHERE date IN (?, ?) LIMIT 1`)
-    .get(today, tomorrow);
-
-  if (existing) return { ok: true, source: "DB", dates: [today, tomorrow] };
-
-  const demo = [...demoGamesFor(today), ...demoGamesFor(tomorrow)];
-  upsertGames(demo);
-  return { ok: true, source: "DEMO_FALLBACK", dates: [today, tomorrow] };
-}
-
 // ---------- Pool generation (deterministic) ----------
 function ensurePoolsForTodayTomorrow() {
-  ensureGamesForTodayTomorrow();
-
   const today = isoDate(new Date());
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const games = db
-    .prepare(`SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`)
+    .prepare(
+      `SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`
+    )
     .all(today, tomorrow);
 
   const upsert = db.prepare(`
@@ -168,38 +115,53 @@ function ensurePoolsForTodayTomorrow() {
   const nowIso = new Date().toISOString();
   let count = 0;
 
-  const tx = db.transaction(() => {
-    for (const g of games) {
-      const id = `${g.date}-${g.gameId}`;
-      const name = `Daily Blitz: ${g.awayCode || "AWAY"} @ ${g.homeCode || "HOME"}`;
-      const lockAt = g.startAt || new Date().toISOString();
-      const mode = g.source === "LIVE" ? "LIVE" : "DEMO";
+  for (const g of games) {
+    const id = `${g.date}-${g.gameId}`; // deterministic
+    const name = `Daily Blitz: ${g.awayCode || "AWAY"} @ ${g.homeCode || "HOME"}`;
+    const lockAt = g.startAt || new Date().toISOString();
 
-      upsert.run(id, g.gameId, g.date, name, lockAt, 10, 5, 5, 100, mode, nowIso);
-      count++;
-    }
-  });
-  tx();
+    const mode = g.source === "ESPN" ? "LIVE" : "DEMO";
+
+    upsert.run(
+      id,
+      g.gameId,
+      g.date,
+      name,
+      lockAt,
+      10,
+      5,
+      5,
+      100,
+      mode,
+      nowIso
+    );
+    count++;
+  }
 
   return { ok: true, poolsUpserted: count, dates: [today, tomorrow] };
 }
 
 // ---------- API ----------
-app.get("/api/ping", (req, res) => res.json({ ok: true, message: "pong" }));
+app.get("/api/ping", (req, res) => {
+  res.json({ ok: true, message: "pong" });
+});
 
+// list games (today+tomorrow)
 app.get("/api/games", (req, res) => {
-  ensureGamesForTodayTomorrow();
-
   const today = isoDate(new Date());
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const games = db
-    .prepare(`SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`)
+    .prepare(
+      `SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`
+    )
     .all(today, tomorrow);
 
-  res.json({ ok: true, mode: "DEMO", games });
+  const mode = games.some((g) => g.source === "ESPN") ? "LIVE" : "DEMO";
+  res.json({ ok: true, mode, games });
 });
 
+// list pools (today+tomorrow)
 app.get("/api/pools", (req, res) => {
   const poolResult = ensurePoolsForTodayTomorrow();
 
@@ -207,13 +169,16 @@ app.get("/api/pools", (req, res) => {
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const pools = db
-    .prepare(`SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`)
+    .prepare(
+      `SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`
+    )
     .all(today, tomorrow);
 
-  res.json({ ok: true, mode: "DEMO", poolResult, pools });
+  const mode = pools.some((p) => p.mode === "LIVE") ? "LIVE" : "DEMO";
+  res.json({ ok: true, mode, poolResult, pools });
 });
 
-// Backward compatibility: your frontend sometimes calls /api/pool
+// backward compatible: /api/pool returns same as /api/pools
 app.get("/api/pool", (req, res) => {
   const poolResult = ensurePoolsForTodayTomorrow();
 
@@ -221,12 +186,16 @@ app.get("/api/pool", (req, res) => {
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const pools = db
-    .prepare(`SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`)
+    .prepare(
+      `SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`
+    )
     .all(today, tomorrow);
 
-  res.json({ ok: true, mode: "DEMO", poolResult, pools });
+  const mode = pools.some((p) => p.mode === "LIVE") ? "LIVE" : "DEMO";
+  res.json({ ok: true, mode, poolResult, pools });
 });
 
+// pool by id
 app.get("/api/pool/:id", (req, res) => {
   ensurePoolsForTodayTomorrow();
   const pool = db.prepare(`SELECT * FROM pools WHERE id = ?`).get(req.params.id);
@@ -234,19 +203,73 @@ app.get("/api/pool/:id", (req, res) => {
   res.json({ ok: true, pool });
 });
 
-// Keep admin endpoint, but for now it just returns "not enabled"
-app.get("/api/admin/sync-schedule", (req, res) => {
-  res.json({
-    ok: false,
-    error: "SYNC_DISABLED",
-    message:
-      "Real schedule sync is disabled for now (SSL issue). We will switch to a stable source later.",
-  });
+// ✅ NEW: list teams
+app.get("/api/teams", (req, res) => {
+  const teams = db
+    .prepare(`SELECT teamId, code, name FROM teams ORDER BY teamId ASC`)
+    .all();
+  res.json({ ok: true, teams });
 });
 
-// ---------- Frontend static ----------
+// ✅ NEW: list players by date + teamId
+// GET /api/players?teamId=1&date=YYYY-MM-DD
+app.get("/api/players", (req, res) => {
+  const date = req.query.date || isoDate(new Date());
+  const teamId = Number(req.query.teamId);
+
+  if (!teamId || Number.isNaN(teamId)) {
+    return res.status(400).json({ ok: false, error: "teamId is required" });
+  }
+
+  const players = db
+    .prepare(
+      `
+      SELECT p.playerId, p.fullName, p.pos, p.teamId, p.price
+      FROM roster_players rp
+      JOIN players p ON p.playerId = rp.playerId
+      WHERE rp.date = ? AND rp.teamId = ? AND p.isActive = 1
+      ORDER BY p.price DESC, p.fullName ASC
+    `
+    )
+    .all(date, teamId);
+
+  res.json({ ok: true, mode: "DEMO", date, teamId, players });
+});
+
+// admin: sync schedule (real) -> then generate pools
+app.get("/api/admin/sync-schedule", async (req, res) => {
+  try {
+    const result = await syncSchedule({ dryRun: false });
+    const poolResult = ensurePoolsForTodayTomorrow();
+    res.json({ ok: true, result, poolResult });
+  } catch (e) {
+    console.error("sync-schedule error:", e);
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+// ✅ NEW: admin seed players (today + tomorrow roster snapshot)
+// GET /api/admin/seed-players
+app.get("/api/admin/seed-players", (req, res) => {
+  try {
+    const today = isoDate(new Date());
+    const tomorrow = isoDate(addDays(new Date(), 1));
+    const result = seedPlayers({ dbPath: DB_PATH, dates: [today, tomorrow] });
+    res.json({ ok: true, result });
+  } catch (e) {
+    console.error("seed-players error:", e);
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+// ---------- Frontend static (if you have /frontend/dist) ----------
 const frontendDist = path.join(__dirname, "frontend", "dist");
 app.use(express.static(frontendDist));
-app.get("*", (req, res) => res.sendFile(path.join(frontendDist, "index.html")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendDist, "index.html"));
+});
 
-app.listen(port, () => console.log(`Server listening on port ${port}`));
+// ---------- Start ----------
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
