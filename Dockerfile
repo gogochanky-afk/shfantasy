@@ -1,34 +1,29 @@
-# ---------- 1) Build Frontend (Vite) ----------
+# ---------- 1) Build Frontend ----------
 FROM node:18 AS frontend-builder
 WORKDIR /app/frontend
 
-# Enable pnpm (because your repo has pnpm-lock.yaml)
 RUN corepack enable
 
-# Copy only frontend first for better cache
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# Copy the rest of frontend
 COPY frontend/ ./
 RUN pnpm build
 
+
 # ---------- 2) Backend Runtime ----------
-FROM node:18 AS runner
+FROM node:18
 WORKDIR /app
 
-# Copy backend
-COPY backend/package.json backend/package-lock.json* ./backend/
-WORKDIR /app/backend
+# copy backend (which is root in your repo)
+COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 
-# Copy backend source
-COPY backend/ /app/backend/
+COPY . .
 
-# Copy frontend build output into backend public folder
-# Vite default output = dist
-RUN mkdir -p /app/backend/public
-COPY --from=frontend-builder /app/frontend/dist /app/backend/public
+# copy frontend build into public
+RUN mkdir -p public
+COPY --from=frontend-builder /app/frontend/dist ./public
 
 ENV PORT=8080
 EXPOSE 8080
