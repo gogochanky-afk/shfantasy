@@ -1,5 +1,3 @@
-// index.js (REPLACE ENTIRE FILE)
-
 const express = require("express");
 const path = require("path");
 const Database = require("better-sqlite3");
