@@ -1,5 +1,5 @@
-// frontend/src/pages/Home.jsx
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function Home() {
   const [pools, setPools] = useState([]);
@@ -7,21 +7,11 @@ export default function Home() {
 
   useEffect(() => {
     async function loadPools() {
-      try {
-        const res = await fetch("/api/pools");
-        const data = await res.json();
-
-        console.log("Pools API response:", data);
-
-        if (data && data.pools) {
-          setPools(data.pools);   // ❗ 不再 filter LIVE
-          setMode(data.mode || "DEMO");
-        }
-      } catch (err) {
-        console.error("Failed to load pools:", err);
-      }
+      const res = await fetch("/api/pools");
+      const data = await res.json();
+      setPools(data.pools || []);
+      setMode(data.mode || "DEMO");
     }
-
     loadPools();
   }, []);
 
@@ -35,9 +25,7 @@ export default function Home() {
 
       <h2>Today + Tomorrow Pools</h2>
 
-      {pools.length === 0 && (
-        <div>No pools available.</div>
-      )}
+      {pools.length === 0 && <div>No pools available.</div>}
 
       {pools.map(pool => (
         <div
@@ -45,15 +33,18 @@ export default function Home() {
           style={{
             border: "1px solid #333",
             padding: 12,
-            marginBottom: 12,
-            borderRadius: 8
+            marginBottom: 12
           }}
         >
           <div><strong>{pool.name}</strong></div>
-          <div>Date: {pool.date}</div>
-          <div>Lock: {pool.lockAt}</div>
-          <div>Cap: {pool.salaryCap}</div>
-          <div>Mode: {pool.mode}</div>
+          <div>Salary Cap: {pool.salaryCap}</div>
+          <div>Roster Size: {pool.rosterSize}</div>
+
+          <Link to={`/arena/${pool.id}`}>
+            <button style={{ marginTop: 10 }}>
+              Enter Arena
+            </button>
+          </Link>
         </div>
       ))}
     </div>
