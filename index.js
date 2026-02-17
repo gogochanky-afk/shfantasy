@@ -7,125 +7,106 @@ const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.sqlite");
+/* ================================
+   DATABASE INIT
+================================ */
+
+const DB_PATH =
+  process.env.DB_PATH || path.join(__dirname, "shfantasy.db");
+
 const db = new Database(DB_PATH);
 
-function isoDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-function addDays(date, n) {
-  return new Date(date.getTime() + n * 86400000);
-}
-
+// --- CREATE TABLES ---
 db.exec(`
+CREATE TABLE IF NOT EXISTS games (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT,
+  homeTeam TEXT,
+  awayTeam TEXT,
+  status TEXT
+);
+
 CREATE TABLE IF NOT EXISTS entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  poolId TEXT,
+  gameId INTEGER,
   players TEXT,
   totalSalary INTEGER,
-  score INTEGER,
+  score INTEGER DEFAULT 0,
   createdAt TEXT
 );
 `);
 
-function ensurePoolsForTodayTomorrow() {
-  const today = isoDate(new Date());
-  const tomorrow = isoDate(addDays(new Date(), 1));
+/* ================================
+   SEED DEMO GAME
+================================ */
 
-  const games = db.prepare(`
-    SELECT * FROM games WHERE date IN (?, ?)
-  `).all(today, tomorrow);
-
-  const upsert = db.prepare(`
-    INSERT INTO pools (id, gameId, date, name, lockAt, salaryCap, rosterSize, entryFee, prize, mode, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      name=excluded.name,
-      lockAt=excluded.lockAt,
-      updatedAt=excluded.updatedAt
-  `);
-
-  const nowIso = new Date().toISOString();
-
-  for (const g of games) {
-    const id = `${g.date}-${g.gameId}`;
-    const name = `Daily Blitz: ${g.awayCode} @ ${g.homeCode}`;
-
-    upsert.run(
-      id,
-      g.gameId,
-      g.date,
-      name,
-      g.startAt,
-      10,
-      5,
-      5,
-      100,
-      "DEMO",
-      nowIso
-    );
-  }
+function isoDate(d) {
+  return d.toISOString().slice(0, 10);
 }
 
-app.get("/api/pools", (req, res) => {
-  ensurePoolsForTodayTomorrow();
+const today = isoDate(new Date());
 
-  const today = isoDate(new Date());
-  const tomorrow = isoDate(addDays(new Date(), 1));
+const gameCount = db.prepare(
+  "SELECT COUNT(*) as c FROM games WHERE date = ?"
+).get(today).c;
 
-  const pools = db.prepare(`
-    SELECT * FROM pools WHERE date IN (?, ?)
-  `).all(today, tomorrow);
-
-  res.json({ ok: true, mode: "DEMO", pools });
-});
-
-app.get("/api/roster", (req, res) => {
-  const players = db.prepare(`
-    SELECT * FROM players WHERE isActive = 1
-  `).all();
-
-  res.json({ ok: true, players });
-});
-
-app.post("/api/entry", (req, res) => {
-  const { poolId, players, totalSalary } = req.body;
-
-  if (!poolId || !players || players.length !== 5) {
-    return res.status(400).json({ ok: false, error: "Invalid entry" });
-  }
-
-  const score = Math.floor(Math.random() * 120); // mock scoring
-
+if (gameCount === 0) {
   db.prepare(`
-    INSERT INTO entries (poolId, players, totalSalary, score, createdAt)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(
-    poolId,
-    JSON.stringify(players),
-    totalSalary,
-    score,
-    new Date().toISOString()
-  );
+    INSERT INTO games (date, homeTeam, awayTeam, status)
+    VALUES (?, ?, ?, ?)
+  `).run(today, "Lakers", "Warriors", "scheduled");
+}
 
-  res.json({ ok: true, score });
+/* ================================
+   ROUTES
+================================ */
+
+app.get("/api/games", (req, res) => {
+  try {
+    const games = db
+      .prepare("SELECT * FROM games ORDER BY id DESC")
+      .all();
+    res.json({ games });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.get("/api/leaderboard/:poolId", (req, res) => {
-  const rows = db.prepare(`
-    SELECT * FROM entries WHERE poolId = ?
-    ORDER BY score DESC
-  `).all(req.params.poolId);
+app.post("/api/entries", (req, res) => {
+  try {
+    const { gameId, players, totalSalary } = req.body;
 
-  res.json({ ok: true, leaderboard: rows });
+    db.prepare(`
+      INSERT INTO entries (gameId, players, totalSalary, createdAt)
+      VALUES (?, ?, ?, ?)
+    `).run(
+      gameId,
+      JSON.stringify(players),
+      totalSalary,
+      new Date().toISOString()
+    );
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-const frontendDist = path.join(__dirname, "frontend", "dist");
-app.use(express.static(frontendDist));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(frontendDist, "index.html"));
+app.get("/api/leaderboard", (req, res) => {
+  try {
+    const rows = db
+      .prepare("SELECT * FROM entries ORDER BY score DESC")
+      .all();
+    res.json({ leaderboard: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
+
+/* ================================
+   START
+================================ */
 
 app.listen(port, () => {
-  console.log("Server started on", port);
+  console.log(`SH Fantasy running on ${port}`);
 });
