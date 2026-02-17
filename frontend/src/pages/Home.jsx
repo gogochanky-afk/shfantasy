@@ -6,42 +6,56 @@ export default function Home() {
   const [mode, setMode] = useState("DEMO");
 
   useEffect(() => {
-    async function loadPools() {
+    async function load() {
       const res = await fetch("/api/pools");
       const data = await res.json();
       setPools(data.pools || []);
       setMode(data.mode || "DEMO");
     }
-    loadPools();
+    load();
   }, []);
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>SH Fantasy</h1>
+    <div style={{ padding: 30, fontFamily: "sans-serif" }}>
+      <h1 style={{ fontSize: 32 }}>🔥 SH Fantasy Arena</h1>
 
-      <div style={{ marginBottom: 20 }}>
-        <strong>DATA_MODE:</strong> {mode}
+      <div style={{ marginBottom: 20, opacity: 0.7 }}>
+        Mode: <b>{mode}</b>
       </div>
 
       <h2>Today + Tomorrow Pools</h2>
 
-      {pools.length === 0 && <div>No pools available.</div>}
-
-      {pools.map(pool => (
+      {pools.map((pool) => (
         <div
           key={pool.id}
           style={{
-            border: "1px solid #333",
-            padding: 12,
-            marginBottom: 12
+            background: "#111",
+            color: "white",
+            padding: 20,
+            borderRadius: 12,
+            marginBottom: 15,
           }}
         >
-          <div><strong>{pool.name}</strong></div>
-          <div>Salary Cap: {pool.salaryCap}</div>
-          <div>Roster Size: {pool.rosterSize}</div>
+          <div style={{ fontSize: 20, fontWeight: "bold" }}>
+            {pool.name}
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            Salary Cap: {pool.salaryCap} | Roster Size: {pool.rosterSize}
+          </div>
 
           <Link to={`/arena/${pool.id}`}>
-            <button style={{ marginTop: 10 }}>
+            <button
+              style={{
+                marginTop: 15,
+                padding: "10px 20px",
+                borderRadius: 8,
+                border: "none",
+                background: "orange",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
               Enter Arena
             </button>
           </Link>
