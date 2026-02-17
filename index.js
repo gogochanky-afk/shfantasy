@@ -7,7 +7,6 @@ const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
-// ---------------- DB ----------------
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data.sqlite");
 const db = new Database(DB_PATH);
 
@@ -18,127 +17,109 @@ function addDays(date, n) {
   return new Date(date.getTime() + n * 86400000);
 }
 
-// ---------------- Schema ----------------
 db.exec(`
-CREATE TABLE IF NOT EXISTS teams (
-  teamId INTEGER PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS players (
-  playerId TEXT PRIMARY KEY,
-  fullName TEXT NOT NULL,
-  pos TEXT,
-  teamId INTEGER,
-  price INTEGER DEFAULT 2,
-  isActive INTEGER DEFAULT 1
-);
-
-CREATE TABLE IF NOT EXISTS games (
-  gameId TEXT PRIMARY KEY,
-  date TEXT NOT NULL,
-  startAt TEXT,
-  homeCode TEXT,
-  awayCode TEXT
-);
-
-CREATE TABLE IF NOT EXISTS pools (
-  id TEXT PRIMARY KEY,
-  gameId TEXT NOT NULL,
-  date TEXT NOT NULL,
-  name TEXT,
-  lockAt TEXT,
-  salaryCap INTEGER DEFAULT 10,
-  rosterSize INTEGER DEFAULT 5
-);
-
 CREATE TABLE IF NOT EXISTS entries (
-  id TEXT PRIMARY KEY,
-  poolId TEXT NOT NULL,
-  players TEXT NOT NULL,
-  totalCredits INTEGER,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  poolId TEXT,
+  players TEXT,
+  totalSalary INTEGER,
+  score INTEGER,
   createdAt TEXT
 );
 `);
 
-// ---------------- DEMO SEED ----------------
-function seedDemo() {
+function ensurePoolsForTodayTomorrow() {
   const today = isoDate(new Date());
   const tomorrow = isoDate(addDays(new Date(), 1));
 
-  db.prepare(`DELETE FROM teams`).run();
-  db.prepare(`DELETE FROM players`).run();
-  db.prepare(`DELETE FROM games`).run();
-  db.prepare(`DELETE FROM pools`).run();
+  const games = db.prepare(`
+    SELECT * FROM games WHERE date IN (?, ?)
+  `).all(today, tomorrow);
 
-  db.prepare(`INSERT INTO teams VALUES (1,'GSW','Warriors')`).run();
-  db.prepare(`INSERT INTO teams VALUES (2,'LAL','Lakers')`).run();
-
-  const insertPlayer = db.prepare(`
-    INSERT INTO players (playerId,fullName,pos,teamId,price)
-    VALUES (?,?,?,?,?)
+  const upsert = db.prepare(`
+    INSERT INTO pools (id, gameId, date, name, lockAt, salaryCap, rosterSize, entryFee, prize, mode, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name=excluded.name,
+      lockAt=excluded.lockAt,
+      updatedAt=excluded.updatedAt
   `);
 
-  for (let i = 1; i <= 10; i++) {
-    insertPlayer.run(`p${i}`, `Player ${i}`, "G", i <= 5 ? 1 : 2, 2);
+  const nowIso = new Date().toISOString();
+
+  for (const g of games) {
+    const id = `${g.date}-${g.gameId}`;
+    const name = `Daily Blitz: ${g.awayCode} @ ${g.homeCode}`;
+
+    upsert.run(
+      id,
+      g.gameId,
+      g.date,
+      name,
+      g.startAt,
+      10,
+      5,
+      5,
+      100,
+      "DEMO",
+      nowIso
+    );
   }
-
-  db.prepare(`
-    INSERT INTO games VALUES ('g1', ?, ?, 'GSW', 'LAL')
-  `).run(today, new Date().toISOString());
-
-  db.prepare(`
-    INSERT INTO pools VALUES (?, 'g1', ?, 'Daily Blitz: GSW @ LAL', ?, 10, 5)
-  `).run(`${today}-g1`, today, new Date().toISOString());
 }
 
-seedDemo();
-
-// ---------------- API ----------------
-
 app.get("/api/pools", (req, res) => {
-  const pools = db.prepare(`SELECT * FROM pools`).all();
-  res.json({ ok: true, pools });
+  ensurePoolsForTodayTomorrow();
+
+  const today = isoDate(new Date());
+  const tomorrow = isoDate(addDays(new Date(), 1));
+
+  const pools = db.prepare(`
+    SELECT * FROM pools WHERE date IN (?, ?)
+  `).all(today, tomorrow);
+
+  res.json({ ok: true, mode: "DEMO", pools });
 });
 
-app.get("/api/players", (req, res) => {
-  const players = db.prepare(`SELECT * FROM players WHERE isActive=1`).all();
+app.get("/api/roster", (req, res) => {
+  const players = db.prepare(`
+    SELECT * FROM players WHERE isActive = 1
+  `).all();
+
   res.json({ ok: true, players });
 });
 
-app.post("/api/entries", (req, res) => {
-  const { poolId, players } = req.body;
+app.post("/api/entry", (req, res) => {
+  const { poolId, players, totalSalary } = req.body;
 
   if (!poolId || !players || players.length !== 5) {
     return res.status(400).json({ ok: false, error: "Invalid entry" });
   }
 
-  const rows = db
-    .prepare(`SELECT * FROM players WHERE playerId IN (${players.map(() => "?").join(",")})`)
-    .all(...players);
-
-  const totalCredits = rows.reduce((sum, p) => sum + p.price, 0);
-
-  if (totalCredits > 10) {
-    return res.status(400).json({ ok: false, error: "Over salary cap" });
-  }
-
-  const id = `${poolId}-${Date.now()}`;
+  const score = Math.floor(Math.random() * 120); // mock scoring
 
   db.prepare(`
-    INSERT INTO entries VALUES (?,?,?,?,?)
-  `).run(id, poolId, JSON.stringify(players), totalCredits, new Date().toISOString());
+    INSERT INTO entries (poolId, players, totalSalary, score, createdAt)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    poolId,
+    JSON.stringify(players),
+    totalSalary,
+    score,
+    new Date().toISOString()
+  );
 
-  res.json({ ok: true, id, totalCredits });
+  res.json({ ok: true, score });
 });
 
-app.get("/api/entries/:poolId", (req, res) => {
-  const rows = db.prepare(`SELECT * FROM entries WHERE poolId=?`).all(req.params.poolId);
-  res.json({ ok: true, rows });
+app.get("/api/leaderboard/:poolId", (req, res) => {
+  const rows = db.prepare(`
+    SELECT * FROM entries WHERE poolId = ?
+    ORDER BY score DESC
+  `).all(req.params.poolId);
+
+  res.json({ ok: true, leaderboard: rows });
 });
 
-// ---------------- Frontend ----------------
 const frontendDist = path.join(__dirname, "frontend", "dist");
 app.use(express.static(frontendDist));
 app.get("*", (req, res) => {
@@ -146,5 +127,5 @@ app.get("*", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log("Server running on port", port);
+  console.log("Server started on", port);
 });
