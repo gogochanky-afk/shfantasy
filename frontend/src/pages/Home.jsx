@@ -2,62 +2,26 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function Home() {
-  const [pools, setPools] = useState([]);
-  const [mode, setMode] = useState("DEMO");
+  const [games, setGames] = useState([]);
 
   useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/pools");
-      const data = await res.json();
-      setPools(data.pools || []);
-      setMode(data.mode || "DEMO");
-    }
-    load();
+    fetch("/api/games")
+      .then(res => res.json())
+      .then(data => setGames(data.games || []));
   }, []);
 
   return (
-    <div style={{ padding: 30, fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 32 }}>🔥 SH Fantasy Arena</h1>
+    <div style={{ padding: 20 }}>
+      <h1>🔥 SH Fantasy Arena</h1>
 
-      <div style={{ marginBottom: 20, opacity: 0.7 }}>
-        Mode: <b>{mode}</b>
-      </div>
+      <h2>Today's Games</h2>
 
-      <h2>Today + Tomorrow Pools</h2>
-
-      {pools.map((pool) => (
-        <div
-          key={pool.id}
-          style={{
-            background: "#111",
-            color: "white",
-            padding: 20,
-            borderRadius: 12,
-            marginBottom: 15,
-          }}
-        >
-          <div style={{ fontSize: 20, fontWeight: "bold" }}>
-            {pool.name}
-          </div>
-
-          <div style={{ marginTop: 8 }}>
-            Salary Cap: {pool.salaryCap} | Roster Size: {pool.rosterSize}
-          </div>
-
-          <Link to={`/arena/${pool.id}`}>
-            <button
-              style={{
-                marginTop: 15,
-                padding: "10px 20px",
-                borderRadius: 8,
-                border: "none",
-                background: "orange",
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
-            >
-              Enter Arena
-            </button>
+      {games.map(game => (
+        <div key={game.id} style={{ marginBottom: 15 }}>
+          {game.homeTeam} vs {game.awayTeam}
+          <br />
+          <Link to="/arena">
+            <button style={{ marginTop: 8 }}>Enter Arena</button>
           </Link>
         </div>
       ))}
