@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("path");
 const Database = require("better-sqlite3");
 
-// existing scripts
+// scripts
 const { syncSchedule } = require("./scripts/sync-schedule");
 const { seedPlayers } = require("./scripts/seed-players");
 
@@ -62,14 +62,13 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_pools_date ON pools(date);
     CREATE INDEX IF NOT EXISTS idx_pools_gameId ON pools(gameId);
 
-    -- ✅ NEW: teams
+    -- Seed players tables (used by scripts/seed-players.js)
     CREATE TABLE IF NOT EXISTS teams (
       teamId INTEGER PRIMARY KEY,
       code TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL
     );
 
-    -- ✅ NEW: players
     CREATE TABLE IF NOT EXISTS players (
       playerId TEXT PRIMARY KEY,
       fullName TEXT NOT NULL,
@@ -80,14 +79,15 @@ function ensureSchema() {
       updatedAt TEXT
     );
 
-    -- ✅ NEW: roster snapshots
     CREATE TABLE IF NOT EXISTS roster_players (
       date TEXT NOT NULL,
       teamId INTEGER NOT NULL,
       playerId TEXT NOT NULL,
       PRIMARY KEY (date, teamId, playerId)
     );
-    CREATE INDEX IF NOT EXISTS idx_roster_players_date_team ON roster_players(date, teamId);
+
+    CREATE INDEX IF NOT EXISTS idx_players_teamId ON players(teamId);
+    CREATE INDEX IF NOT EXISTS idx_roster_date_team ON roster_players(date, teamId);
   `);
 }
 ensureSchema();
@@ -98,9 +98,7 @@ function ensurePoolsForTodayTomorrow() {
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const games = db
-    .prepare(
-      `SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`
-    )
+    .prepare(`SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`)
     .all(today, tomorrow);
 
   const upsert = db.prepare(`
@@ -119,22 +117,9 @@ function ensurePoolsForTodayTomorrow() {
     const id = `${g.date}-${g.gameId}`; // deterministic
     const name = `Daily Blitz: ${g.awayCode || "AWAY"} @ ${g.homeCode || "HOME"}`;
     const lockAt = g.startAt || new Date().toISOString();
-
     const mode = g.source === "ESPN" ? "LIVE" : "DEMO";
 
-    upsert.run(
-      id,
-      g.gameId,
-      g.date,
-      name,
-      lockAt,
-      10,
-      5,
-      5,
-      100,
-      mode,
-      nowIso
-    );
+    upsert.run(id, g.gameId, g.date, name, lockAt, 10, 5, 5, 100, mode, nowIso);
     count++;
   }
 
@@ -152,9 +137,7 @@ app.get("/api/games", (req, res) => {
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const games = db
-    .prepare(
-      `SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`
-    )
+    .prepare(`SELECT * FROM games WHERE date IN (?, ?) ORDER BY date ASC, startAt ASC`)
     .all(today, tomorrow);
 
   const mode = games.some((g) => g.source === "ESPN") ? "LIVE" : "DEMO";
@@ -169,16 +152,14 @@ app.get("/api/pools", (req, res) => {
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const pools = db
-    .prepare(
-      `SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`
-    )
+    .prepare(`SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`)
     .all(today, tomorrow);
 
   const mode = pools.some((p) => p.mode === "LIVE") ? "LIVE" : "DEMO";
   res.json({ ok: true, mode, poolResult, pools });
 });
 
-// backward compatible: /api/pool returns same as /api/pools
+// backward compat: fix "Cannot GET /api/pool"
 app.get("/api/pool", (req, res) => {
   const poolResult = ensurePoolsForTodayTomorrow();
 
@@ -186,9 +167,7 @@ app.get("/api/pool", (req, res) => {
   const tomorrow = isoDate(addDays(new Date(), 1));
 
   const pools = db
-    .prepare(
-      `SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`
-    )
+    .prepare(`SELECT * FROM pools WHERE date IN (?, ?) ORDER BY date ASC, lockAt ASC`)
     .all(today, tomorrow);
 
   const mode = pools.some((p) => p.mode === "LIVE") ? "LIVE" : "DEMO";
@@ -203,40 +182,7 @@ app.get("/api/pool/:id", (req, res) => {
   res.json({ ok: true, pool });
 });
 
-// ✅ NEW: list teams
-app.get("/api/teams", (req, res) => {
-  const teams = db
-    .prepare(`SELECT teamId, code, name FROM teams ORDER BY teamId ASC`)
-    .all();
-  res.json({ ok: true, teams });
-});
-
-// ✅ NEW: list players by date + teamId
-// GET /api/players?teamId=1&date=YYYY-MM-DD
-app.get("/api/players", (req, res) => {
-  const date = req.query.date || isoDate(new Date());
-  const teamId = Number(req.query.teamId);
-
-  if (!teamId || Number.isNaN(teamId)) {
-    return res.status(400).json({ ok: false, error: "teamId is required" });
-  }
-
-  const players = db
-    .prepare(
-      `
-      SELECT p.playerId, p.fullName, p.pos, p.teamId, p.price
-      FROM roster_players rp
-      JOIN players p ON p.playerId = rp.playerId
-      WHERE rp.date = ? AND rp.teamId = ? AND p.isActive = 1
-      ORDER BY p.price DESC, p.fullName ASC
-    `
-    )
-    .all(date, teamId);
-
-  res.json({ ok: true, mode: "DEMO", date, teamId, players });
-});
-
-// admin: sync schedule (real) -> then generate pools
+// admin: sync schedule (may fail -> still returns error JSON)
 app.get("/api/admin/sync-schedule", async (req, res) => {
   try {
     const result = await syncSchedule({ dryRun: false });
@@ -248,13 +194,10 @@ app.get("/api/admin/sync-schedule", async (req, res) => {
   }
 });
 
-// ✅ NEW: admin seed players (today + tomorrow roster snapshot)
-// GET /api/admin/seed-players
+// ✅ NEW: admin seed demo teams + players into DB
 app.get("/api/admin/seed-players", (req, res) => {
   try {
-    const today = isoDate(new Date());
-    const tomorrow = isoDate(addDays(new Date(), 1));
-    const result = seedPlayers({ dbPath: DB_PATH, dates: [today, tomorrow] });
+    const result = seedPlayers();
     res.json({ ok: true, result });
   } catch (e) {
     console.error("seed-players error:", e);
@@ -262,7 +205,41 @@ app.get("/api/admin/seed-players", (req, res) => {
   }
 });
 
-// ---------- Frontend static (if you have /frontend/dist) ----------
+// list teams
+app.get("/api/teams", (req, res) => {
+  try {
+    const teams = db.prepare(`SELECT * FROM teams ORDER BY teamId ASC`).all();
+    res.json({ ok: true, teams });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+// list players by date + teamId (uses roster_players snapshot)
+app.get("/api/players", (req, res) => {
+  try {
+    const date = req.query.date || isoDate(new Date());
+    const teamId = Number(req.query.teamId || 0);
+
+    if (!teamId) {
+      return res.json({ ok: true, mode: "DEMO", date, teamId, players: [] });
+    }
+
+    const players = db.prepare(`
+      SELECT p.*
+      FROM roster_players rp
+      JOIN players p ON p.playerId = rp.playerId
+      WHERE rp.date = ? AND rp.teamId = ?
+      ORDER BY p.price DESC, p.fullName ASC
+    `).all(date, teamId);
+
+    res.json({ ok: true, mode: "DEMO", date, teamId, players });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+// ---------- Frontend static ----------
 const frontendDist = path.join(__dirname, "frontend", "dist");
 app.use(express.static(frontendDist));
 app.get("*", (req, res) => {
