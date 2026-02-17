@@ -8,6 +8,7 @@ export default function Arena() {
   const [players, setPlayers] = useState([]);
   const [selected, setSelected] = useState([]);
   const [salaryUsed, setSalaryUsed] = useState(0);
+
   const salaryCap = 10;
 
   useEffect(() => {
@@ -22,14 +23,14 @@ export default function Arena() {
   function togglePlayer(p) {
     let updated;
 
-    if (selected.find(x => x.playerId === p.playerId)) {
-      updated = selected.filter(x => x.playerId !== p.playerId);
+    if (selected.find((x) => x.playerId === p.playerId)) {
+      updated = selected.filter((x) => x.playerId !== p.playerId);
     } else {
       if (selected.length >= 5) return;
       updated = [...selected, p];
     }
 
-    const total = updated.reduce((sum, x) => sum + x.price, 0);
+    const total = updated.reduce((sum, x) => sum + x.salary, 0);
     if (total > salaryCap) return;
 
     setSelected(updated);
@@ -37,55 +38,67 @@ export default function Arena() {
   }
 
   async function submitEntry() {
-    if (selected.length !== 5) return;
-
-    const res = await fetch("/api/entry", {
+    await fetch("/api/entry", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         poolId: id,
         players: selected,
-        totalSalary: salaryUsed
-      })
+        totalSalary: salaryUsed,
+      }),
     });
 
-    const data = await res.json();
-    alert("Score: " + data.score);
-    navigate("/leaderboard?pool=" + id);
+    navigate(`/leaderboard?poolId=${id}`);
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Arena</h2>
+    <div style={{ padding: 30 }}>
+      <h1>🏀 Arena</h1>
 
-      <div>
-        Salary: {salaryUsed} / {salaryCap}
+      <div style={{ marginBottom: 20 }}>
+        Selected: {selected.length}/5 | Salary: {salaryUsed}/{salaryCap}
       </div>
 
-      <h3>Selected ({selected.length}/5)</h3>
-      {selected.map(p => (
-        <div key={p.playerId}>{p.fullName}</div>
-      ))}
+      <div>
+        {players.map((p) => {
+          const isSelected = selected.find(
+            (x) => x.playerId === p.playerId
+          );
 
-      <h3>All Players</h3>
-      {players.map(p => (
-        <div key={p.playerId}>
-          {p.fullName} (${p.price})
-          <button onClick={() => togglePlayer(p)}>
-            {selected.find(x => x.playerId === p.playerId)
-              ? "Remove"
-              : "Add"}
-          </button>
-        </div>
-      ))}
+          return (
+            <div
+              key={p.playerId}
+              onClick={() => togglePlayer(p)}
+              style={{
+                padding: 12,
+                marginBottom: 8,
+                borderRadius: 8,
+                cursor: "pointer",
+                background: isSelected ? "orange" : "#eee",
+              }}
+            >
+              {p.name} – {p.salary}
+            </div>
+          );
+        })}
+      </div>
 
-      <button
-        onClick={submitEntry}
-        disabled={selected.length !== 5}
-        style={{ marginTop: 20 }}
-      >
-        Submit Entry
-      </button>
+      {selected.length === 5 && (
+        <button
+          onClick={submitEntry}
+          style={{
+            marginTop: 20,
+            padding: "10px 20px",
+            borderRadius: 8,
+            border: "none",
+            background: "green",
+            color: "white",
+            fontWeight: "bold",
+          }}
+        >
+          Submit Lineup 🚀
+        </button>
+      )}
     </div>
   );
 }
