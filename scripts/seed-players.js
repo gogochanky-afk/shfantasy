@@ -1,6 +1,18 @@
+// scripts/seed-players.js (REPLACE ENTIRE FILE)
+
 const path = require("path");
 const Database = require("better-sqlite3");
 
+/**
+ * Seed DEMO data into SQLite:
+ * - teams
+ * - players
+ * - roster_players (today + tomorrow)
+ * - games (today + tomorrow)  ✅ this is what makes pools exist
+ *
+ * Env:
+ * - DB_PATH (optional): default ../data.sqlite (same as index.js)
+ */
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -32,59 +44,139 @@ function ensureSchema(db) {
       playerId TEXT NOT NULL,
       PRIMARY KEY (date, teamId, playerId)
     );
+    CREATE INDEX IF NOT EXISTS idx_roster_date_team ON roster_players(date, teamId);
+
+    CREATE TABLE IF NOT EXISTS games (
+      gameId TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      startAt TEXT,
+      status TEXT,
+      homeCode TEXT,
+      homeName TEXT,
+      awayCode TEXT,
+      awayName TEXT,
+      source TEXT,
+      updatedAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_games_date ON games(date);
+
+    -- pools table may already exist from index.js; keep compatible
+    CREATE TABLE IF NOT EXISTS pools (
+      id TEXT PRIMARY KEY,
+      gameId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      name TEXT,
+      lockAt TEXT,
+      salaryCap INTEGER DEFAULT 10,
+      rosterSize INTEGER DEFAULT 5,
+      entryFee INTEGER DEFAULT 5,
+      prize INTEGER DEFAULT 100,
+      mode TEXT DEFAULT 'DEMO',
+      updatedAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_pools_date ON pools(date);
+    CREATE INDEX IF NOT EXISTS idx_pools_gameId ON pools(gameId);
   `);
 }
 
-function seedPlayers() {
-  const DB_PATH = process.env.DB_PATH || path.join(__dirname, "..", "data.sqlite");
-  const db = new Database(DB_PATH);
-  ensureSchema(db);
-
+function seedDemoTeamsPlayersRosterGames(db) {
   const today = isoDate(new Date());
   const tomorrow = isoDate(addDays(new Date(), 1));
-  const dates = [today, tomorrow];
-
   const nowIso = new Date().toISOString();
 
-  // ---- Teams (keep IDs stable) ----
-  const TEAMS = [
+  // --- DEMO teams (4)
+  const teams = [
     { teamId: 1, code: "LAL", name: "Lakers" },
     { teamId: 2, code: "GSW", name: "Warriors" },
     { teamId: 3, code: "BOS", name: "Celtics" },
-    { teamId: 4, code: "MIA", name: "Heat" }
+    { teamId: 4, code: "MIA", name: "Heat" },
   ];
 
-  // ---- Players (示範版：真名 + 價錢 1-4；之後可擴到全聯盟) ----
-  // Lakers (5)
-  const PLAYERS = [
-    { playerId: "lal_lebron", fullName: "LeBron James", pos: "F", teamId: 1, price: 4 },
-    { playerId: "lal_davis", fullName: "Anthony Davis", pos: "C", teamId: 1, price: 4 },
-    { playerId: "lal_reaves", fullName: "Austin Reaves", pos: "G", teamId: 1, price: 3 },
-    { playerId: "lal_russell", fullName: "D'Angelo Russell", pos: "G", teamId: 1, price: 2 },
-    { playerId: "lal_hachimura", fullName: "Rui Hachimura", pos: "F", teamId: 1, price: 1 },
+  // --- DEMO players (20) (5 each team)
+  const players = [
+    // LAL
+    { playerId: "lal-001", fullName: "LeBron James", pos: "F", teamId: 1, price: 4 },
+    { playerId: "lal-002", fullName: "Anthony Davis", pos: "C", teamId: 1, price: 4 },
+    { playerId: "lal-003", fullName: "D'Angelo Russell", pos: "G", teamId: 1, price: 2 },
+    { playerId: "lal-004", fullName: "Austin Reaves", pos: "G", teamId: 1, price: 2 },
+    { playerId: "lal-005", fullName: "Rui Hachimura", pos: "F", teamId: 1, price: 1 },
 
-    // Warriors (5)
-    { playerId: "gsw_curry", fullName: "Stephen Curry", pos: "G", teamId: 2, price: 4 },
-    { playerId: "gsw_thompson", fullName: "Klay Thompson", pos: "G", teamId: 2, price: 2 },
-    { playerId: "gsw_green", fullName: "Draymond Green", pos: "F", teamId: 2, price: 2 },
-    { playerId: "gsw_wiggins", fullName: "Andrew Wiggins", pos: "F", teamId: 2, price: 2 },
-    { playerId: "gsw_kuminga", fullName: "Jonathan Kuminga", pos: "F", teamId: 2, price: 2 },
+    // GSW
+    { playerId: "gsw-001", fullName: "Stephen Curry", pos: "G", teamId: 2, price: 4 },
+    { playerId: "gsw-002", fullName: "Klay Thompson", pos: "G", teamId: 2, price: 2 },
+    { playerId: "gsw-003", fullName: "Draymond Green", pos: "F", teamId: 2, price: 2 },
+    { playerId: "gsw-004", fullName: "Andrew Wiggins", pos: "F", teamId: 2, price: 2 },
+    { playerId: "gsw-005", fullName: "Jonathan Kuminga", pos: "F", teamId: 2, price: 1 },
 
-    // Celtics (5)
-    { playerId: "bos_tatum", fullName: "Jayson Tatum", pos: "F", teamId: 3, price: 4 },
-    { playerId: "bos_brown", fullName: "Jaylen Brown", pos: "F", teamId: 3, price: 3 },
-    { playerId: "bos_holiday", fullName: "Jrue Holiday", pos: "G", teamId: 3, price: 2 },
-    { playerId: "bos_white", fullName: "Derrick White", pos: "G", teamId: 3, price: 2 },
-    { playerId: "bos_porzingis", fullName: "Kristaps Porzingis", pos: "C", teamId: 3, price: 3 },
+    // BOS
+    { playerId: "bos-001", fullName: "Jayson Tatum", pos: "F", teamId: 3, price: 4 },
+    { playerId: "bos-002", fullName: "Jaylen Brown", pos: "F", teamId: 3, price: 3 },
+    { playerId: "bos-003", fullName: "Jrue Holiday", pos: "G", teamId: 3, price: 2 },
+    { playerId: "bos-004", fullName: "Derrick White", pos: "G", teamId: 3, price: 2 },
+    { playerId: "bos-005", fullName: "Kristaps Porzingis", pos: "C", teamId: 3, price: 3 },
 
-    // Heat (5)
-    { playerId: "mia_butler", fullName: "Jimmy Butler", pos: "F", teamId: 4, price: 4 },
-    { playerId: "mia_adebayo", fullName: "Bam Adebayo", pos: "C", teamId: 4, price: 3 },
-    { playerId: "mia_herro", fullName: "Tyler Herro", pos: "G", teamId: 4, price: 2 },
-    { playerId: "mia_robinson", fullName: "Duncan Robinson", pos: "G", teamId: 4, price: 1 },
-    { playerId: "mia_jacquez", fullName: "Jaime Jaquez Jr.", pos: "F", teamId: 4, price: 1 }
+    // MIA
+    { playerId: "mia-001", fullName: "Jimmy Butler", pos: "F", teamId: 4, price: 3 },
+    { playerId: "mia-002", fullName: "Bam Adebayo", pos: "C", teamId: 4, price: 3 },
+    { playerId: "mia-003", fullName: "Tyler Herro", pos: "G", teamId: 4, price: 2 },
+    { playerId: "mia-004", fullName: "Terry Rozier", pos: "G", teamId: 4, price: 2 },
+    { playerId: "mia-005", fullName: "Duncan Robinson", pos: "G", teamId: 4, price: 1 },
   ];
 
+  // --- DEMO games (today+tomorrow)
+  // IMPORTANT: gameId format matches pools id logic in index.js: `${date}-${gameId}`
+  const games = [
+    {
+      gameId: `demo-${today}-001`,
+      date: today,
+      startAt: `${today}T11:00:00.000Z`,
+      status: "SCHEDULED",
+      homeCode: "LAL",
+      homeName: "Lakers",
+      awayCode: "GSW",
+      awayName: "Warriors",
+      source: "DEMO",
+      updatedAt: nowIso,
+    },
+    {
+      gameId: `demo-${today}-002`,
+      date: today,
+      startAt: `${today}T13:30:00.000Z`,
+      status: "SCHEDULED",
+      homeCode: "BOS",
+      homeName: "Celtics",
+      awayCode: "MIA",
+      awayName: "Heat",
+      source: "DEMO",
+      updatedAt: nowIso,
+    },
+    {
+      gameId: `demo-${tomorrow}-001`,
+      date: tomorrow,
+      startAt: `${tomorrow}T11:00:00.000Z`,
+      status: "SCHEDULED",
+      homeCode: "LAL",
+      homeName: "Lakers",
+      awayCode: "GSW",
+      awayName: "Warriors",
+      source: "DEMO",
+      updatedAt: nowIso,
+    },
+    {
+      gameId: `demo-${tomorrow}-002`,
+      date: tomorrow,
+      startAt: `${tomorrow}T13:30:00.000Z`,
+      status: "SCHEDULED",
+      homeCode: "BOS",
+      homeName: "Celtics",
+      awayCode: "MIA",
+      awayName: "Heat",
+      source: "DEMO",
+      updatedAt: nowIso,
+    },
+  ];
+
+  // ---------- Upserts ----------
   const upsertTeam = db.prepare(`
     INSERT INTO teams (teamId, code, name)
     VALUES (?, ?, ?)
@@ -95,53 +187,111 @@ function seedPlayers() {
 
   const upsertPlayer = db.prepare(`
     INSERT INTO players (playerId, fullName, pos, teamId, price, isActive, updatedAt)
-    VALUES (?, ?, ?, ?, ?, 1, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(playerId) DO UPDATE SET
       fullName=excluded.fullName,
       pos=excluded.pos,
       teamId=excluded.teamId,
       price=excluded.price,
-      isActive=1,
+      isActive=excluded.isActive,
       updatedAt=excluded.updatedAt
   `);
 
-  const insertRoster = db.prepare(`
+  const upsertGame = db.prepare(`
+    INSERT INTO games (gameId, date, startAt, status, homeCode, homeName, awayCode, awayName, source, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(gameId) DO UPDATE SET
+      date=excluded.date,
+      startAt=excluded.startAt,
+      status=excluded.status,
+      homeCode=excluded.homeCode,
+      homeName=excluded.homeName,
+      awayCode=excluded.awayCode,
+      awayName=excluded.awayName,
+      source=excluded.source,
+      updatedAt=excluded.updatedAt
+  `);
+
+  const upsertRoster = db.prepare(`
     INSERT OR IGNORE INTO roster_players (date, teamId, playerId)
     VALUES (?, ?, ?)
   `);
 
   const tx = db.transaction(() => {
     // teams
-    for (const t of TEAMS) upsertTeam.run(t.teamId, t.code, t.name);
+    for (const t of teams) upsertTeam.run(t.teamId, t.code, t.name);
 
     // players
-    for (const p of PLAYERS) {
-      upsertPlayer.run(p.playerId, p.fullName, p.pos, p.teamId, p.price, nowIso);
+    for (const p of players) {
+      upsertPlayer.run(
+        p.playerId,
+        p.fullName,
+        p.pos,
+        p.teamId,
+        p.price,
+        1,
+        nowIso
+      );
     }
 
-    // roster snapshots for today+tomorrow
-    for (const d of dates) {
-      for (const p of PLAYERS) insertRoster.run(d, p.teamId, p.playerId);
+    // roster: today + tomorrow (all players active for both days)
+    for (const d of [today, tomorrow]) {
+      for (const p of players) {
+        upsertRoster.run(d, p.teamId, p.playerId);
+      }
+    }
+
+    // games
+    for (const g of games) {
+      upsertGame.run(
+        g.gameId,
+        g.date,
+        g.startAt,
+        g.status,
+        g.homeCode,
+        g.homeName,
+        g.awayCode,
+        g.awayName,
+        g.source,
+        g.updatedAt
+      );
     }
   });
 
   tx();
 
-  const teamCount = db.prepare(`SELECT COUNT(*) as c FROM teams`).get().c;
-  const playerCount = db.prepare(`SELECT COUNT(*) as c FROM players`).get().c;
-  const rosterCount = db.prepare(`SELECT COUNT(*) as c FROM roster_players WHERE date IN (?, ?)`)
-    .get(today, tomorrow).c;
-
-  db.close();
-
   return {
     ok: true,
-    dbPath: DB_PATH,
-    dates,
-    teams: teamCount,
-    players: playerCount,
-    rosterRows: rosterCount
+    dbPath: db.name || "sqlite",
+    dates: [today, tomorrow],
+    teams: teams.length,
+    players: players.length,
+    rosterRows: players.length * 2,
+    games: games.length,
   };
+}
+
+async function seedPlayers({ dryRun = false } = {}) {
+  const DB_PATH = process.env.DB_PATH || path.join(__dirname, "..", "data.sqlite");
+  const db = new Database(DB_PATH);
+
+  try {
+    ensureSchema(db);
+
+    if (dryRun) {
+      return {
+        ok: true,
+        dryRun: true,
+        message: "dryRun=true; schema ensured only",
+        dbPath: DB_PATH,
+      };
+    }
+
+    const result = seedDemoTeamsPlayersRosterGames(db);
+    return { ok: true, result };
+  } finally {
+    db.close();
+  }
 }
 
 module.exports = { seedPlayers };
