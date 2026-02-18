@@ -1,31 +1,15 @@
-# ---------- 1) Build Frontend ----------
-FROM node:18 AS frontend-builder
-WORKDIR /app/frontend
-
-RUN corepack enable
-
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
-
-COPY frontend/ ./
-RUN pnpm build
-
-
-# ---------- 2) Backend Runtime ----------
 FROM node:18
+
 WORKDIR /app
-
-# copy backend (which is root in your repo)
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
-
 COPY . .
 
-# copy frontend build into public
-RUN mkdir -p public
-COPY --from=frontend-builder /app/frontend/dist ./public
+# 1) Build frontend
+RUN cd frontend && npm install && npm run build
 
-ENV PORT=8080
+# 2) Install backend deps (root)
+RUN npm install
+
 EXPOSE 8080
 
+# ✅ IMPORTANT: use ROOT index.js as the only server entry
 CMD ["node", "index.js"]
