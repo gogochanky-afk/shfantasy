@@ -1,64 +1,33 @@
-const express = require('express');
-const path = require('path');
+const express = require("express");
+const path = require("path");
+
+const { initDb } = require("./db/database");
+const poolsRoutes = require("./routes/pools");
+const joinRoutes = require("./routes/join");
 
 const app = express();
 
 app.use(express.json());
 
-/* =========================
-   API ROUTES
-========================= */
+// init DB + seed demo pools
+initDb();
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+// health
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
 });
 
-app.get('/api/pools', (req, res) => {
-  res.json({
-    mode: 'DEMO',
-    pools: [
-      {
-        id: 'demo-today',
-        name: 'Today Arena',
-        salaryCap: 10,
-        rosterSize: 5,
-        date: 'today'
-      },
-      {
-        id: 'demo-tomorrow',
-        name: 'Tomorrow Arena',
-        salaryCap: 10,
-        rosterSize: 5,
-        date: 'tomorrow'
-      }
-    ]
-  });
+// API routes
+app.use("/api", poolsRoutes);
+app.use("/api", joinRoutes);
+
+// serve frontend (public/)
+app.use(express.static(path.join(__dirname, "public")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
-
-app.post('/api/join', (req, res) => {
-  const { username, poolId } = req.body;
-  res.json({
-    success: true,
-    message: `${username} joined ${poolId}`
-  });
-});
-
-/* =========================
-   SERVE FRONTEND
-========================= */
-
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-/* =========================
-   START SERVER
-========================= */
 
 const PORT = process.env.PORT || 8080;
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
