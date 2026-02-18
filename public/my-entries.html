@@ -1,161 +1,138 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SH Fantasy Arena</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        background: #111;
-        color: #fff;
-        padding: 20px;
-      }
-      .header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 18px;
-      }
-      h1 {
-        margin: 0;
-        font-size: 40px;
-        letter-spacing: 0.5px;
-      }
-      .right {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-      }
-      .pill {
-        background: #222;
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 14px;
-        display: inline-flex;
-        gap: 6px;
-        align-items: center;
-      }
-      a.btn {
-        background: #222;
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 14px;
-        color: #fff;
-        text-decoration: none;
-        border: 1px solid #333;
-      }
-      a.btn.primary {
-        border-color: #f90;
-        color: #f90;
-      }
-      .muted { opacity: 0.75; font-size: 13px; }
-
-      .card {
-        background: #222;
-        border-radius: 12px;
-        padding: 16px;
-        margin: 14px 0;
-        max-width: 720px;
-      }
-      .poolTitle { font-size: 20px; font-weight: 800; margin-bottom: 10px; }
-      .poolMeta { margin: 6px 0; }
-      button {
-        background: orange;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
-        font-weight: 800;
-        margin-top: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <div>
-        <h1>🔥 SH Fantasy Arena</h1>
-        <div class="muted">Today + Tomorrow Pools</div>
-        <div class="muted">提示：Join 之後會記住你個名（localStorage）</div>
-      </div>
-
-      <div class="right">
-        <div class="pill">Mode: <b id="modeText">-</b></div>
-        <div class="pill">User: <b id="userText">-</b></div>
-        <a class="btn primary" href="/my-entries.html">My Entries →</a>
-      </div>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SH Fantasy - My Entries</title>
+  <style>
+    body{font-family:Arial;background:#111;color:#fff;padding:20px}
+    .header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .pill{background:#222;border-radius:999px;padding:8px 12px;display:inline-block}
+    .btn{background:transparent;border:1px solid orange;color:orange;border-radius:999px;padding:10px 14px;cursor:pointer}
+    .btnSolid{background:orange;border:none;color:#111;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .card{background:#1b1b1b;border-radius:12px;padding:14px;margin-top:12px}
+    .muted{opacity:.75}
+    .row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .small{font-size:12px;opacity:.85}
+    a{color:orange}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div style="font-size:22px;font-weight:700;">📒 My Entries</div>
+      <div class="muted small">Demo mode / localStorage username fallback</div>
     </div>
+    <div class="row">
+      <span class="pill" id="modePill">Mode: -</span>
+      <span class="pill" id="userPill">User: -</span>
+      <button class="btn" onclick="goHome()">← Back</button>
+    </div>
+  </div>
 
-    <div id="pools"></div>
+  <div class="card">
+    <div class="row">
+      <div>
+        <div style="font-weight:700;">Load Entries</div>
+        <div class="muted small">If no username found, we will ask once and save it.</div>
+      </div>
+      <button class="btnSolid" onclick="load()">Refresh</button>
+    </div>
+  </div>
 
-    <script>
-      function getStoredUser() {
-        return (
-          localStorage.getItem("sh_username") ||
-          localStorage.getItem("username") ||
-          ""
-        ).trim();
-      }
+  <div id="list"></div>
 
-      function setStoredUser(u) {
-        localStorage.setItem("sh_username", u);
-        localStorage.setItem("username", u);
-      }
+<script>
+  function goHome(){ window.location.href = "/"; }
 
-      async function loadPools() {
-        const res = await fetch("/api/pools");
-        const data = await res.json();
+  function getUsername(){
+    // Try query param first
+    const url = new URL(window.location.href);
+    const q = url.searchParams.get("username");
+    if (q && q.trim()) return q.trim();
 
-        document.getElementById("modeText").textContent = data.mode || "-";
-        const existingUser = getStoredUser();
-        document.getElementById("userText").textContent = existingUser || "-";
+    // Then localStorage
+    const a = localStorage.getItem("sh_username");
+    if (a && a.trim()) return a.trim();
 
-        const container = document.getElementById("pools");
-        container.innerHTML = "";
+    const b = localStorage.getItem("username");
+    if (b && b.trim()) return b.trim();
 
-        (data.pools || []).forEach((pool) => {
-          const div = document.createElement("div");
-          div.className = "card";
-          div.innerHTML = `
-            <div class="poolTitle">${pool.name}</div>
-            <div class="poolMeta">Salary Cap: <b>${pool.salaryCap}</b></div>
-            <div class="poolMeta">Roster Size: <b>${pool.rosterSize}</b></div>
-            <button>Join</button>
-          `;
+    return "";
+  }
 
-          div.querySelector("button").addEventListener("click", async () => {
-            let username = getStoredUser();
-            if (!username) {
-              username = prompt("Enter your name:");
-              if (!username) return;
-              username = username.trim();
-              setStoredUser(username);
-              document.getElementById("userText").textContent = username;
-            }
+  function ensureUsername(){
+    let u = getUsername();
+    if (u) return u;
 
-            const joinRes = await fetch("/api/join", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ poolId: pool.id, username }),
-            });
-            const joinData = await joinRes.json();
+    u = prompt("Enter your name (for My Entries):");
+    if (!u || !u.trim()) return "";
+    u = u.trim();
+    localStorage.setItem("sh_username", u);
+    return u;
+  }
 
-            if (!joinData || !joinData.ok) {
-              alert("Join failed");
-              return;
-            }
+  function renderEmpty(msg){
+    document.getElementById("list").innerHTML = `
+      <div class="card">
+        <div style="font-weight:700;">No entries</div>
+        <div class="muted">${msg || "You have not joined any pool yet."}</div>
+        <div style="margin-top:10px;">
+          <button class="btnSolid" onclick="goHome()">Go Join a Pool</button>
+        </div>
+      </div>
+    `;
+  }
 
-            alert("Joined successfully!");
-          });
+  function openDraft(poolId, entryId){
+    const params = new URLSearchParams();
+    if (poolId) params.set("poolId", poolId);
+    if (entryId) params.set("entryId", entryId);
+    window.location.href = "/draft.html?" + params.toString();
+  }
 
-          container.appendChild(div);
-        });
-      }
+  async function load(){
+    const username = ensureUsername();
+    if (!username){
+      renderEmpty("No username. Please go back and Join first.");
+      return;
+    }
 
-      loadPools();
-    </script>
-  </body>
+    document.getElementById("userPill").textContent = "User: " + username;
+
+    const res = await fetch("/api/my-entries?username=" + encodeURIComponent(username));
+    const data = await res.json().catch(()=>null);
+
+    if (!data || !data.ok){
+      renderEmpty("API error. Check /api/my-entries.");
+      return;
+    }
+
+    document.getElementById("modePill").textContent = "Mode: " + (data.mode || "-");
+
+    const entries = data.entries || [];
+    if (!entries.length){
+      renderEmpty("0 entries found for " + username);
+      return;
+    }
+
+    document.getElementById("list").innerHTML = entries.map(e => `
+      <div class="card">
+        <div class="row">
+          <div>
+            <div style="font-weight:700;">Pool: ${e.poolId}</div>
+            <div class="small muted">Entry ID: ${e.id}</div>
+            <div class="small muted">Created: ${e.createdAt || "-"}</div>
+          </div>
+          <div>
+            <button class="btnSolid" onclick="openDraft('${e.poolId}','${e.id}')">Open Draft</button>
+          </div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  load();
+</script>
+</body>
 </html>
