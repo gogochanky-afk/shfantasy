@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Entries - SH Fantasy</title>
+  <style>
+    body { font-family: Arial; background: #111; color: #fff; padding: 20px; }
+    a { color: #ffb000; text-decoration: none; }
+    .card { background: #222; padding: 14px; border-radius: 10px; margin-bottom: 12px; }
+    .row { display: flex; justify-content: space-between; gap: 10px; }
+    .muted { color: #aaa; font-size: 12px; }
+    button { background: orange; border: none; padding: 8px 12px; cursor: pointer; border-radius: 6px; }
+    input { padding: 8px 10px; border-radius: 6px; border: 1px solid #333; background: #111; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <h1>📌 My Entries</h1>
+    <div class="muted"><a href="/">← Back</a></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">Current User</div>
+        <div id="userLabel" style="font-size: 18px;">-</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="muted">Switch User</div>
+        <div>
+          <input id="userInput" placeholder="Type name..." />
+          <button id="saveBtn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" class="muted"></div>
+  <br/>
+
+  <div id="list"></div>
+
+  <script>
+    function getUsername() {
+      return localStorage.getItem("shfantasy_username") || "";
+    }
+    function setUsername(name) {
+      localStorage.setItem("shfantasy_username", name);
+    }
+
+    async function loadEntries() {
+      const username = getUsername().trim();
+      document.getElementById("userLabel").textContent = username || "-";
+      document.getElementById("userInput").value = username;
+
+      if (!username) {
+        document.getElementById("status").textContent = "No username saved yet. Please enter your name above.";
+        document.getElementById("list").innerHTML = "";
+        return;
+      }
+
+      document.getElementById("status").textContent = "Loading...";
+      const res = await fetch("/api/my-entries?username=" + encodeURIComponent(username));
+      const data = await res.json();
+
+      if (!data.ok) {
+        document.getElementById("status").textContent = "Error: " + (data.error || "unknown");
+        document.getElementById("list").innerHTML = "";
+        return;
+      }
+
+      document.getElementById("status").textContent = `Mode: ${data.mode} • Total: ${data.entries.length}`;
+
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+
+      if (data.entries.length === 0) {
+        list.innerHTML = `<div class="card">No entries yet. Go back and Join a pool first.</div>`;
+        return;
+      }
+
+      data.entries.forEach(e => {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `
+          <div class="row">
+            <div><b>Pool</b>: ${e.poolId}</div>
+            <div class="muted">#${e.id}</div>
+          </div>
+          <div class="muted">Created: ${e.createdAt}</div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    document.getElementById("saveBtn").addEventListener("click", () => {
+      const v = (document.getElementById("userInput").value || "").trim();
+      if (!v) return alert("Please enter a name.");
+      setUsername(v);
+      loadEntries();
+    });
+
+    loadEntries();
+  </script>
+</body>
+</html>
