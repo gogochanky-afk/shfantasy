@@ -1,158 +1,262 @@
 <!-- /public/draft.html -->
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <title>SH Fantasy - Draft</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: Arial; background:#111; color:#fff; padding:20px; }
-    .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
-    .badge { background:#222; padding:8px 12px; border-radius:999px; font-size:14px; }
-    .card { background:#1e1e1e; padding:14px; border-radius:12px; margin:12px 0; }
-    button { background:orange; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
-    button:disabled { opacity:.4; cursor:not-allowed; }
-    .player { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #2a2a2a; }
-    .player:last-child { border-bottom:none; }
-    .ok { color:#0f0; }
-    .bad { color:#f33; }
-    a { color:orange; text-decoration:none; }
-  </style>
-</head>
-<body>
-  <div class="top">
-    <div class="badge">Mode: <span id="mode">DEMO</span> · User: <span id="user">-</span></div>
-    <div><a href="/my-entries">My Entries →</a></div>
-  </div>
-
-  <h1>📝 Draft Lineup</h1>
-  <div class="card">
-    <div>Pool: <b id="poolId">-</b> · Entry: <b id="entryId">-</b></div>
-    <div style="margin-top:8px;">
-      Salary Cap: <b>10</b> · Pick exactly: <b>5</b>
-    </div>
-    <div style="margin-top:8px;">
-      Total Cost: <b id="totalCost">0</b>
-      <span id="capStatus" class="ok">(OK)</span>
-    </div>
-    <div style="margin-top:10px;">
-      <button id="saveBtn" disabled>Save Lineup</button>
-      <button id="clearBtn" style="margin-left:8px;background:#444;">Clear</button>
-      <a href="/" style="margin-left:12px;">← Back</a>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Players</h3>
-    <div id="players"></div>
-  </div>
-
-<script>
-  const qs = new URLSearchParams(location.search);
-  const entryId = qs.get('entryId');
-  const poolId = qs.get('poolId');
-
-  const user = localStorage.getItem('shf_username') || '';
-  document.getElementById('user').textContent = user || '-';
-  document.getElementById('entryId').textContent = entryId || '-';
-  document.getElementById('poolId').textContent = poolId || '-';
-
-  if (!entryId || !poolId || !user) {
-    alert("Missing entryId/poolId/user. Go back and Join first.");
-  }
-
-  let selected = new Set();
-
-  function render(players) {
-    const container = document.getElementById('players');
-    container.innerHTML = '';
-
-    const totalCost = players
-      .filter(p => selected.has(p.id))
-      .reduce((sum, p) => sum + p.cost, 0);
-
-    document.getElementById('totalCost').textContent = totalCost;
-
-    const capStatus = document.getElementById('capStatus');
-    const saveBtn = document.getElementById('saveBtn');
-
-    const ok = (selected.size === 5 && totalCost <= 10);
-    capStatus.textContent = ok ? '(OK)' : '(Need 5 picks & <= 10)';
-    capStatus.className = ok ? 'ok' : 'bad';
-    saveBtn.disabled = !ok;
-
-    players.forEach(p => {
-      const row = document.createElement('div');
-      row.className = 'player';
-      const checked = selected.has(p.id);
-
-      row.innerHTML = `
-        <div>
-          <label>
-            <input type="checkbox" ${checked ? 'checked' : ''} data-id="${p.id}" />
-            ${p.name}
-          </label>
-        </div>
-        <div>Cost: <b>${p.cost}</b></div>
-      `;
-      container.appendChild(row);
-    });
-
-    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const id = e.target.getAttribute('data-id');
-        if (e.target.checked) {
-          selected.add(id);
-        } else {
-          selected.delete(id);
-        }
-        render(players);
-      });
-    });
-  }
-
-  async function loadPlayersAndExistingLineup() {
-    const pres = await fetch('/api/players');
-    const pdata = await pres.json();
-    const players = pdata.players || [];
-
-    // try load existing lineup
-    const lres = await fetch(`/api/lineup?entryId=${encodeURIComponent(entryId)}`);
-    const ldata = await lres.json();
-    if (ldata && ldata.lineup && Array.isArray(ldata.lineup.players)) {
-      selected = new Set(ldata.lineup.players);
-    }
-
-    render(players);
-
-    document.getElementById('saveBtn').onclick = async () => {
-      const body = {
-        entryId: Number(entryId),
-        poolId,
-        username: user,
-        players: Array.from(selected)
-      };
-      const res = await fetch('/api/lineup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || 'Save failed');
-        return;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Draft</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #111;
+        color: #fff;
+        padding: 20px;
       }
-      alert('Saved! Total cost = ' + data.totalCost);
-      location.href = '/my-entries';
-    };
+      a { color: #f90; text-decoration: none; }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .card {
+        background: #222;
+        border-radius: 12px;
+        padding: 14px;
+        margin: 12px 0;
+      }
+      .pill {
+        display: inline-block;
+        background: #222;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 14px;
+      }
+      button {
+        background: orange;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 800;
+      }
+      .muted { opacity: 0.75; font-size: 13px; }
+      .playerRow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid #333;
+      }
+      .playerRow:last-child { border-bottom: none; }
+      .ok { color: #0f0; }
+      .bad { color: #f33; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="pill">🧠 <b>Draft</b></div>
+      <div><a href="/my-entries.html">← My Entries</a></div>
+    </div>
 
-    document.getElementById('clearBtn').onclick = () => {
-      selected = new Set();
-      render(players);
-    };
-  }
+    <div class="card">
+      <div><b>Context</b></div>
+      <div class="muted" style="margin-top:6px;">
+        Pool: <span class="mono" id="poolIdText">-</span> • Entry: <span class="mono" id="entryIdText">-</span>
+      </div>
+      <div class="muted" style="margin-top:6px;">
+        User: <span class="mono" id="userText">-</span> • Salary Cap: <span class="mono" id="capText">10</span> • Roster Size: <span class="mono" id="rosterText">5</span>
+      </div>
+    </div>
 
-  loadPlayersAndExistingLineup();
-</script>
-</body>
+    <div class="card">
+      <div class="muted">Select players (tick)</div>
+      <div id="playersList" style="margin-top:10px;">Loading...</div>
+    </div>
+
+    <div class="card">
+      <div><b>Status</b></div>
+      <div style="margin-top:8px;">
+        Selected: <span class="mono" id="selectedCount">0</span> /
+        <span class="mono" id="rosterSize">5</span>
+        • Cost: <span class="mono" id="costText">0</span> /
+        <span class="mono" id="salaryCap">10</span>
+        • <span id="capStatus" class="ok">OK</span>
+      </div>
+      <div style="margin-top:12px;">
+        <button id="saveBtn">Save Lineup</button>
+      </div>
+      <div class="muted" style="margin-top:8px;">
+        Save 會寫入 `/api/lineup`（同時會檢查 salary cap）。
+      </div>
+    </div>
+
+    <script>
+      const SALARY_CAP = 10;
+      const ROSTER_SIZE = 5;
+
+      function getStoredUser() {
+        return (
+          localStorage.getItem("sh_username") ||
+          localStorage.getItem("username") ||
+          localStorage.getItem("sh_user") ||
+          localStorage.getItem("user") ||
+          ""
+        ).trim();
+      }
+
+      function setStoredUser(u) {
+        localStorage.setItem("sh_username", u);
+        localStorage.setItem("username", u); // fallback
+      }
+
+      function qs(name) {
+        return new URLSearchParams(window.location.search).get(name);
+      }
+
+      function compute(selectedIds, players) {
+        const selected = players.filter(p => selectedIds.has(p.id));
+        const cost = selected.reduce((sum, p) => sum + (p.cost || 0), 0);
+        return { selected, cost };
+      }
+
+      async function main() {
+        // context
+        const poolId = qs("poolId") || "demo-today";
+        const entryId = qs("entryId"); // important for resume
+        let username = getStoredUser();
+
+        document.getElementById("poolIdText").textContent = poolId;
+        document.getElementById("entryIdText").textContent = entryId || "(none)";
+        document.getElementById("capText").textContent = SALARY_CAP;
+        document.getElementById("rosterText").textContent = ROSTER_SIZE;
+        document.getElementById("salaryCap").textContent = SALARY_CAP;
+        document.getElementById("rosterSize").textContent = ROSTER_SIZE;
+
+        if (!username) {
+          const u = prompt("Enter your name:");
+          if (!u) {
+            alert("Username required");
+            return;
+          }
+          username = u.trim();
+          setStoredUser(username);
+        }
+        document.getElementById("userText").textContent = username;
+
+        // 1) load players
+        const pres = await fetch("/api/players");
+        const pdata = await pres.json();
+        const players = (pdata && pdata.players) ? pdata.players : [];
+        const selectedIds = new Set();
+
+        // 2) if entryId exists, load existing lineup and preselect
+        if (entryId) {
+          const lres = await fetch(`/api/lineup?entryId=${encodeURIComponent(entryId)}`);
+          const ldata = await lres.json();
+          if (ldata && ldata.ok && ldata.lineup && Array.isArray(ldata.lineup.players)) {
+            ldata.lineup.players.forEach(pid => selectedIds.add(pid));
+          }
+        }
+
+        // render list
+        const list = document.getElementById("playersList");
+        list.innerHTML = "";
+
+        players.forEach((p) => {
+          const row = document.createElement("div");
+          row.className = "playerRow";
+
+          const left = document.createElement("label");
+          left.style.display = "flex";
+          left.style.alignItems = "center";
+          left.style.gap = "10px";
+          left.style.cursor = "pointer";
+
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = selectedIds.has(p.id);
+
+          cb.addEventListener("change", () => {
+            if (cb.checked) selectedIds.add(p.id);
+            else selectedIds.delete(p.id);
+            updateStatus(players, selectedIds);
+          });
+
+          const name = document.createElement("span");
+          name.textContent = `${p.name} (${p.cost})`;
+
+          left.appendChild(cb);
+          left.appendChild(name);
+
+          row.appendChild(left);
+
+          list.appendChild(row);
+        });
+
+        updateStatus(players, selectedIds);
+
+        // save
+        document.getElementById("saveBtn").addEventListener("click", async () => {
+          if (!entryId) {
+            alert("Missing entryId. Please open draft from My Entries.");
+            return;
+          }
+
+          const { selected, cost } = compute(selectedIds, players);
+
+          if (selected.length !== ROSTER_SIZE) {
+            alert(`Roster must be exactly ${ROSTER_SIZE} players`);
+            return;
+          }
+          if (cost > SALARY_CAP) {
+            alert(`Over salary cap: ${cost} > ${SALARY_CAP}`);
+            return;
+          }
+
+          const body = {
+            entryId: Number(entryId),
+            poolId,
+            username,
+            players: selected.map(p => p.id),
+          };
+
+          const res = await fetch("/api/lineup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+
+          if (!data || !data.ok) {
+            alert("Save failed");
+            return;
+          }
+
+          alert("Lineup Saved! 💪");
+        });
+      }
+
+      function updateStatus(players, selectedIds) {
+        const { selected, cost } = compute(selectedIds, players);
+
+        document.getElementById("selectedCount").textContent = selected.length;
+        document.getElementById("costText").textContent = cost;
+
+        const capStatus = document.getElementById("capStatus");
+
+        if (selected.length > ROSTER_SIZE || cost > SALARY_CAP) {
+          capStatus.textContent = "OVER";
+          capStatus.className = "bad";
+        } else {
+          capStatus.textContent = "OK";
+          capStatus.className = "ok";
+        }
+      }
+
+      main();
+    </script>
+  </body>
 </html>
