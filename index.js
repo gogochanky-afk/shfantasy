@@ -1,14 +1,20 @@
+// /index.js
 const express = require("express");
+const path = require("path");
 const { initDb } = require("./db-init");
 
 const app = express();
 app.use(express.json());
 
+// ---- DB ----
 const db = initDb();
 
-//
-// ===== DEMO PLAYERS (Alpha hardcoded) =====
-//
+// ---- DEMO DATA (Alpha hardcoded) ----
+const DEMO_POOLS = [
+  { id: "demo-today", name: "Today Arena", salaryCap: 10, rosterSize: 5, date: "today" },
+  { id: "demo-tomorrow", name: "Tomorrow Arena", salaryCap: 10, rosterSize: 5, date: "tomorrow" },
+];
+
 const DEMO_PLAYERS = [
   { id: "p1", name: "LeBron James", cost: 3 },
   { id: "p2", name: "Stephen Curry", cost: 3 },
@@ -19,129 +25,105 @@ const DEMO_PLAYERS = [
   { id: "p7", name: "Nikola Jokic", cost: 3 },
   { id: "p8", name: "Ja Morant", cost: 2 },
   { id: "p9", name: "Jimmy Butler", cost: 2 },
-  { id: "p10", name: "Kyrie Irving", cost: 2 }
+  { id: "p10", name: "Kyrie Irving", cost: 2 },
 ];
 
-//
-// ===== ROOT =====
-//
-app.get("/", (req, res) => {
-  res.send("SH Fantasy Backend Running 🚀");
+// ---- API: health ----
+app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+
+// ---- API: pools ----
+app.get("/api/pools", (req, res) => {
+  res.json({ mode: "DEMO", pools: DEMO_POOLS });
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
-});
-
-//
-// ===== PLAYERS =====
-//
+// ---- API: players ----
 app.get("/api/players", (req, res) => {
   res.json({ mode: "DEMO", players: DEMO_PLAYERS });
 });
 
-//
-// ===== JOIN POOL =====
-//
+// ---- API: join pool -> create entry ----
 app.post("/api/join", (req, res) => {
-  const { poolId, username } = req.body;
-
-  if (!poolId || !username) {
-    return res.status(400).json({ error: "Missing poolId or username" });
-  }
+  const { poolId, username } = req.body || {};
+  if (!poolId || !username) return res.status(400).json({ error: "poolId and username required" });
 
   const createdAt = new Date().toISOString();
-
   const stmt = db.prepare(`
     INSERT INTO entries (poolId, username, createdAt)
     VALUES (?, ?, ?)
   `);
-
   const result = stmt.run(poolId, username, createdAt);
 
-  res.json({
-    ok: true,
-    entryId: result.lastInsertRowid,
-    poolId,
-    username
-  });
+  res.json({ ok: true, mode: "DEMO", entryId: result.lastInsertRowid, poolId, username });
 });
 
-//
-// ===== SAVE LINEUP =====
-//
+// ---- API: my entries ----
+app.get("/api/my-entries", (req, res) => {
+  const username = (req.query.username || "").trim();
+  if (!username) return res.status(400).json({ error: "username required" });
+
+  const rows = db
+    .prepare(`SELECT id, poolId, username, createdAt FROM entries WHERE username = ? ORDER BY id DESC`)
+    .all(username);
+
+  res.json({ ok: true, mode: "DEMO", username, entries: rows });
+});
+
+// ---- API: save lineup (5 players, salary cap enforced) ----
 app.post("/api/lineup", (req, res) => {
-  const { entryId, poolId, username, players } = req.body;
+  const { entryId, poolId, username, players } = req.body || {};
 
-  if (!entryId || !players || players.length !== 5) {
-    return res.status(400).json({ error: "Invalid lineup" });
+  if (!entryId || !poolId || !username || !Array.isArray(players)) {
+    return res.status(400).json({ error: "entryId, poolId, username, players[] required" });
   }
+  if (players.length !== 5) return res.status(400).json({ error: "Must pick exactly 5 players" });
 
-  const selectedPlayers = DEMO_PLAYERS.filter(p =>
-    players.includes(p.id)
-  );
+  // validate players & cost
+  const selected = DEMO_PLAYERS.filter((p) => players.includes(p.id));
+  if (selected.length !== 5) return res.status(400).json({ error: "Invalid player ids" });
 
-  const totalCost = selectedPlayers.reduce((sum, p) => sum + p.cost, 0);
-
-  if (totalCost > 10) {
-    return res.status(400).json({ error: "Salary cap exceeded" });
-  }
+  const totalCost = selected.reduce((sum, p) => sum + p.cost, 0);
+  if (totalCost > 10) return res.status(400).json({ error: "Over salary cap (10)" });
 
   const now = new Date().toISOString();
-
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO lineups
     (entryId, poolId, username, playersJson, totalCost, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-
-  stmt.run(
-    entryId,
-    poolId,
-    username,
-    JSON.stringify(players),
-    totalCost,
-    now,
-    now
-  );
+  stmt.run(entryId, poolId, username, JSON.stringify(players), totalCost, now, now);
 
   res.json({ ok: true, totalCost });
 });
 
-//
-// ===== GET LINEUP =====
-//
+// ---- API: get lineup by entryId ----
 app.get("/api/lineup", (req, res) => {
-  const { entryId } = req.query;
+  const entryId = req.query.entryId;
+  if (!entryId) return res.status(400).json({ error: "entryId required" });
 
-  if (!entryId) {
-    return res.status(400).json({ error: "Missing entryId" });
-  }
-
-  const stmt = db.prepare(`
-    SELECT * FROM lineups WHERE entryId = ?
-  `);
-
-  const lineup = stmt.get(entryId);
-
-  if (!lineup) {
-    return res.json({ ok: true, lineup: null });
-  }
+  const row = db.prepare(`SELECT * FROM lineups WHERE entryId = ?`).get(entryId);
+  if (!row) return res.json({ ok: true, lineup: null });
 
   res.json({
     ok: true,
     lineup: {
-      ...lineup,
-      players: JSON.parse(lineup.playersJson)
-    }
+      ...row,
+      players: JSON.parse(row.playersJson),
+    },
   });
 });
 
-//
-// ===== SERVER =====
-//
-const PORT = process.env.PORT || 8080;
+// ---- Serve frontend (public/) ----
+const PUBLIC_DIR = path.join(__dirname, "public");
+app.use(express.static(PUBLIC_DIR));
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Root -> always show frontend
+app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+app.get("/my-entries", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "my-entries.html")));
+app.get("/draft", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "draft.html")));
+
+// Fallback: if user hits random route, return index.html (avoid blank white)
+app.get("*", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+
+// ---- Server ----
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
