@@ -1,69 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SH Fantasy Arena</title>
   <style>
-    body {
-      font-family: Arial;
-      background: #111;
-      color: white;
-      padding: 20px;
-    }
-    .pool {
-      background: #222;
-      padding: 15px;
-      margin-bottom: 15px;
-      border-radius: 8px;
-    }
-    button {
-      background: orange;
-      border: none;
-      padding: 8px 12px;
-      cursor: pointer;
-    }
+    body { font-family: Arial; background: #111; color: #fff; padding: 20px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .pill { padding: 6px 10px; border-radius: 999px; background: #222; font-size: 12px; color: #bbb; }
+    a { color: #ffb000; text-decoration: none; }
+    .pool { background: #222; padding: 15px; margin-bottom: 15px; border-radius: 8px; }
+    button { background: orange; border: none; padding: 8px 12px; cursor: pointer; border-radius: 6px; }
+    .muted { color: #aaa; font-size: 12px; }
   </style>
 </head>
 <body>
+  <div class="topbar">
+    <h1>🔥 SH Fantasy Arena</h1>
+    <div>
+      <span class="pill" id="modePill">Mode: ...</span>
+      <span class="pill" id="userPill">User: -</span>
+      <span class="pill"><a href="/my-entries">My Entries →</a></span>
+    </div>
+  </div>
 
-<h1>🔥 SH Fantasy Arena</h1>
-<div id="pools"></div>
+  <h2>Today + Tomorrow Pools</h2>
+  <div class="muted">提示：Join 之後會自動記住你個名（localStorage）。</div>
+  <br/>
 
-<script>
-async function loadPools() {
-  const res = await fetch('/api/pools');
-  const data = await res.json();
+  <div id="pools"></div>
 
-  const container = document.getElementById('pools');
+  <script>
+    function getUsername() {
+      return localStorage.getItem("shfantasy_username") || "";
+    }
+    function setUsername(name) {
+      localStorage.setItem("shfantasy_username", name);
+      document.getElementById("userPill").textContent = "User: " + name;
+    }
+    function refreshUserPill() {
+      const u = getUsername();
+      document.getElementById("userPill").textContent = "User: " + (u || "-");
+    }
 
-  data.pools.forEach(pool => {
-    const div = document.createElement('div');
-    div.className = 'pool';
+    async function loadPools() {
+      const res = await fetch("/api/pools");
+      const data = await res.json();
 
-    div.innerHTML = `
-      <h3>${pool.name}</h3>
-      <p>Salary Cap: ${pool.salaryCap}</p>
-      <p>Roster Size: ${pool.rosterSize}</p>
-      <button onclick="join('${pool.id}')">Join</button>
-    `;
+      document.getElementById("modePill").textContent = "Mode: " + (data.mode || "UNKNOWN");
+      refreshUserPill();
 
-    container.appendChild(div);
-  });
-}
+      const container = document.getElementById("pools");
+      container.innerHTML = "";
 
-async function join(poolId) {
-  const username = prompt("Enter your name:");
+      (data.pools || []).forEach(pool => {
+        const div = document.createElement("div");
+        div.className = "pool";
+        div.innerHTML = `
+          <h3>${pool.name}</h3>
+          <p>Salary Cap: ${pool.salaryCap}</p>
+          <p>Roster Size: ${pool.rosterSize}</p>
+          <button data-pool="${pool.id}">Join</button>
+        `;
+        div.querySelector("button").addEventListener("click", async () => {
+          let username = getUsername();
+          if (!username) {
+            username = prompt("Enter your name:");
+            if (!username) return;
+            setUsername(username.trim());
+          }
 
-  await fetch('/api/join', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ poolId, username })
-  });
+          const r = await fetch("/api/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ poolId: pool.id, username })
+          });
+          const out = await r.json();
+          if (!out.ok) {
+            alert("Join failed: " + (out.error || "unknown"));
+            return;
+          }
+          alert("Joined successfully!");
+        });
 
-  alert("Joined successfully!");
-}
+        container.appendChild(div);
+      });
+    }
 
-loadPools();
-</script>
-
+    loadPools();
+  </script>
 </body>
 </html>
