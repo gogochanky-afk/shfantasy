@@ -1,70 +1,64 @@
 const express = require('express');
+const path = require('path');
+
 const app = express();
 
 app.use(express.json());
 
-/**
- * DEMO POOLS
- */
-const demoPools = [
-  {
-    id: 1,
-    date: "2026-02-18",
-    homeTeam: "Lakers",
-    awayTeam: "Warriors",
-    entryFee: 10,
-    prizePool: 100,
-    status: "open"
-  },
-  {
-    id: 2,
-    date: "2026-02-18",
-    homeTeam: "Celtics",
-    awayTeam: "Bucks",
-    entryFee: 10,
-    prizePool: 120,
-    status: "open"
-  }
-];
+/* =========================
+   API ROUTES
+========================= */
 
-/**
- * Root
- */
-app.get('/', (req, res) => {
-  res.send('SH Fantasy Backend Running 🚀');
-});
-
-/**
- * Health Check
- */
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-/**
- * GET Pools
- */
 app.get('/api/pools', (req, res) => {
-  res.json({ pools: demoPools });
-});
-
-/**
- * Join Pool
- */
-app.post('/api/join', (req, res) => {
-  const { poolId, username } = req.body;
-
-  if (!poolId || !username) {
-    return res.status(400).json({ error: "Missing poolId or username" });
-  }
-
   res.json({
-    success: true,
-    message: `${username} joined pool ${poolId}`
+    mode: 'DEMO',
+    pools: [
+      {
+        id: 'demo-today',
+        name: 'Today Arena',
+        salaryCap: 10,
+        rosterSize: 5,
+        date: 'today'
+      },
+      {
+        id: 'demo-tomorrow',
+        name: 'Tomorrow Arena',
+        salaryCap: 10,
+        rosterSize: 5,
+        date: 'tomorrow'
+      }
+    ]
   });
 });
 
+app.post('/api/join', (req, res) => {
+  const { username, poolId } = req.body;
+  res.json({
+    success: true,
+    message: `${username} joined ${poolId}`
+  });
+});
+
+/* =========================
+   SERVE FRONTEND
+========================= */
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+/* =========================
+   START SERVER
+========================= */
+
 const PORT = process.env.PORT || 8080;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
