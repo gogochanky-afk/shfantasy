@@ -1,107 +1,115 @@
+<!-- /public/my-entries.html -->
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <title>SH Fantasy - My Entries</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>My Entries - SH Fantasy</title>
   <style>
-    body { font-family: Arial; background: #111; color: #fff; padding: 20px; }
-    a { color: #ffb000; text-decoration: none; }
-    .card { background: #222; padding: 14px; border-radius: 10px; margin-bottom: 12px; }
-    .row { display: flex; justify-content: space-between; gap: 10px; }
-    .muted { color: #aaa; font-size: 12px; }
-    button { background: orange; border: none; padding: 8px 12px; cursor: pointer; border-radius: 6px; }
-    input { padding: 8px 10px; border-radius: 6px; border: 1px solid #333; background: #111; color: #fff; }
+    body { font-family: Arial; background:#111; color:#fff; padding:20px; }
+    .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .badge { background:#222; padding:8px 12px; border-radius:999px; font-size:14px; }
+    .card { background:#1e1e1e; padding:14px; border-radius:12px; margin:12px 0; }
+    button { background:orange; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+    input { background:#222; color:#fff; border:1px solid #333; padding:10px; border-radius:8px; width:180px; }
+    a { color:orange; text-decoration:none; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .muted { color:#999; font-size:13px; }
   </style>
 </head>
 <body>
-  <div class="row">
-    <h1>📌 My Entries</h1>
-    <div class="muted"><a href="/">← Back</a></div>
+  <div class="top">
+    <div class="badge">Mode: <span id="mode">DEMO</span> · User: <span id="userBadge">-</span></div>
+    <div><a href="/">← Back</a></div>
   </div>
+
+  <h1>📌 My Entries</h1>
 
   <div class="card">
     <div class="row">
       <div>
         <div class="muted">Current User</div>
-        <div id="userLabel" style="font-size: 18px;">-</div>
+        <div style="font-size:20px;font-weight:bold;" id="currentUser">-</div>
       </div>
       <div style="text-align:right;">
         <div class="muted">Switch User</div>
-        <div>
-          <input id="userInput" placeholder="Type name..." />
-          <button id="saveBtn">Save</button>
+        <div class="row">
+          <input id="userInput" placeholder="Type name" />
+          <button id="saveUser">Save</button>
         </div>
       </div>
     </div>
+    <div class="muted" style="margin-top:10px;">
+      Tip: Join 後會自動記住你個名（localStorage）。
+    </div>
   </div>
-
-  <div id="status" class="muted"></div>
-  <br/>
 
   <div id="list"></div>
 
-  <script>
-    function getUsername() {
-      return localStorage.getItem("shfantasy_username") || "";
+<script>
+  function getUser() {
+    return (localStorage.getItem('shf_username') || '').trim();
+  }
+  function setUser(u) {
+    localStorage.setItem('shf_username', u.trim());
+  }
+
+  async function load() {
+    const user = getUser();
+    document.getElementById('currentUser').textContent = user || '-';
+    document.getElementById('userBadge').textContent = user || '-';
+    document.getElementById('userInput').value = user || '';
+
+    if (!user) {
+      document.getElementById('list').innerHTML = `<div class="card">No user set. Please type your name and Save.</div>`;
+      return;
     }
-    function setUsername(name) {
-      localStorage.setItem("shfantasy_username", name);
+
+    const res = await fetch(`/api/my-entries?username=${encodeURIComponent(user)}`);
+    const data = await res.json();
+
+    const list = document.getElementById('list');
+    list.innerHTML = '';
+
+    if (!data.entries || data.entries.length === 0) {
+      list.innerHTML = `<div class="card">No entries yet. Go back and Join a pool first.</div>`;
+      return;
     }
 
-    async function loadEntries() {
-      const username = getUsername().trim();
-      document.getElementById("userLabel").textContent = username || "-";
-      document.getElementById("userInput").value = username;
-
-      if (!username) {
-        document.getElementById("status").textContent = "No username saved yet. Please enter your name above.";
-        document.getElementById("list").innerHTML = "";
-        return;
-      }
-
-      document.getElementById("status").textContent = "Loading...";
-      const res = await fetch("/api/my-entries?username=" + encodeURIComponent(username));
-      const data = await res.json();
-
-      if (!data.ok) {
-        document.getElementById("status").textContent = "Error: " + (data.error || "unknown");
-        document.getElementById("list").innerHTML = "";
-        return;
-      }
-
-      document.getElementById("status").textContent = `Mode: ${data.mode} • Total: ${data.entries.length}`;
-
-      const list = document.getElementById("list");
-      list.innerHTML = "";
-
-      if (data.entries.length === 0) {
-        list.innerHTML = `<div class="card">No entries yet. Go back and Join a pool first.</div>`;
-        return;
-      }
-
-      data.entries.forEach(e => {
-        const div = document.createElement("div");
-        div.className = "card";
-        div.innerHTML = `
-          <div class="row">
-            <div><b>Pool</b>: ${e.poolId}</div>
-            <div class="muted">#${e.id}</div>
+    data.entries.forEach((e) => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.innerHTML = `
+        <div class="row">
+          <div>
+            <div><b>Pool:</b> ${e.poolId}</div>
+            <div class="muted">Entry #${e.id} · Created: ${e.createdAt}</div>
           </div>
-          <div class="muted">Created: ${e.createdAt}</div>
-        `;
-        list.appendChild(div);
-      });
-    }
-
-    document.getElementById("saveBtn").addEventListener("click", () => {
-      const v = (document.getElementById("userInput").value || "").trim();
-      if (!v) return alert("Please enter a name.");
-      setUsername(v);
-      loadEntries();
+          <div>
+            <button data-entry="${e.id}" data-pool="${e.poolId}">Open Draft</button>
+          </div>
+        </div>
+      `;
+      list.appendChild(div);
     });
 
-    loadEntries();
-  </script>
+    list.querySelectorAll('button[data-entry]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const entryId = btn.getAttribute('data-entry');
+        const poolId = btn.getAttribute('data-pool');
+        location.href = `/draft?entryId=${encodeURIComponent(entryId)}&poolId=${encodeURIComponent(poolId)}`;
+      });
+    });
+  }
+
+  document.getElementById('saveUser').onclick = () => {
+    const v = document.getElementById('userInput').value.trim();
+    if (!v) return alert('Please enter a name');
+    setUser(v);
+    load();
+  };
+
+  load();
+</script>
 </body>
 </html>
