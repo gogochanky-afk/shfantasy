@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SH Fantasy — Draft</title>
+  <style>
+    body { font-family: Arial; background:#111; color:#fff; padding:20px; }
+    .top { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .pill { background:#222; border-radius:999px; padding:8px 12px; font-size:14px; opacity:.9; }
+    a { color: orange; text-decoration:none; }
+    .card { background:#222; border-radius:12px; padding:14px; margin-top:14px; }
+    .player { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #333; }
+    .player:last-child { border-bottom:none; }
+    button { background:orange; border:none; padding:10px 14px; border-radius:10px; cursor:pointer; }
+    button:disabled { opacity:.35; cursor:not-allowed; }
+    .muted { opacity:.75; font-size:13px; }
+    .ok { color:#0f0; }
+    .bad { color:#f55; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .tag { background:#333; border-radius:8px; padding:6px 10px; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="pill">🔥 Draft</div>
+    <div class="pill" id="modePill">Mode: ...</div>
+    <div class="pill" id="userPill">User: ...</div>
+    <div class="pill"><a href="/my-entries.html">My Entries →</a></div>
+    <div class="pill"><a href="/">← Back</a></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">Pool</div>
+        <div id="poolName" style="font-size:18px;font-weight:700;">Loading...</div>
+      </div>
+      <div class="tag">Roster: <span id="rosterSize">5</span></div>
+      <div class="tag">Cap: <span id="salaryCap">10</span></div>
+      <div class="tag">Selected: <span id="selectedCount">0</span>/5</div>
+      <div class="tag">Cost: <span id="totalCost" class="ok">0</span>/10</div>
+    </div>
+    <div class="muted" style="margin-top:10px;">
+      提示：你要揀滿 5 個人，同時 total cost ≤ 10 先可以提交。
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:700; font-size:16px; margin-bottom:8px;">Players</div>
+    <div id="players"></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">Lineup Preview</div>
+        <div id="preview" class="muted">No players selected yet.</div>
+      </div>
+      <button id="submitBtn" disabled>Submit Lineup</button>
+    </div>
+  </div>
+
+<script>
+  const qs = new URLSearchParams(location.search);
+  const poolId = qs.get('poolId') || '';
+  const DEFAULT_CAP = 10;
+  const DEFAULT_ROSTER = 5;
+
+  function getUsername() {
+    return localStorage.getItem('shf_username') || 'Guest';
+  }
+
+  function setPills(mode='DEMO') {
+    document.getElementById('modePill').textContent = `Mode: ${mode}`;
+    document.getElementById('userPill').textContent = `User: ${getUsername()}`;
+  }
+
+  let salaryCap = DEFAULT_CAP;
+  let rosterSize = DEFAULT_ROSTER;
+  let mode = 'DEMO';
+
+  let selected = []; // {id,name,cost}
+
+  function updateUI() {
+    document.getElementById('selectedCount').textContent = selected.length;
+    const total = selected.reduce((s,p)=>s+p.cost,0);
+    const totalEl = document.getElementById('totalCost');
+    totalEl.textContent = total;
+    totalEl.className = (total <= salaryCap) ? 'ok' : 'bad';
+
+    document.getElementById('salaryCap').textContent = salaryCap;
+    document.getElementById('rosterSize').textContent = rosterSize;
+
+    const preview = document.getElementById('preview');
+    if (!selected.length) {
+      preview.textContent = 'No players selected yet.';
+      preview.className = 'muted';
+    } else {
+      preview.className = '';
+      preview.innerHTML = selected.map(p => `• ${p.name} (cost ${p.cost})`).join('<br/>');
+    }
+
+    const canSubmit = (selected.length === rosterSize) && (total <= salaryCap) && poolId;
+    document.getElementById('submitBtn').disabled = !canSubmit;
+
+    // Toggle buttons text
+    document.querySelectorAll('[data-player-id]').forEach(btn => {
+      const id = btn.getAttribute('data-player-id');
+      const isSel = selected.some(p => p.id === id);
+      btn.textContent = isSel ? 'Remove' : 'Add';
+    });
+  }
+
+  async function loadPoolMeta() {
+    const res = await fetch('/api/pools');
+    const data = await res.json();
+    mode = data.mode || 'DEMO';
+    setPills(mode);
+
+    const pool = (data.pools || []).find(p => p.id === poolId) || null;
+    if (!pool) {
+      document.getElementById('poolName').textContent = `Pool not found: ${poolId}`;
+      return;
+    }
+    document.getElementById('poolName').textContent = pool.name || pool.id;
+    salaryCap = pool.salaryCap || DEFAULT_CAP;
+    rosterSize = pool.rosterSize || DEFAULT_ROSTER;
+    updateUI();
+  }
+
+  async function loadPlayers() {
+    const res = await fetch('/api/players');
+    const data = await res.json();
+    const list = data.players || [];
+
+    const wrap = document.getElementById('players');
+    wrap.innerHTML = '';
+
+    list.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'player';
+      row.innerHTML = `
+        <div>
+          <div style="font-weight:700;">${p.name}</div>
+          <div class="muted">cost: ${p.cost}</div>
+        </div>
+        <button data-player-id="${p.id}">Add</button>
+      `;
+      wrap.appendChild(row);
+    });
+
+    wrap.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-player-id]');
+      if (!btn) return;
+      const id = btn.getAttribute('data-player-id');
+      const p = list.find(x => x.id === id);
+      if (!p) return;
+
+      const isSel = selected.some(x => x.id === id);
+      if (isSel) {
+        selected = selected.filter(x => x.id !== id);
+      } else {
+        if (selected.length >= rosterSize) {
+          alert(`Roster full (${rosterSize}). Remove one first.`);
+          return;
+        }
+        selected.push({ id:p.id, name:p.name, cost:p.cost });
+      }
+      updateUI();
+    });
+
+    updateUI();
+  }
+
+  async function submitLineup() {
+    const username = getUsername();
+    const total = selected.reduce((s,p)=>s+p.cost,0);
+    const payload = {
+      poolId,
+      username,
+      players: selected,
+      totalCost: total
+    };
+    const res = await fetch('/api/lineup/save', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error || 'Submit failed');
+      return;
+    }
+    alert('Lineup saved!');
+    location.href = '/my-entries.html';
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', submitLineup);
+
+  // Init
+  if (!poolId) {
+    document.getElementById('poolName').textContent = 'Missing poolId in URL';
+    setPills('DEMO');
+  } else {
+    loadPoolMeta();
+  }
+  loadPlayers();
+</script>
+</body>
+</html>
