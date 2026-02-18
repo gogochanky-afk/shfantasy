@@ -1,211 +1,158 @@
+<!-- /public/draft.html -->
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <title>SH Fantasy - Draft</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SH Fantasy — Draft</title>
   <style>
     body { font-family: Arial; background:#111; color:#fff; padding:20px; }
-    .top { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
-    .pill { background:#222; border-radius:999px; padding:8px 12px; font-size:14px; opacity:.9; }
-    a { color: orange; text-decoration:none; }
-    .card { background:#222; border-radius:12px; padding:14px; margin-top:14px; }
-    .player { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #333; }
+    .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .badge { background:#222; padding:8px 12px; border-radius:999px; font-size:14px; }
+    .card { background:#1e1e1e; padding:14px; border-radius:12px; margin:12px 0; }
+    button { background:orange; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+    button:disabled { opacity:.4; cursor:not-allowed; }
+    .player { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #2a2a2a; }
     .player:last-child { border-bottom:none; }
-    button { background:orange; border:none; padding:10px 14px; border-radius:10px; cursor:pointer; }
-    button:disabled { opacity:.35; cursor:not-allowed; }
-    .muted { opacity:.75; font-size:13px; }
     .ok { color:#0f0; }
-    .bad { color:#f55; }
-    .row { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
-    .tag { background:#333; border-radius:8px; padding:6px 10px; font-size:13px; }
+    .bad { color:#f33; }
+    a { color:orange; text-decoration:none; }
   </style>
 </head>
 <body>
   <div class="top">
-    <div class="pill">🔥 Draft</div>
-    <div class="pill" id="modePill">Mode: ...</div>
-    <div class="pill" id="userPill">User: ...</div>
-    <div class="pill"><a href="/my-entries.html">My Entries →</a></div>
-    <div class="pill"><a href="/">← Back</a></div>
+    <div class="badge">Mode: <span id="mode">DEMO</span> · User: <span id="user">-</span></div>
+    <div><a href="/my-entries">My Entries →</a></div>
   </div>
 
+  <h1>📝 Draft Lineup</h1>
   <div class="card">
-    <div class="row">
-      <div>
-        <div class="muted">Pool</div>
-        <div id="poolName" style="font-size:18px;font-weight:700;">Loading...</div>
-      </div>
-      <div class="tag">Roster: <span id="rosterSize">5</span></div>
-      <div class="tag">Cap: <span id="salaryCap">10</span></div>
-      <div class="tag">Selected: <span id="selectedCount">0</span>/5</div>
-      <div class="tag">Cost: <span id="totalCost" class="ok">0</span>/10</div>
+    <div>Pool: <b id="poolId">-</b> · Entry: <b id="entryId">-</b></div>
+    <div style="margin-top:8px;">
+      Salary Cap: <b>10</b> · Pick exactly: <b>5</b>
     </div>
-    <div class="muted" style="margin-top:10px;">
-      提示：你要揀滿 5 個人，同時 total cost ≤ 10 先可以提交。
+    <div style="margin-top:8px;">
+      Total Cost: <b id="totalCost">0</b>
+      <span id="capStatus" class="ok">(OK)</span>
+    </div>
+    <div style="margin-top:10px;">
+      <button id="saveBtn" disabled>Save Lineup</button>
+      <button id="clearBtn" style="margin-left:8px;background:#444;">Clear</button>
+      <a href="/" style="margin-left:12px;">← Back</a>
     </div>
   </div>
 
   <div class="card">
-    <div style="font-weight:700; font-size:16px; margin-bottom:8px;">Players</div>
+    <h3>Players</h3>
     <div id="players"></div>
-  </div>
-
-  <div class="card">
-    <div class="row">
-      <div>
-        <div class="muted">Lineup Preview</div>
-        <div id="preview" class="muted">No players selected yet.</div>
-      </div>
-      <button id="submitBtn" disabled>Submit Lineup</button>
-    </div>
   </div>
 
 <script>
   const qs = new URLSearchParams(location.search);
-  const poolId = qs.get('poolId') || '';
-  const DEFAULT_CAP = 10;
-  const DEFAULT_ROSTER = 5;
+  const entryId = qs.get('entryId');
+  const poolId = qs.get('poolId');
 
-  function getUsername() {
-    return localStorage.getItem('shf_username') || 'Guest';
+  const user = localStorage.getItem('shf_username') || '';
+  document.getElementById('user').textContent = user || '-';
+  document.getElementById('entryId').textContent = entryId || '-';
+  document.getElementById('poolId').textContent = poolId || '-';
+
+  if (!entryId || !poolId || !user) {
+    alert("Missing entryId/poolId/user. Go back and Join first.");
   }
 
-  function setPills(mode='DEMO') {
-    document.getElementById('modePill').textContent = `Mode: ${mode}`;
-    document.getElementById('userPill').textContent = `User: ${getUsername()}`;
-  }
+  let selected = new Set();
 
-  let salaryCap = DEFAULT_CAP;
-  let rosterSize = DEFAULT_ROSTER;
-  let mode = 'DEMO';
+  function render(players) {
+    const container = document.getElementById('players');
+    container.innerHTML = '';
 
-  let selected = []; // {id,name,cost}
+    const totalCost = players
+      .filter(p => selected.has(p.id))
+      .reduce((sum, p) => sum + p.cost, 0);
 
-  function updateUI() {
-    document.getElementById('selectedCount').textContent = selected.length;
-    const total = selected.reduce((s,p)=>s+p.cost,0);
-    const totalEl = document.getElementById('totalCost');
-    totalEl.textContent = total;
-    totalEl.className = (total <= salaryCap) ? 'ok' : 'bad';
+    document.getElementById('totalCost').textContent = totalCost;
 
-    document.getElementById('salaryCap').textContent = salaryCap;
-    document.getElementById('rosterSize').textContent = rosterSize;
+    const capStatus = document.getElementById('capStatus');
+    const saveBtn = document.getElementById('saveBtn');
 
-    const preview = document.getElementById('preview');
-    if (!selected.length) {
-      preview.textContent = 'No players selected yet.';
-      preview.className = 'muted';
-    } else {
-      preview.className = '';
-      preview.innerHTML = selected.map(p => `• ${p.name} (cost ${p.cost})`).join('<br/>');
-    }
+    const ok = (selected.size === 5 && totalCost <= 10);
+    capStatus.textContent = ok ? '(OK)' : '(Need 5 picks & <= 10)';
+    capStatus.className = ok ? 'ok' : 'bad';
+    saveBtn.disabled = !ok;
 
-    const canSubmit = (selected.length === rosterSize) && (total <= salaryCap) && poolId;
-    document.getElementById('submitBtn').disabled = !canSubmit;
-
-    // Toggle buttons text
-    document.querySelectorAll('[data-player-id]').forEach(btn => {
-      const id = btn.getAttribute('data-player-id');
-      const isSel = selected.some(p => p.id === id);
-      btn.textContent = isSel ? 'Remove' : 'Add';
-    });
-  }
-
-  async function loadPoolMeta() {
-    const res = await fetch('/api/pools');
-    const data = await res.json();
-    mode = data.mode || 'DEMO';
-    setPills(mode);
-
-    const pool = (data.pools || []).find(p => p.id === poolId) || null;
-    if (!pool) {
-      document.getElementById('poolName').textContent = `Pool not found: ${poolId}`;
-      return;
-    }
-    document.getElementById('poolName').textContent = pool.name || pool.id;
-    salaryCap = pool.salaryCap || DEFAULT_CAP;
-    rosterSize = pool.rosterSize || DEFAULT_ROSTER;
-    updateUI();
-  }
-
-  async function loadPlayers() {
-    const res = await fetch('/api/players');
-    const data = await res.json();
-    const list = data.players || [];
-
-    const wrap = document.getElementById('players');
-    wrap.innerHTML = '';
-
-    list.forEach(p => {
+    players.forEach(p => {
       const row = document.createElement('div');
       row.className = 'player';
+      const checked = selected.has(p.id);
+
       row.innerHTML = `
         <div>
-          <div style="font-weight:700;">${p.name}</div>
-          <div class="muted">cost: ${p.cost}</div>
+          <label>
+            <input type="checkbox" ${checked ? 'checked' : ''} data-id="${p.id}" />
+            ${p.name}
+          </label>
         </div>
-        <button data-player-id="${p.id}">Add</button>
+        <div>Cost: <b>${p.cost}</b></div>
       `;
-      wrap.appendChild(row);
+      container.appendChild(row);
     });
 
-    wrap.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-player-id]');
-      if (!btn) return;
-      const id = btn.getAttribute('data-player-id');
-      const p = list.find(x => x.id === id);
-      if (!p) return;
-
-      const isSel = selected.some(x => x.id === id);
-      if (isSel) {
-        selected = selected.filter(x => x.id !== id);
-      } else {
-        if (selected.length >= rosterSize) {
-          alert(`Roster full (${rosterSize}). Remove one first.`);
-          return;
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const id = e.target.getAttribute('data-id');
+        if (e.target.checked) {
+          selected.add(id);
+        } else {
+          selected.delete(id);
         }
-        selected.push({ id:p.id, name:p.name, cost:p.cost });
-      }
-      updateUI();
+        render(players);
+      });
     });
-
-    updateUI();
   }
 
-  async function submitLineup() {
-    const username = getUsername();
-    const total = selected.reduce((s,p)=>s+p.cost,0);
-    const payload = {
-      poolId,
-      username,
-      players: selected,
-      totalCost: total
-    };
-    const res = await fetch('/api/lineup/save', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.error || 'Submit failed');
-      return;
+  async function loadPlayersAndExistingLineup() {
+    const pres = await fetch('/api/players');
+    const pdata = await pres.json();
+    const players = pdata.players || [];
+
+    // try load existing lineup
+    const lres = await fetch(`/api/lineup?entryId=${encodeURIComponent(entryId)}`);
+    const ldata = await lres.json();
+    if (ldata && ldata.lineup && Array.isArray(ldata.lineup.players)) {
+      selected = new Set(ldata.lineup.players);
     }
-    alert('Lineup saved!');
-    location.href = '/my-entries.html';
+
+    render(players);
+
+    document.getElementById('saveBtn').onclick = async () => {
+      const body = {
+        entryId: Number(entryId),
+        poolId,
+        username: user,
+        players: Array.from(selected)
+      };
+      const res = await fetch('/api/lineup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Save failed');
+        return;
+      }
+      alert('Saved! Total cost = ' + data.totalCost);
+      location.href = '/my-entries';
+    };
+
+    document.getElementById('clearBtn').onclick = () => {
+      selected = new Set();
+      render(players);
+    };
   }
 
-  document.getElementById('submitBtn').addEventListener('click', submitLineup);
-
-  // Init
-  if (!poolId) {
-    document.getElementById('poolName').textContent = 'Missing poolId in URL';
-    setPills('DEMO');
-  } else {
-    loadPoolMeta();
-  }
-  loadPlayers();
+  loadPlayersAndExistingLineup();
 </script>
 </body>
 </html>
