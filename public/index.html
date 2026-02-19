@@ -1,188 +1,183 @@
-<!-- file: public/index.html -->
+<!-- /public/index.html -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>SH Fantasy · Arena</title>
   <style>
     :root { color-scheme: dark; }
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial; background:#0b0b0c; color:#fff; }
-    .wrap { max-width:720px; margin:0 auto; padding:18px; }
-    .nav { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
-    .brand { font-weight:800; letter-spacing:.2px; }
-    .pill { border:1px solid #2b2b2e; padding:6px 10px; border-radius:999px; font-size:12px; color:#d2d2d7; background:#111113; }
-    .btn { background:#f0a500; color:#111; border:none; padding:10px 14px; border-radius:10px; font-weight:800; cursor:pointer; }
-    .btn.secondary { background:transparent; color:#fff; border:1px solid #2b2b2e; }
-    .btn:disabled { opacity:.45; cursor:not-allowed; }
-    .card { background:#141416; border:1px solid #1f1f22; border-radius:16px; padding:16px; margin-top:14px; }
-    .muted { color:#b7b7bd; font-size:12px; }
-    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
-    input[type="text"] { width:100%; background:#0f0f11; border:1px solid #2b2b2e; color:#fff; padding:12px 12px; border-radius:12px; font-size:14px; }
-    .pool { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .pool h3 { margin:0 0 6px 0; }
-    .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:26px; background:#1b1b1f; border:1px solid #2b2b2e; color:#fff; padding:10px 14px; border-radius:12px; font-size:13px; display:none; z-index:9999; }
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;background:#0b0c0f;color:#eaeaea;}
+    .wrap{max-width:720px;margin:0 auto;padding:18px;}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;}
+    .brand{font-weight:800;font-size:20px;line-height:1.2;}
+    .pill{border:1px solid #2b2b2e;border-radius:999px;padding:8px 10px;font-size:12px;color:#cfcfcf;background:#101114;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .btn{background:#f0a500;border:none;border-radius:10px;padding:10px 14px;font-weight:700;color:#111;cursor:pointer;}
+    .btn.secondary{background:transparent;border:1px solid #2b2b2e;color:#eaeaea;}
+    .btn:disabled{opacity:.45;cursor:not-allowed;}
+    .card{background:#141416;border:1px solid #242427;border-radius:16px;padding:14px;margin-top:12px;}
+    .title{font-weight:800;font-size:18px;margin:0 0 6px;}
+    .muted{color:#b7b7bd;font-size:12px;}
+    input{width:100%;box-sizing:border-box;background:#0f1012;border:1px solid #2b2b2e;color:#eaeaea;padding:12px 12px;border-radius:12px;font-size:16px;}
+    .poolRow{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#1b1c20;border:1px solid #303036;color:#fff;padding:10px 12px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;}
+    .toast.show{opacity:1;}
+    a{color:#f0a500;text-decoration:none;}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="nav">
-      <div class="brand">🔥 SH Fantasy · Arena</div>
-      <div class="row" style="margin:0;">
-        <div class="pill" id="modePill">Mode: —</div>
+      <div class="brand">🔥 SH Fantasy<br/>Arena</div>
+      <div class="row">
+        <div class="pill" id="modePill">Mode: ...</div>
         <div class="pill" id="userPill">User: —</div>
-        <button class="btn secondary" onclick="goMyEntries()">🗂️ My Entries</button>
+        <a class="pill" href="/my-entries.html">📒 My Entries</a>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 6px 0;">Start</h3>
+      <div class="title">Start</div>
       <div class="muted">Enter your username once. We save it on this device.</div>
+      <div style="height:10px"></div>
+      <input id="username" placeholder="e.g. Hugo" />
+      <div style="height:10px"></div>
       <div class="row">
-        <input id="username" type="text" placeholder="e.g. Hugo" />
-      </div>
-      <div class="row">
-        <button class="btn" onclick="saveUsername()">Save Username</button>
-        <button class="btn secondary" onclick="clearUsername()">Clear</button>
+        <button class="btn" id="saveBtn">Save Username</button>
+        <button class="btn secondary" id="clearBtn">Clear</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="pool">
-        <div>
-          <h3 id="poolName">Loading pools…</h3>
-          <div class="muted" id="poolMeta">—</div>
-          <div class="muted" id="poolHint" style="margin-top:8px;">Join will take you directly to Draft.</div>
-        </div>
-        <button class="btn" id="joinBtn" onclick="joinSelectedPool()" disabled>Join</button>
-      </div>
+      <div class="title">Pools</div>
+      <div class="muted" id="poolsHint">Loading…</div>
+      <div id="pools" style="margin-top:12px"></div>
     </div>
-
-    <div class="toast" id="toast"></div>
   </div>
 
-  <script>
-    function toast(msg) {
-      const t = document.getElementById("toast");
-      t.textContent = msg;
-      t.style.display = "block";
-      clearTimeout(window.__toastTimer);
-      window.__toastTimer = setTimeout(() => t.style.display = "none", 2200);
-    }
+  <div class="toast" id="toast"></div>
 
-    function setModePill(mode) {
-      document.getElementById("modePill").textContent = `Mode: ${mode || "—"}`;
-    }
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const toastEl = $('toast');
+  let toastTimer = null;
 
-    function setUserPill(u) {
-      document.getElementById("userPill").textContent = `User: ${u || "—"}`;
-    }
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1800);
+  }
 
-    function getUsername() {
-      return (localStorage.getItem("shf_username") || "").trim();
-    }
+  function getUsername(){
+    return (localStorage.getItem('shf_username') || '').trim();
+  }
+  function setUsername(u){
+    localStorage.setItem('shf_username', u);
+  }
+  function clearUsername(){
+    localStorage.removeItem('shf_username');
+  }
 
-    function saveUsername() {
-      const u = (document.getElementById("username").value || "").trim();
-      if (!u) { toast("Please enter a username."); return; }
-      localStorage.setItem("shf_username", u);
-      setUserPill(u);
-      toast("Saved.");
-      refreshJoinEnabled();
-    }
+  function setUserPill(){
+    const u = getUsername();
+    $('userPill').textContent = 'User: ' + (u || '—');
+  }
 
-    function clearUsername() {
-      localStorage.removeItem("shf_username");
-      document.getElementById("username").value = "";
-      setUserPill("—");
-      toast("Cleared.");
-      refreshJoinEnabled();
-    }
-
-    function goMyEntries() {
-      window.location.href = "/my-entries.html";
-    }
-
-    // ----- Pool state -----
-    let pools = [];
-    let selectedPoolId = null;
-
-    function refreshJoinEnabled() {
-      const u = getUsername();
-      const ok = !!u && !!selectedPoolId;
-      document.getElementById("joinBtn").disabled = !ok;
-    }
-
-    async function loadHealth() {
-      try {
-        const r = await fetch("/health", { cache: "no-store" });
-        const j = await r.json();
-        setModePill(j.mode || "LIVE");
-      } catch (e) {
-        setModePill("—");
-      }
-    }
-
-    async function loadPools() {
-      const r = await fetch("/api/pools", { cache: "no-store" });
+  async function loadMode(){
+    try{
+      const r = await fetch('/health', { cache:'no-store' });
       const j = await r.json();
-      if (!j.ok) throw new Error(j.error || "Failed to load pools");
-      pools = j.pools || [];
-      if (!pools.length) throw new Error("No pools available");
-
-      // Default pick first pool
-      selectedPoolId = pools[0].id;
-
-      const p = pools[0];
-      document.getElementById("poolName").textContent = p.name || "Arena";
-      document.getElementById("poolMeta").textContent = `Salary Cap: ${p.salaryCap} · Roster Size: ${p.rosterSize}`;
-      refreshJoinEnabled();
+      $('modePill').textContent = 'Mode: ' + (j.mode || 'LIVE');
+    }catch(e){
+      $('modePill').textContent = 'Mode: —';
     }
+  }
 
-    async function joinSelectedPool() {
-      const u = getUsername();
-      if (!u) { toast("No username. Please save it first."); return; }
-      if (!selectedPoolId) { toast("No pool selected."); return; }
-
-      // IMPORTANT: join must be POST /api/join
-      const payload = { username: u, poolId: selectedPoolId };
-
-      const btn = document.getElementById("joinBtn");
-      btn.disabled = true;
-      btn.textContent = "Joining…";
-
-      try {
-        const r = await fetch("/api/join", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const j = await r.json();
-        if (!j.ok) throw new Error(j.error || "Join failed");
-
-        // Expect entryId in response
-        if (!j.entryId) throw new Error("Missing entryId from server");
-
-        window.location.href = `/draft.html?entryId=${encodeURIComponent(j.entryId)}`;
-      } catch (e) {
-        toast(String(e.message || e));
-        btn.textContent = "Join";
-        refreshJoinEnabled();
+  async function loadPools(){
+    $('poolsHint').textContent = 'Loading…';
+    $('pools').innerHTML = '';
+    try{
+      const r = await fetch('/api/pools', { cache:'no-store' });
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error || 'pools failed');
+      const pools = j.pools || [];
+      if(!pools.length){
+        $('poolsHint').textContent = 'No pools right now.';
+        return;
       }
+      $('poolsHint').textContent = 'Pick a pool to join.';
+      for(const p of pools){
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `
+          <div class="poolRow">
+            <div>
+              <div class="title">${escapeHtml(p.name || p.id)}</div>
+              <div class="muted">Salary Cap: ${p.salaryCap} · Roster Size: ${p.rosterSize}</div>
+              <div class="muted">Join will take you directly to Draft.</div>
+            </div>
+            <button class="btn" data-pool="${escapeAttr(p.id)}">Join</button>
+          </div>
+        `;
+        div.querySelector('button').addEventListener('click', ()=>joinPool(p.id));
+        $('pools').appendChild(div);
+      }
+    }catch(e){
+      $('poolsHint').textContent = 'Pools unavailable';
+      toast('Pools unavailable');
     }
+  }
 
-    // Init
-    (function init() {
-      const u = getUsername();
-      document.getElementById("username").value = u || "";
-      setUserPill(u || "—");
-      loadHealth();
-      loadPools().catch(err => {
-        document.getElementById("poolName").textContent = "Pools unavailable";
-        document.getElementById("poolMeta").textContent = String(err.message || err);
-        toast("Failed to load pools.");
+  async function joinPool(poolId){
+    const u = getUsername();
+    if(!u){
+      toast('Please save username first.');
+      return;
+    }
+    try{
+      const r = await fetch('/api/join', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username:u, poolId }),
       });
-    })();
-  </script>
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.message || j.error || 'join failed');
+      const entryId = j.entryId;
+      if(!entryId) throw new Error('Missing entryId from server');
+      window.location.href = '/draft.html?entryId=' + encodeURIComponent(entryId);
+    }catch(e){
+      toast('Join failed: ' + (e.message || 'error'));
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  // init
+  $('username').value = getUsername();
+  $('saveBtn').addEventListener('click', ()=>{
+    const u = $('username').value.trim();
+    if(!u){ toast('Username is required'); return; }
+    setUsername(u);
+    setUserPill();
+    toast('Saved');
+  });
+  $('clearBtn').addEventListener('click', ()=>{
+    clearUsername();
+    $('username').value = '';
+    setUserPill();
+    toast('Cleared');
+  });
+
+  setUserPill();
+  loadMode();
+  loadPools();
+})();
+</script>
 </body>
 </html>
