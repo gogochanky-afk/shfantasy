@@ -1,188 +1,125 @@
-'use strict';
+<!-- /public/my-entries.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>My Entries · SH Fantasy</title>
+  <style>
+    :root { color-scheme: dark; }
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;background:#0b0c0f;color:#eaeaea;}
+    .wrap{max-width:720px;margin:0 auto;padding:18px;}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;}
+    .brand{font-weight:800;font-size:20px;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .pill{border:1px solid #2b2b2e;border-radius:999px;padding:8px 10px;font-size:12px;color:#cfcfcf;background:#101114;}
+    .btn{background:#f0a500;border:none;border-radius:10px;padding:10px 14px;font-weight:800;color:#111;cursor:pointer;}
+    .btn.secondary{background:transparent;border:1px solid #2b2b2e;color:#eaeaea;}
+    .card{background:#141416;border:1px solid #242427;border-radius:16px;padding:14px;margin-top:12px;}
+    .title{font-weight:800;font-size:18px;margin:0 0 6px;}
+    .muted{color:#b7b7bd;font-size:12px;}
+    a{color:#f0a500;text-decoration:none;}
+    .item{border:1px solid #242427;border-radius:14px;background:#101114;padding:12px;margin-bottom:10px;}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#1b1c20;border:1px solid #303036;color:#fff;padding:10px 12px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;}
+    .toast.show{opacity:1;}
+    code{font-size:12px;color:#d5d5d5;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav">
+      <div class="brand">📒 My Entries</div>
+      <div class="row">
+        <a class="pill" href="/">← Home</a>
+        <div class="pill" id="userPill">User: —</div>
+      </div>
+    </div>
 
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
+    <div class="card">
+      <div class="title">Entries</div>
+      <div class="muted" id="hint">Loading…</div>
+      <div style="height:10px"></div>
+      <div id="list"></div>
+    </div>
+  </div>
 
-const app = express();
+  <div class="toast" id="toast"></div>
 
-const MODE = process.env.DATA_MODE || process.env.MODE || 'LIVE';
-const PORT = process.env.PORT || 8080;
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const toastEl = $('toast');
+  let toastTimer = null;
 
-app.set('trust proxy', 1);
-app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function jsonOk(res, payload) {
-  res.setHeader('Cache-Control', 'no-store');
-  return res.status(200).json(payload);
-}
-
-function jsonErr(res, code, message, status = 400, extra = {}) {
-  res.setHeader('Cache-Control', 'no-store');
-  return res.status(status).json({
-    ok: false,
-    error: code,
-    message,
-    mode: MODE,
-    ts: nowIso(),
-    ...extra,
-  });
-}
-
-function normalizeUsername(x) {
-  const s = String(x || '').trim();
-  const cleaned = s.replace(/[^\w.\- ]/g, '').trim();
-  return cleaned.slice(0, 24);
-}
-
-const DEMO_POOLS = [
-  { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5 },
-  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 },
-];
-
-const DEMO_PLAYERS = [
-  { id: 'p1', name: 'LeBron James', team: 'LAL', cost: 4 },
-  { id: 'p2', name: 'Stephen Curry', team: 'GSW', cost: 4 },
-  { id: 'p3', name: 'Kevin Durant', team: 'PHX', cost: 4 },
-  { id: 'p4', name: 'Jayson Tatum', team: 'BOS', cost: 4 },
-  { id: 'p5', name: 'Jalen Brunson', team: 'NYK', cost: 3 },
-  { id: 'p6', name: 'Anthony Edwards', team: 'MIN', cost: 3 },
-  { id: 'p7', name: 'Devin Booker', team: 'PHX', cost: 3 },
-  { id: 'p8', name: 'Donovan Mitchell', team: 'CLE', cost: 3 },
-  { id: 'p9', name: 'Mikal Bridges', team: 'NYK', cost: 2 },
-  { id: 'p10', name: 'Derrick White', team: 'BOS', cost: 2 },
-  { id: 'p11', name: 'Austin Reaves', team: 'LAL', cost: 2 },
-  { id: 'p12', name: 'Klay Thompson', team: 'DAL', cost: 2 },
-  { id: 'p13', name: 'Alex Caruso', team: 'OKC', cost: 1 },
-  { id: 'p14', name: 'Josh Hart', team: 'NYK', cost: 1 },
-  { id: 'p15', name: 'Naz Reid', team: 'MIN', cost: 1 },
-  { id: 'p16', name: 'Dorian Finney-Smith', team: 'LAL', cost: 1 },
-];
-
-const POOLS_BY_ID = Object.fromEntries(DEMO_POOLS.map(p => [p.id, p]));
-const PLAYERS_BY_ID = Object.fromEntries(DEMO_PLAYERS.map(p => [p.id, p]));
-
-const STORE_PATH = '/tmp/shfantasy_store.json';
-
-function loadStore() {
-  try {
-    if (fs.existsSync(STORE_PATH)) {
-      return JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8'));
-    }
-  } catch (_) {}
-  return { entries: {} };
-}
-
-function saveStore(store) {
-  try {
-    fs.writeFileSync(STORE_PATH, JSON.stringify(store), 'utf-8');
-  } catch (_) {}
-}
-
-let store = loadStore();
-
-function makeEntryId() {
-  return 'e_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-}
-
-function getEntry(id) {
-  return store.entries[id] || null;
-}
-
-function upsertEntry(entry) {
-  store.entries[entry.id] = entry;
-  saveStore(store);
-}
-
-app.get('/health', (req, res) => {
-  return jsonOk(res, { status: 'ok', mode: MODE, ts: nowIso() });
-});
-
-app.get('/api/pools', (req, res) => {
-  return jsonOk(res, { ok: true, pools: DEMO_POOLS, mode: MODE, ts: nowIso() });
-});
-
-app.get('/api/players', (req, res) => {
-  return jsonOk(res, { ok: true, players: DEMO_PLAYERS, mode: MODE, ts: nowIso() });
-});
-
-app.post('/api/join', (req, res) => {
-  const username = normalizeUsername(req.body?.username);
-  const poolId = String(req.body?.poolId || '').trim();
-
-  if (!username) return jsonErr(res, 'INVALID_USERNAME', 'Username required');
-  if (!POOLS_BY_ID[poolId]) return jsonErr(res, 'POOL_NOT_FOUND', 'Pool not found');
-
-  const entry = {
-    id: makeEntryId(),
-    username,
-    poolId,
-    players: [],
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  };
-
-  upsertEntry(entry);
-
-  return jsonOk(res, {
-    ok: true,
-    entryId: entry.id,
-    redirect: `/draft.html?entryId=${entry.id}`,
-  });
-});
-
-app.get('/api/lineup', (req, res) => {
-  const entry = getEntry(req.query.entryId);
-  if (!entry) return jsonErr(res, 'NOT_FOUND', 'Entry not found', 404);
-
-  return jsonOk(res, { ok: true, entry, pool: POOLS_BY_ID[entry.poolId] });
-});
-
-app.post('/api/lineup', (req, res) => {
-  const entry = getEntry(req.body?.entryId);
-  if (!entry) return jsonErr(res, 'NOT_FOUND', 'Entry not found', 404);
-
-  const pool = POOLS_BY_ID[entry.poolId];
-  const players = Array.from(new Set((req.body.players || []).map(String)));
-
-  if (players.length !== pool.rosterSize)
-    return jsonErr(res, 'ROSTER_INVALID', 'Wrong roster size');
-
-  let cost = 0;
-  for (const id of players) {
-    const p = PLAYERS_BY_ID[id];
-    if (!p) return jsonErr(res, 'PLAYER_NOT_FOUND', id);
-    cost += p.cost;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1800);
   }
 
-  if (cost > pool.salaryCap)
-    return jsonErr(res, 'CAP_EXCEEDED', 'Salary cap exceeded');
+  function getUsername(){
+    return (localStorage.getItem('shf_username') || '').trim();
+  }
 
-  entry.players = players;
-  entry.updatedAt = nowIso();
-  upsertEntry(entry);
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
 
-  return jsonOk(res, { ok: true });
-});
+  async function load(){
+    const u = getUsername();
+    $('userPill').textContent = 'User: ' + (u || '—');
+    if(!u){
+      $('hint').textContent = 'No username saved. Go back Home and Save Username.';
+      return;
+    }
 
-app.get('/api/my-entries', (req, res) => {
-  const username = normalizeUsername(req.query.username);
-  const entries = Object.values(store.entries)
-    .filter(e => e.username === username)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    try{
+      const r = await fetch('/api/my-entries?username=' + encodeURIComponent(u), { cache:'no-store' });
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.message || j.error || 'failed');
 
-  return jsonOk(res, { ok: true, entries });
-});
+      const entries = j.entries || [];
+      const pools = j.pools || [];
+      const poolName = (id)=>{
+        const p = pools.find(x=>x.id===id);
+        return p ? p.name : id;
+      };
 
-app.get('/', (req, res) => {
-  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+      if(!entries.length){
+        $('hint').textContent = 'No entries yet.';
+        $('list').innerHTML = '';
+        return;
+      }
 
-app.listen(PORT, () => {
-  console.log(`[shfantasy] listening on ${PORT} mode=${MODE}`);
-});
+      $('hint').textContent = 'Tap an entry to open Draft.';
+      const list = $('list');
+      list.innerHTML = '';
+      for(const e of entries){
+        const div = document.createElement('div');
+        div.className = 'item';
+        const picked = (e.players || []).length;
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+            <div>
+              <div style="font-weight:900;">${escapeHtml(poolName(e.poolId))}</div>
+              <div class="muted">Picked: ${picked} · Updated: ${escapeHtml(e.updatedAt || '')}</div>
+              <div class="muted"><code>${escapeHtml(e.id)}</code></div>
+            </div>
+            <a class="pill" href="/draft.html?entryId=${encodeURIComponent(e.id)}">Open</a>
+          </div>
+        `;
+        list.appendChild(div);
+      }
+
+    }catch(e){
+      $('hint').textContent = 'Load failed.';
+      toast('Load failed: ' + (e.message || 'error'));
+    }
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>
