@@ -1,262 +1,239 @@
-<!-- file: public/draft.html -->
+<!-- /public/draft.html -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Draft · SH Fantasy</title>
   <style>
     :root { color-scheme: dark; }
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial; background:#0b0b0c; color:#fff; }
-    .wrap { max-width:720px; margin:0 auto; padding:18px; }
-    .nav { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
-    .brand { font-weight:800; letter-spacing:.2px; }
-    .btn { background:#f0a500; color:#111; border:none; padding:10px 14px; border-radius:10px; font-weight:800; cursor:pointer; }
-    .btn.secondary { background:transparent; color:#fff; border:1px solid #2b2b2e; }
-    .btn:disabled { opacity:.45; cursor:not-allowed; }
-    .card { background:#141416; border:1px solid #1f1f22; border-radius:16px; padding:16px; margin-top:14px; }
-    .muted { color:#b7b7bd; font-size:12px; }
-    .pill { border:1px solid #2b2b2e; padding:6px 10px; border-radius:999px; font-size:12px; color:#d2d2d7; background:#111113; }
-    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
-    .list { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
-    .item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px; background:#0f0f11; border:1px solid #2b2b2e; border-radius:12px; }
-    .left { display:flex; flex-direction:column; gap:2px; }
-    .name { font-weight:800; }
-    .meta { font-size:12px; color:#b7b7bd; }
-    .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:26px; background:#1b1b1f; border:1px solid #2b2b2e; color:#fff; padding:10px 14px; border-radius:12px; font-size:13px; display:none; z-index:9999; }
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;background:#0b0c0f;color:#eaeaea;}
+    .wrap{max-width:720px;margin:0 auto;padding:18px;}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;}
+    .brand{font-weight:800;font-size:20px;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .pill{border:1px solid #2b2b2e;border-radius:999px;padding:8px 10px;font-size:12px;color:#cfcfcf;background:#101114;}
+    .btn{background:#f0a500;border:none;border-radius:10px;padding:10px 14px;font-weight:800;color:#111;cursor:pointer;}
+    .btn.secondary{background:transparent;border:1px solid #2b2b2e;color:#eaeaea;}
+    .btn:disabled{opacity:.45;cursor:not-allowed;}
+    .card{background:#141416;border:1px solid #242427;border-radius:16px;padding:14px;margin-top:12px;}
+    .title{font-weight:800;font-size:18px;margin:0 0 6px;}
+    .muted{color:#b7b7bd;font-size:12px;}
+    .list{margin-top:10px;}
+    .item{display:flex;justify-content:space-between;align-items:center;padding:10px 10px;border:1px solid #242427;border-radius:14px;background:#101114;margin-bottom:8px;}
+    .left{display:flex;flex-direction:column;gap:2px;}
+    .name{font-weight:800;}
+    .sub{font-size:12px;color:#b7b7bd;}
+    input[type="checkbox"]{transform:scale(1.2);}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#1b1c20;border:1px solid #303036;color:#fff;padding:10px 12px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;}
+    .toast.show{opacity:1;}
+    a{color:#f0a500;text-decoration:none;}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="nav">
       <div class="brand">🧠 Draft</div>
-      <div class="row" style="margin:0;">
-        <button class="btn secondary" onclick="goHome()">← Back</button>
-        <button class="btn secondary" onclick="goMyEntries()">🗂️ My Entries</button>
+      <div class="row">
+        <button class="btn secondary" id="backBtn">← Back</button>
+        <a class="pill" href="/my-entries.html">📒 My Entries</a>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 6px 0;">Select Players</h3>
-      <div class="muted">Exactly <span id="rosterSizeTxt">5</span> players · Salary cap <span id="salaryCapTxt">10</span></div>
-      <div class="row" style="margin-top:12px;">
+      <div class="title">Select Players</div>
+      <div class="muted" id="hint">Loading…</div>
+      <div style="height:10px"></div>
+      <div class="row">
         <div class="pill" id="userPill">User: —</div>
         <div class="pill" id="poolPill">Pool: —</div>
         <div class="pill" id="selPill">Selected: 0/5</div>
         <div class="pill" id="costPill">Cost: 0/10</div>
       </div>
+      <div style="height:10px"></div>
       <div class="row">
-        <button class="btn" id="saveBtn" onclick="saveLineup()" disabled>Save Lineup</button>
-        <button class="btn secondary" onclick="resetPick()">Reset</button>
+        <button class="btn" id="saveBtn" disabled>Save Lineup</button>
+        <button class="btn secondary" id="resetBtn">Reset</button>
       </div>
-      <div class="muted" id="hintTxt" style="margin-top:8px;">Pick players to enable Save.</div>
-
-      <div class="list" id="playersList"></div>
+      <div class="muted" style="margin-top:10px" id="ruleText">Pick players to enable Save.</div>
+      <div class="list" id="list"></div>
     </div>
-
-    <div class="toast" id="toast"></div>
   </div>
 
-  <script>
-    function toast(msg) {
-      const t = document.getElementById("toast");
-      t.textContent = msg;
-      t.style.display = "block";
-      clearTimeout(window.__toastTimer);
-      window.__toastTimer = setTimeout(() => t.style.display = "none", 2200);
+  <div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const toastEl = $('toast');
+  let toastTimer = null;
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1800);
+  }
+
+  function getUsername(){
+    return (localStorage.getItem('shf_username') || '').trim();
+  }
+
+  function qs(name){
+    return new URLSearchParams(window.location.search).get(name);
+  }
+
+  const entryId = (qs('entryId') || '').trim();
+  let rosterSize = 5;
+  let salaryCap = 10;
+  let poolId = '';
+  let username = getUsername();
+
+  let players = [];
+  let selected = new Set();
+
+  $('backBtn').addEventListener('click', ()=>{ window.location.href = '/'; });
+  $('resetBtn').addEventListener('click', ()=>{
+    selected = new Set();
+    renderList();
+    updatePills();
+  });
+
+  function updatePills(){
+    $('userPill').textContent = 'User: ' + (username || '—');
+    $('poolPill').textContent = 'Pool: ' + (poolId || '—');
+    $('selPill').textContent = `Selected: ${selected.size}/${rosterSize}`;
+    const cost = calcCost();
+    $('costPill').textContent = `Cost: ${cost}/${salaryCap}`;
+
+    const ok = (selected.size === rosterSize) && (cost <= salaryCap);
+    $('saveBtn').disabled = !ok;
+    $('ruleText').textContent = ok
+      ? 'Ready to save.'
+      : `Pick exactly ${rosterSize} players. Stay within salary cap ${salaryCap}.`;
+  }
+
+  function calcCost(){
+    let c = 0;
+    for(const id of selected){
+      const p = players.find(x=>x.id===id);
+      if(p) c += Number(p.cost)||0;
+    }
+    return c;
+  }
+
+  function renderList(){
+    const list = $('list');
+    list.innerHTML = '';
+    for(const p of players){
+      const div = document.createElement('div');
+      div.className = 'item';
+      const checked = selected.has(p.id) ? 'checked' : '';
+      div.innerHTML = `
+        <div class="left">
+          <div class="name">${escapeHtml(p.name)} <span class="muted">· ${escapeHtml(p.team)}</span></div>
+          <div class="sub">Cost: ${p.cost}</div>
+        </div>
+        <div>
+          <input type="checkbox" data-id="${escapeAttr(p.id)}" ${checked}/>
+        </div>
+      `;
+      const cb = div.querySelector('input[type="checkbox"]');
+      cb.addEventListener('change', (e)=>{
+        const id = e.target.getAttribute('data-id');
+        if(e.target.checked){
+          // soft-enforce roster size
+          if(selected.size >= rosterSize){
+            e.target.checked = false;
+            toast(`Max ${rosterSize} players.`);
+            return;
+          }
+          selected.add(id);
+        }else{
+          selected.delete(id);
+        }
+        // salary cap warning only
+        const cost = calcCost();
+        if(cost > salaryCap) toast(`Over cap: ${cost}/${salaryCap}`);
+        updatePills();
+      });
+      list.appendChild(div);
+    }
+  }
+
+  async function loadAll(){
+    // hard guard
+    if(!entryId){
+      toast('Missing entryId. Going home…');
+      setTimeout(()=>window.location.href='/', 600);
+      return;
+    }
+    if(!username){
+      toast('No username. Go back to Home.');
+      setTimeout(()=>window.location.href='/', 600);
+      return;
     }
 
-    function goHome(){ window.location.href = "/"; }
-    function goMyEntries(){ window.location.href = "/my-entries.html"; }
+    try{
+      $('hint').textContent = 'Loading entry…';
+      const er = await fetch('/api/lineup?entryId=' + encodeURIComponent(entryId), { cache:'no-store' });
+      const ej = await er.json();
+      if(!ej.ok) throw new Error(ej.message || ej.error || 'Entry not found');
 
-    function getUsername() {
-      return (localStorage.getItem("shf_username") || "").trim();
-    }
+      poolId = (ej.entry && ej.entry.poolId) || '';
+      rosterSize = (ej.pool && ej.pool.rosterSize) || rosterSize;
+      salaryCap = (ej.pool && ej.pool.salaryCap) || salaryCap;
 
-    function qparam(name) {
-      const u = new URL(window.location.href);
-      return u.searchParams.get(name);
-    }
+      // restore selected
+      selected = new Set(((ej.entry && ej.entry.players) || []).map(String));
 
-    let entryId = null;
-    let poolId = null;
-    let salaryCap = 10;
-    let rosterSize = 5;
+      $('hint').textContent = 'Loading players…';
+      const pr = await fetch('/api/players', { cache:'no-store' });
+      const pj = await pr.json();
+      if(!pj.ok) throw new Error(pj.message || pj.error || 'Players load failed');
 
-    let players = [];
-    let selected = new Set();
+      players = pj.players || [];
+      if(!players.length) throw new Error('No players');
 
-    function updateHeader() {
-      const u = getUsername();
-      document.getElementById("userPill").textContent = `User: ${u || "—"}`;
-      document.getElementById("poolPill").textContent = `Pool: ${poolId || "—"}`;
-      document.getElementById("rosterSizeTxt").textContent = String(rosterSize);
-      document.getElementById("salaryCapTxt").textContent = String(salaryCap);
-
-      const cost = calcCost();
-      document.getElementById("selPill").textContent = `Selected: ${selected.size}/${rosterSize}`;
-      document.getElementById("costPill").textContent = `Cost: ${cost}/${salaryCap}`;
-
-      const canSave = (selected.size === rosterSize) && (cost <= salaryCap);
-      document.getElementById("saveBtn").disabled = !canSave;
-      document.getElementById("hintTxt").textContent = canSave ? "Ready to save." : "Pick players to enable Save.";
-    }
-
-    function calcCost() {
-      let total = 0;
-      for (const pid of selected) {
-        const p = players.find(x => x.id === pid);
-        if (p) total += Number(p.cost || 0);
-      }
-      return total;
-    }
-
-    function togglePick(pid) {
-      if (selected.has(pid)) {
-        selected.delete(pid);
-        renderList();
-        updateHeader();
-        return;
-      }
-      // prevent picking beyond rosterSize
-      if (selected.size >= rosterSize) {
-        toast(`You can only pick ${rosterSize} players.`);
-        return;
-      }
-      selected.add(pid);
+      $('hint').textContent = `Exactly ${rosterSize} players · Salary cap ${salaryCap}`;
       renderList();
-      updateHeader();
+      updatePills();
+
+    }catch(e){
+      $('hint').textContent = 'Load failed.';
+      toast('Load failed: ' + (e.message || 'error'));
     }
+  }
 
-    function resetPick() {
-      selected = new Set();
-      renderList();
-      updateHeader();
-    }
-
-    function renderList() {
-      const el = document.getElementById("playersList");
-      el.innerHTML = "";
-
-      for (const p of players) {
-        const picked = selected.has(p.id);
-
-        const row = document.createElement("div");
-        row.className = "item";
-
-        const left = document.createElement("div");
-        left.className = "left";
-
-        const name = document.createElement("div");
-        name.className = "name";
-        name.textContent = p.name;
-
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent = `${p.team || "—"} · Cost ${p.cost}`;
-
-        left.appendChild(name);
-        left.appendChild(meta);
-
-        const btn = document.createElement("button");
-        btn.className = "btn secondary";
-        btn.textContent = picked ? "Remove" : "Pick";
-        btn.onclick = () => togglePick(p.id);
-
-        row.appendChild(left);
-        row.appendChild(btn);
-        el.appendChild(row);
-      }
-    }
-
-    async function loadPlayers() {
-      const r = await fetch("/api/players", { cache: "no-store" });
+  async function saveLineup(){
+    try{
+      const payload = { entryId, players: Array.from(selected) };
+      const r = await fetch('/api/lineup', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+      });
       const j = await r.json();
-      if (!j.ok) throw new Error(j.error || "Failed to load players");
-      players = j.players || [];
-      if (!players.length) throw new Error("No players available");
+      if(!j.ok) throw new Error(j.message || j.error || 'Save failed');
+      toast('Saved!');
+      // optional: go entries
+      // setTimeout(()=>window.location.href='/my-entries.html', 500);
+    }catch(e){
+      toast('Save failed: ' + (e.message || 'error'));
     }
+  }
 
-    async function loadEntry() {
-      // This endpoint must exist in backend: /api/lineup?entryId=...
-      const r = await fetch(`/api/lineup?entryId=${encodeURIComponent(entryId)}`, { cache: "no-store" });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || "Entry not found");
+  $('saveBtn').addEventListener('click', saveLineup);
 
-      // Expect entry + pool in response
-      poolId = (j.entry && j.entry.poolId) ? j.entry.poolId : (j.pool && j.pool.id) ? j.pool.id : null;
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function escapeAttr(s){ return escapeHtml(s); }
 
-      // Use server truth for caps
-      if (j.pool && typeof j.pool.salaryCap !== "undefined") salaryCap = Number(j.pool.salaryCap);
-      if (j.pool && typeof j.pool.rosterSize !== "undefined") rosterSize = Number(j.pool.rosterSize);
-
-      // Preselect if lineup exists
-      const picked = (j.entry && Array.isArray(j.entry.players)) ? j.entry.players : [];
-      selected = new Set(picked);
-    }
-
-    async function saveLineup() {
-      const u = getUsername();
-      if (!u) { toast("No username. Go back to Home."); return; }
-      if (!entryId) { toast("Missing entryId."); return; }
-
-      const payload = {
-        entryId,
-        poolId,
-        username: u,
-        players: Array.from(selected)
-      };
-
-      const btn = document.getElementById("saveBtn");
-      btn.disabled = true;
-      btn.textContent = "Saving…";
-
-      try {
-        const r = await fetch("/api/lineup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const j = await r.json();
-        if (!j.ok) throw new Error(j.error || "Save failed");
-
-        toast("Saved ✅");
-        btn.textContent = "Save Lineup";
-        updateHeader();
-      } catch (e) {
-        toast(String(e.message || e));
-        btn.textContent = "Save Lineup";
-        updateHeader();
-      }
-    }
-
-    async function init() {
-      entryId = qparam("entryId");
-      if (!entryId) {
-        toast("Missing entryId. Returning Home…");
-        setTimeout(() => goHome(), 700);
-        return;
-      }
-
-      // Require username exist (same device storage)
-      const u = getUsername();
-      if (!u) {
-        toast("No username. Returning Home…");
-        setTimeout(() => goHome(), 700);
-        return;
-      }
-
-      try {
-        await loadPlayers();
-        await loadEntry();
-        renderList();
-        updateHeader();
-      } catch (e) {
-        toast(String(e.message || e));
-      }
-    }
-
-    init();
-  </script>
+  // init
+  $('userPill').textContent = 'User: ' + (username || '—');
+  loadAll();
+})();
+</script>
 </body>
 </html>
