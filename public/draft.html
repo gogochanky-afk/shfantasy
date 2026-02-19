@@ -1,262 +1,219 @@
-<!-- /public/draft.html -->
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Draft</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        background: #111;
-        color: #fff;
-        padding: 20px;
-      }
-      a { color: #f90; text-decoration: none; }
-      .topbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 14px;
-      }
-      .card {
-        background: #222;
-        border-radius: 12px;
-        padding: 14px;
-        margin: 12px 0;
-      }
-      .pill {
-        display: inline-block;
-        background: #222;
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 14px;
-      }
-      button {
-        background: orange;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
-        font-weight: 800;
-      }
-      .muted { opacity: 0.75; font-size: 13px; }
-      .playerRow {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid #333;
-      }
-      .playerRow:last-child { border-bottom: none; }
-      .ok { color: #0f0; }
-      .bad { color: #f33; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    </style>
-  </head>
-  <body>
-    <div class="topbar">
-      <div class="pill">🧠 <b>Draft</b></div>
-      <div><a href="/my-entries.html">← My Entries</a></div>
-    </div>
-
-    <div class="card">
-      <div><b>Context</b></div>
-      <div class="muted" style="margin-top:6px;">
-        Pool: <span class="mono" id="poolIdText">-</span> • Entry: <span class="mono" id="entryIdText">-</span>
-      </div>
-      <div class="muted" style="margin-top:6px;">
-        User: <span class="mono" id="userText">-</span> • Salary Cap: <span class="mono" id="capText">10</span> • Roster Size: <span class="mono" id="rosterText">5</span>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Draft · SH Fantasy</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial; background:#0b0b0c; color:#eee; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    .nav { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; }
+    .brand { font-weight:700; }
+    .btn { background:#f0a500; border:none; color:#111; padding:10px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
+    .btn.secondary { background:transparent; border:1px solid #3a3a3f; color:#eee; }
+    .btn:disabled { opacity:.4; cursor:not-allowed; }
+    .card { background:#141416; border:1px solid #232327; border-radius:14px; padding:16px; margin-top:12px; }
+    .muted { color:#b7b7bd; font-size:12px; }
+    .list { margin-top:10px; }
+    .item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #1f1f22; }
+    .item:last-child { border-bottom:none; }
+    .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background:#17171a; border:1px solid #2b2b2e; padding:10px 12px; border-radius:12px; font-size:13px; display:none; }
+    .kpi { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+    .pill { border:1px solid #2b2b2e; padding:6px 10px; border-radius:999px; font-size:12px; }
+    input[type="checkbox"] { transform: scale(1.2); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav">
+      <div class="brand">🧠 Draft</div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn secondary" id="backBtn">← Back</button>
+        <button class="btn secondary" id="entriesBtn">📒 My Entries</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="muted">Select players (tick)</div>
-      <div id="playersList" style="margin-top:10px;">Loading...</div>
+      <div style="font-weight:700;">Select Players</div>
+      <div class="muted">Exactly 5 players · Salary cap 10</div>
+
+      <div class="kpi">
+        <div class="pill" id="userPill">User: -</div>
+        <div class="pill" id="poolPill">Pool: -</div>
+        <div class="pill" id="countPill">Selected: 0/5</div>
+        <div class="pill" id="capPill">Cost: 0/10</div>
+      </div>
+
+      <div class="list" id="playersList"></div>
+
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn" id="saveBtn" disabled>Save Lineup</button>
+        <button class="btn secondary" id="resetBtn">Reset</button>
+      </div>
+      <div class="muted" style="margin-top:8px;" id="hintText">Pick 5 players to enable Save.</div>
     </div>
 
-    <div class="card">
-      <div><b>Status</b></div>
-      <div style="margin-top:8px;">
-        Selected: <span class="mono" id="selectedCount">0</span> /
-        <span class="mono" id="rosterSize">5</span>
-        • Cost: <span class="mono" id="costText">0</span> /
-        <span class="mono" id="salaryCap">10</span>
-        • <span id="capStatus" class="ok">OK</span>
-      </div>
-      <div style="margin-top:12px;">
-        <button id="saveBtn">Save Lineup</button>
-      </div>
-      <div class="muted" style="margin-top:8px;">
-        Save 會寫入 `/api/lineup`（同時會檢查 salary cap）。
-      </div>
-    </div>
+    <div class="toast" id="toast"></div>
+  </div>
 
-    <script>
-      const SALARY_CAP = 10;
-      const ROSTER_SIZE = 5;
+  <script>
+    const LS_USER = "shf_username";
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.display = "block";
+      setTimeout(() => (el.style.display = "none"), 1600);
+    }
 
-      function getStoredUser() {
-        return (
-          localStorage.getItem("sh_username") ||
-          localStorage.getItem("username") ||
-          localStorage.getItem("sh_user") ||
-          localStorage.getItem("user") ||
-          ""
-        ).trim();
+    function getUsername() {
+      return (localStorage.getItem(LS_USER) || "").trim();
+    }
+
+    function qs(name) {
+      const u = new URL(window.location.href);
+      return (u.searchParams.get(name) || "").trim();
+    }
+
+    const entryId = qs("entryId");
+    let poolId = null;
+    let players = [];
+    let selected = new Set();
+    let salaryCap = 10;
+    let rosterSize = 5;
+
+    function calcCost() {
+      let c = 0;
+      for (const id of selected) {
+        const p = players.find(x => x.id === id);
+        c += (p && p.cost) ? p.cost : 0;
       }
+      return c;
+    }
 
-      function setStoredUser(u) {
-        localStorage.setItem("sh_username", u);
-        localStorage.setItem("username", u); // fallback
-      }
+    function renderKPI() {
+      const u = getUsername();
+      document.getElementById("userPill").textContent = "User: " + (u || "-");
+      document.getElementById("poolPill").textContent = "Pool: " + (poolId || "-");
+      document.getElementById("countPill").textContent = "Selected: " + selected.size + "/" + rosterSize;
+      const cost = calcCost();
+      document.getElementById("capPill").textContent = "Cost: " + cost + "/" + salaryCap;
 
-      function qs(name) {
-        return new URLSearchParams(window.location.search).get(name);
-      }
+      const saveOk = (selected.size === rosterSize) && (cost <= salaryCap);
+      document.getElementById("saveBtn").disabled = !saveOk;
 
-      function compute(selectedIds, players) {
-        const selected = players.filter(p => selectedIds.has(p.id));
-        const cost = selected.reduce((sum, p) => sum + (p.cost || 0), 0);
-        return { selected, cost };
-      }
+      const hint = document.getElementById("hintText");
+      if (selected.size !== rosterSize) hint.textContent = "Pick exactly " + rosterSize + " players to enable Save.";
+      else if (cost > salaryCap) hint.textContent = "Over cap. Adjust your picks.";
+      else hint.textContent = "Ready to save.";
+    }
 
-      async function main() {
-        // context
-        const poolId = qs("poolId") || "demo-today";
-        const entryId = qs("entryId"); // important for resume
-        let username = getStoredUser();
+    function renderList() {
+      const el = document.getElementById("playersList");
+      el.innerHTML = "";
+      players.forEach(p => {
+        const row = document.createElement("div");
+        row.className = "item";
 
-        document.getElementById("poolIdText").textContent = poolId;
-        document.getElementById("entryIdText").textContent = entryId || "(none)";
-        document.getElementById("capText").textContent = SALARY_CAP;
-        document.getElementById("rosterText").textContent = ROSTER_SIZE;
-        document.getElementById("salaryCap").textContent = SALARY_CAP;
-        document.getElementById("rosterSize").textContent = ROSTER_SIZE;
+        const left = document.createElement("div");
+        left.innerHTML = `<div style="font-weight:600">${p.name}</div><div class="muted">Cost: ${p.cost}</div>`;
 
-        if (!username) {
-          const u = prompt("Enter your name:");
-          if (!u) {
-            alert("Username required");
-            return;
+        const right = document.createElement("div");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = selected.has(p.id);
+
+        cb.addEventListener("change", () => {
+          // Prevent selecting > rosterSize
+          if (cb.checked) {
+            if (selected.size >= rosterSize) {
+              cb.checked = false;
+              toast("You must select exactly " + rosterSize + " players.");
+              return;
+            }
+            selected.add(p.id);
+          } else {
+            selected.delete(p.id);
           }
-          username = u.trim();
-          setStoredUser(username);
-        }
-        document.getElementById("userText").textContent = username;
-
-        // 1) load players
-        const pres = await fetch("/api/players");
-        const pdata = await pres.json();
-        const players = (pdata && pdata.players) ? pdata.players : [];
-        const selectedIds = new Set();
-
-        // 2) if entryId exists, load existing lineup and preselect
-        if (entryId) {
-          const lres = await fetch(`/api/lineup?entryId=${encodeURIComponent(entryId)}`);
-          const ldata = await lres.json();
-          if (ldata && ldata.ok && ldata.lineup && Array.isArray(ldata.lineup.players)) {
-            ldata.lineup.players.forEach(pid => selectedIds.add(pid));
-          }
-        }
-
-        // render list
-        const list = document.getElementById("playersList");
-        list.innerHTML = "";
-
-        players.forEach((p) => {
-          const row = document.createElement("div");
-          row.className = "playerRow";
-
-          const left = document.createElement("label");
-          left.style.display = "flex";
-          left.style.alignItems = "center";
-          left.style.gap = "10px";
-          left.style.cursor = "pointer";
-
-          const cb = document.createElement("input");
-          cb.type = "checkbox";
-          cb.checked = selectedIds.has(p.id);
-
-          cb.addEventListener("change", () => {
-            if (cb.checked) selectedIds.add(p.id);
-            else selectedIds.delete(p.id);
-            updateStatus(players, selectedIds);
-          });
-
-          const name = document.createElement("span");
-          name.textContent = `${p.name} (${p.cost})`;
-
-          left.appendChild(cb);
-          left.appendChild(name);
-
-          row.appendChild(left);
-
-          list.appendChild(row);
+          renderKPI();
         });
 
-        updateStatus(players, selectedIds);
+        right.appendChild(cb);
+        row.appendChild(left);
+        row.appendChild(right);
+        el.appendChild(row);
+      });
 
-        // save
-        document.getElementById("saveBtn").addEventListener("click", async () => {
-          if (!entryId) {
-            alert("Missing entryId. Please open draft from My Entries.");
-            return;
-          }
+      renderKPI();
+    }
 
-          const { selected, cost } = compute(selectedIds, players);
-
-          if (selected.length !== ROSTER_SIZE) {
-            alert(`Roster must be exactly ${ROSTER_SIZE} players`);
-            return;
-          }
-          if (cost > SALARY_CAP) {
-            alert(`Over salary cap: ${cost} > ${SALARY_CAP}`);
-            return;
-          }
-
-          const body = {
-            entryId: Number(entryId),
-            poolId,
-            username,
-            players: selected.map(p => p.id),
-          };
-
-          const res = await fetch("/api/lineup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          const data = await res.json();
-
-          if (!data || !data.ok) {
-            alert("Save failed");
-            return;
-          }
-
-          alert("Lineup Saved! 💪");
-        });
+    async function load() {
+      const u = getUsername();
+      if (!u) {
+        toast("No username. Go back to Home.");
+        setTimeout(() => window.location.href = "/", 500);
+        return;
+      }
+      if (!entryId) {
+        toast("Missing entryId.");
+        setTimeout(() => window.location.href = "/", 500);
+        return;
       }
 
-      function updateStatus(players, selectedIds) {
-        const { selected, cost } = compute(selectedIds, players);
+      // Load players
+      const pr = await fetch("/api/players");
+      const pj = await pr.json();
+      players = pj.players || [];
 
-        document.getElementById("selectedCount").textContent = selected.length;
-        document.getElementById("costText").textContent = cost;
-
-        const capStatus = document.getElementById("capStatus");
-
-        if (selected.length > ROSTER_SIZE || cost > SALARY_CAP) {
-          capStatus.textContent = "OVER";
-          capStatus.className = "bad";
-        } else {
-          capStatus.textContent = "OK";
-          capStatus.className = "ok";
-        }
+      // Load entry
+      const er = await fetch("/api/lineup?entryId=" + encodeURIComponent(entryId));
+      const ej = await er.json();
+      if (!ej.ok) {
+        toast(ej.error || "Entry not found");
+        setTimeout(() => window.location.href = "/", 600);
+        return;
       }
 
-      main();
-    </script>
-  </body>
+      poolId = ej.entry.poolId;
+      salaryCap = (ej.pool && ej.pool.salaryCap) ? ej.pool.salaryCap : 10;
+      rosterSize = (ej.pool && ej.pool.rosterSize) ? ej.pool.rosterSize : 5;
+
+      selected = new Set(ej.entry.players || []);
+      renderList();
+    }
+
+    async function saveLineup() {
+      const u = getUsername();
+      const payload = {
+        entryId,
+        poolId,
+        username: u,
+        players: Array.from(selected)
+      };
+
+      const r = await fetch("/api/lineup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        toast(j.error || "Save failed");
+        return;
+      }
+      toast("Lineup saved ✅");
+      setTimeout(() => window.location.href = "/my-entries.html", 500);
+    }
+
+    document.getElementById("saveBtn").addEventListener("click", saveLineup);
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      selected = new Set();
+      renderList();
+    });
+    document.getElementById("backBtn").addEventListener("click", () => window.location.href = "/");
+    document.getElementById("entriesBtn").addEventListener("click", () => window.location.href = "/my-entries.html");
+
+    load().catch(() => toast("Load failed"));
+  </script>
+</body>
 </html>
