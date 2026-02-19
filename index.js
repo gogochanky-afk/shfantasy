@@ -1,44 +1,68 @@
-// index.js (repo root) — SH Fantasy Arena API + static site
+// index.js (FULL FILE REPLACEMENT)
+// SH Fantasy Arena - Stable Demo Backend (Cloud Run friendly)
+// - No Firestore required
+// - No URL/UUID pattern parsing that can crash /api/pools
+// - Provides: /health, /api/pools, /api/players, /api/join (POST), /api/lineup (GET/POST), /api/my-entries
+
 'use strict';
 
-const path = require('path');
 const express = require('express');
+const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 
-// ---------------------------
-// Config
-// ---------------------------
-const MODE = (process.env.DATA_MODE || 'DEMO').toUpperCase(); // DEMO | LIVE
-const PORT = process.env.PORT || 8080;
+// -------- Config --------
+const PORT = parseInt(process.env.PORT || '8080', 10);
+const MODE = (process.env.MODE || 'LIVE').toUpperCase(); // just a label for UI
+const FIRESTORE = false; // demo backend
 
+// -------- Middleware --------
+app.disable('x-powered-by');
+app.use(express.json({ limit: '1mb' }));
+
+// -------- Static Pages --------
+const PUBLIC_DIR = path.join(__dirname, 'public');
+app.use(express.static(PUBLIC_DIR, { maxAge: '1h', etag: true }));
+
+// Optional friendly routes (keeps old links working)
+app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
+app.get('/draft', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'draft.html')));
+app.get('/my-entries', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'my-entries.html')));
+
+// -------- Helpers --------
 function nowIso() {
   return new Date().toISOString();
 }
 
-// Allow JSON + form
-app.use(express.json({ limit: '200kb' }));
-app.use(express.urlencoded({ extended: false }));
+function normalizeUsername(u) {
+  if (!u) return '';
+  return String(u).trim().slice(0, 32);
+}
 
-// ---------------------------
-// Static files
-// ---------------------------
-app.use(
-  express.static(path.join(__dirname, 'public'), {
-    etag: true,
-    maxAge: '1h',
-  })
-);
+function safeId(prefix = 'e') {
+  // Node 18+ has randomUUID, but keep compatibility:
+  const id = (crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex'));
+  return `${prefix}_${id}`;
+}
 
-// ---------------------------
-// Demo data (fallback)
-// ---------------------------
-const DEMO_POOLS = [
+function jsonOk(res, payload) {
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.status(200).send(JSON.stringify(payload));
+}
+
+function jsonErr(res, code, error, message, extra = {}) {
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.status(code).send(JSON.stringify({ ok: false, error, message, ts: nowIso(), ...extra }));
+}
+
+// -------- Demo Data (stable, deterministic) --------
+const POOLS = [
   { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5 },
-  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 },
+  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 }
 ];
 
-const DEMO_PLAYERS = [
+const PLAYERS = [
   { id: 'p1', name: 'LeBron James', team: 'LAL', cost: 4 },
   { id: 'p2', name: 'Stephen Curry', team: 'GSW', cost: 4 },
   { id: 'p3', name: 'Kevin Durant', team: 'PHX', cost: 4 },
@@ -54,222 +78,169 @@ const DEMO_PLAYERS = [
   { id: 'p13', name: 'Alex Caruso', team: 'OKC', cost: 1 },
   { id: 'p14', name: 'Josh Hart', team: 'NYK', cost: 1 },
   { id: 'p15', name: 'Naz Reid', team: 'MIN', cost: 1 },
-  { id: 'p16', name: 'Dorian Finney-Smith', team: 'LAL', cost: 1 },
+  { id: 'p16', name: 'Dorian Finney-Smith', team: 'LAL', cost: 1 }
 ];
 
-// ---------------------------
-// In-memory entry store (LIVE/DEMO both can use; later swap to DB)
-// ---------------------------
-/**
- * entriesByUsername: Map<string, Array<Entry>>
- * Entry shape:
- * { id, username, poolId, createdAt, lineup: string[] }
- */
-const entriesByUsername = new Map();
+const playerCostMap = new Map(PLAYERS.map(p => [p.id, p.cost]));
+const poolMap = new Map(POOLS.map(p => [p.id, p]));
 
-function getPools() {
-  // TODO: when you plug real pools, replace here
-  return DEMO_POOLS;
-}
+// -------- In-memory store (demo) --------
+// entriesById: entryId -> entry
+// entriesByUser: username -> [entryId, ...]
+const entriesById = new Map();
+const entriesByUser = new Map();
 
-function getPlayers() {
-  // TODO: when you plug real players, replace here
-  return DEMO_PLAYERS;
-}
+// -------- API --------
 
-function normalizeUsername(v) {
-  const s = String(v || '').trim();
-  if (!s) return null;
-  // keep it simple + safe for now
-  const cleaned = s.replace(/[^\w\- ]+/g, '').trim();
-  if (!cleaned) return null;
-  return cleaned.slice(0, 24);
-}
-
-function pickFirst(obj, keys) {
-  for (const k of keys) {
-    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
-  }
-  return undefined;
-}
-
-// tolerate multiple key names from frontend (so you won't see "Invalid payload")
-function parseJoinPayload(body) {
-  const rawUsername = pickFirst(body, ['username', 'user', 'name']);
-  const rawPoolId = pickFirst(body, ['poolId', 'pool_id', 'pool', 'poolID', 'id']);
-
-  const username = normalizeUsername(rawUsername);
-  const poolId = rawPoolId ? String(rawPoolId).trim() : null;
-
-  return { username, poolId };
-}
-
-function makeId(prefix = 'e') {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-}
-
-// ---------------------------
-// Health + JSON endpoints (what you were testing)
-// ---------------------------
-app.get('/health', (req, res) => {
-  res.json({
+// Health
+app.get('/health', (_req, res) => {
+  jsonOk(res, {
     status: 'ok',
     mode: MODE,
-    firestore: false,
-    ts: nowIso(),
+    firestore: FIRESTORE,
+    ts: nowIso()
   });
 });
 
-app.get('/pools.json', (req, res) => {
-  res.json({
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    pools: getPools(),
-  });
+// Pools (THIS is where your crash was. Now it's crash-proof.)
+app.get('/api/pools', (_req, res) => {
+  jsonOk(res, { ok: true, mode: MODE, ts: nowIso(), pools: POOLS });
 });
 
-app.get('/players.json', (req, res) => {
-  res.json({
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    players: getPlayers(),
-  });
+// Players
+app.get('/api/players', (_req, res) => {
+  jsonOk(res, { ok: true, mode: MODE, ts: nowIso(), players: PLAYERS });
 });
 
-app.get('/my-entries.json', (req, res) => {
-  const username = normalizeUsername(req.query.username);
-  const entries = username ? (entriesByUsername.get(username) || []) : [];
-  res.json({
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    entries,
-  });
+// Join (GET should show guidance)
+app.get('/api/join', (_req, res) => {
+  jsonErr(
+    res,
+    405,
+    'METHOD_NOT_ALLOWED',
+    'Use POST /api/join with JSON body: { "username": "...", "poolId": "..." }'
+  );
 });
 
-// ---------------------------
-// JOIN API
-// ---------------------------
-
-// If someone opens in browser (GET), guide properly (this fixes your "Cannot GET /api/join")
-app.get('/api/join', (req, res) => {
-  res.status(405).json({
-    ok: false,
-    error: 'METHOD_NOT_ALLOWED',
-    message: 'Use POST /api/join with JSON body: { "username": "...", "poolId": "..." }',
-    ts: nowIso(),
-  });
-});
-
-// Actual join (POST)
+// Join (POST creates an entry)
 app.post('/api/join', (req, res) => {
-  const { username, poolId } = parseJoinPayload(req.body);
+  const username = normalizeUsername(req.body && req.body.username);
+  const poolId = req.body && String(req.body.poolId || '').trim();
 
-  if (!username || !poolId) {
-    return res.status(400).json({
-      ok: false,
-      error: 'INVALID_PAYLOAD',
-      message: 'Missing username or poolId',
-      hint: { expected: { username: '...', poolId: '...' }, received: req.body || null },
-      ts: nowIso(),
-    });
-  }
+  if (!username) return jsonErr(res, 400, 'INVALID_PAYLOAD', 'username is required');
+  if (!poolId) return jsonErr(res, 400, 'INVALID_PAYLOAD', 'poolId is required');
 
-  const pools = getPools();
-  const pool = pools.find((p) => p.id === poolId);
-  if (!pool) {
-    return res.status(404).json({
-      ok: false,
-      error: 'POOL_NOT_FOUND',
-      message: `Unknown poolId: ${poolId}`,
-      knownPools: pools.map((p) => p.id),
-      ts: nowIso(),
-    });
-  }
+  const pool = poolMap.get(poolId);
+  if (!pool) return jsonErr(res, 404, 'POOL_NOT_FOUND', `poolId not found: ${poolId}`);
 
+  const entryId = safeId('entry');
   const entry = {
-    id: makeId('entry'),
+    id: entryId,
     username,
-    poolId,
+    poolId: pool.id,
+    players: [],
     createdAt: nowIso(),
-    lineup: [],
+    updatedAt: nowIso()
   };
 
-  const arr = entriesByUsername.get(username) || [];
-  arr.unshift(entry);
-  entriesByUsername.set(username, arr);
+  entriesById.set(entryId, entry);
+  if (!entriesByUser.has(username)) entriesByUser.set(username, []);
+  entriesByUser.get(username).push(entryId);
 
-  return res.json({
+  // Frontend can redirect to draft.html?entryId=...
+  jsonOk(res, {
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    entryId,
+    pool
+  });
+});
+
+// Get lineup (draft page loads this)
+app.get('/api/lineup', (req, res) => {
+  const entryId = String(req.query.entryId || '').trim();
+  if (!entryId) return jsonErr(res, 400, 'INVALID_REQUEST', 'entryId is required');
+
+  const entry = entriesById.get(entryId);
+  if (!entry) return jsonErr(res, 404, 'ENTRY_NOT_FOUND', 'Entry not found');
+
+  const pool = poolMap.get(entry.poolId) || null;
+
+  jsonOk(res, {
     ok: true,
     mode: MODE,
     ts: nowIso(),
     entry,
-    pool,
+    pool
   });
 });
 
-// (Optional) Save lineup endpoint for later wiring
-app.post('/api/save-lineup', (req, res) => {
-  const username = normalizeUsername(pickFirst(req.body, ['username', 'user', 'name']));
-  const entryId = pickFirst(req.body, ['entryId', 'entry_id', 'id']);
-  const lineup = pickFirst(req.body, ['lineup', 'players']);
+// Save lineup
+app.post('/api/lineup', (req, res) => {
+  const entryId = req.body && String(req.body.entryId || '').trim();
+  const players = (req.body && req.body.players) || [];
 
-  if (!username || !entryId || !Array.isArray(lineup)) {
-    return res.status(400).json({
-      ok: false,
-      error: 'INVALID_PAYLOAD',
-      message: 'Expected { username, entryId, lineup: [playerId...] }',
-      ts: nowIso(),
+  if (!entryId) return jsonErr(res, 400, 'INVALID_PAYLOAD', 'entryId is required');
+  if (!Array.isArray(players)) return jsonErr(res, 400, 'INVALID_PAYLOAD', 'players must be an array');
+
+  const entry = entriesById.get(entryId);
+  if (!entry) return jsonErr(res, 404, 'ENTRY_NOT_FOUND', 'Entry not found');
+
+  const pool = poolMap.get(entry.poolId);
+  if (!pool) return jsonErr(res, 500, 'POOL_MISSING', 'Pool missing for this entry');
+
+  // Validate roster size
+  const unique = Array.from(new Set(players.map(x => String(x))));
+  if (unique.length !== pool.rosterSize) {
+    return jsonErr(res, 400, 'INVALID_LINEUP', `Pick exactly ${pool.rosterSize} players`);
+  }
+
+  // Validate players exist & salary cap
+  let totalCost = 0;
+  for (const pid of unique) {
+    const c = playerCostMap.get(pid);
+    if (!c) return jsonErr(res, 400, 'INVALID_PLAYER', `Unknown player id: ${pid}`);
+    totalCost += c;
+  }
+  if (totalCost > pool.salaryCap) {
+    return jsonErr(res, 400, 'OVER_CAP', `Salary cap exceeded: ${totalCost}/${pool.salaryCap}`, {
+      totalCost,
+      salaryCap: pool.salaryCap
     });
   }
 
-  const entries = entriesByUsername.get(username) || [];
-  const target = entries.find((e) => e.id === String(entryId));
-  if (!target) {
-    return res.status(404).json({
-      ok: false,
-      error: 'ENTRY_NOT_FOUND',
-      message: `Entry not found: ${entryId}`,
-      ts: nowIso(),
-    });
-  }
+  entry.players = unique;
+  entry.updatedAt = nowIso();
+  entriesById.set(entryId, entry);
 
-  // simple validation: enforce 5 players & cap=10 using current players list
-  const players = getPlayers();
-  const priceById = new Map(players.map((p) => [p.id, p.cost]));
-  const picked = lineup.map(String);
-
-  const cost = picked.reduce((sum, pid) => sum + (priceById.get(pid) || 999), 0);
-  if (picked.length !== 5) {
-    return res.status(400).json({ ok: false, error: 'INVALID_LINEUP', message: 'Need exactly 5 players', ts: nowIso() });
-  }
-  if (cost > 10) {
-    return res.status(400).json({ ok: false, error: 'OVER_CAP', message: `Cost ${cost} exceeds cap 10`, ts: nowIso() });
-  }
-
-  target.lineup = picked;
-
-  return res.json({
+  jsonOk(res, {
     ok: true,
     mode: MODE,
     ts: nowIso(),
-    entry: target,
-    cost,
+    entry,
+    totalCost,
+    salaryCap: pool.salaryCap
   });
 });
 
-// ---------------------------
-// SPA fallback (keep LAST)
-// ---------------------------
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// My entries
+app.get('/api/my-entries', (req, res) => {
+  const username = normalizeUsername(req.query.username || '');
+  if (!username) return jsonErr(res, 400, 'INVALID_REQUEST', 'username is required');
+
+  const ids = entriesByUser.get(username) || [];
+  const entries = ids.map(id => entriesById.get(id)).filter(Boolean);
+
+  jsonOk(res, { ok: true, mode: MODE, ts: nowIso(), entries });
 });
 
-// ---------------------------
-// Start server
-// ---------------------------
+// -------- Fallback for unknown API --------
+app.use('/api', (_req, res) => {
+  jsonErr(res, 404, 'NOT_FOUND', 'API route not found');
+});
+
+// -------- Start --------
 app.listen(PORT, () => {
-  console.log(`[shfantasy] listening on :${PORT} mode=${MODE}`);
+  console.log(`[shfantasy] listening on :${PORT} mode=${MODE} firestore=${FIRESTORE}`);
 });
