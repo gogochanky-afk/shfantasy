@@ -1,12 +1,13 @@
-// shfantasy/index.js
+// /index.js
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 
 let getFirestore;
 try {
-  // Optional: if firebase.js exists and exports getFirestore()
+  // Optional Firestore: provide ./firebase.js exporting { getFirestore }
   ({ getFirestore } = require('./firebase'));
 } catch (e) {
   getFirestore = () => null;
@@ -14,12 +15,21 @@ try {
 
 const app = express();
 
-// --- MUST: parse JSON body for POST ---
-app.use(express.json({ limit: '1mb' }));
+// IMPORTANT: Cloud Run needs correct PORT
+const PORT = Number(process.env.PORT || 8080);
 
-// -------------------------------
+// JSON body
+app.use(express.json({ limit: '256kb' }));
+
+// ------------------------------------
+// Mode
+// ------------------------------------
+const MODE = (process.env.DATA_MODE || 'LIVE').toUpperCase(); // LIVE / DEMO
+const db = getFirestore();
+
+// ------------------------------------
 // Static files
-// -------------------------------
+// ------------------------------------
 app.use(
   express.static(path.join(__dirname, 'public'), {
     etag: true,
@@ -27,16 +37,9 @@ app.use(
   })
 );
 
-// -------------------------------
-// MODE + Firestore
-// -------------------------------
-const MODE = (process.env.DATA_MODE || process.env.MODE || 'DEMO').toUpperCase();
-const db = getFirestore();
-const firestoreEnabled = !!db;
-
-// -------------------------------
-// Demo pools/players (fallback)
-// -------------------------------
+// ------------------------------------
+// Demo data (safe fallback even in LIVE)
+// ------------------------------------
 const DEMO_POOLS = [
   { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5 },
   { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 },
@@ -61,97 +64,132 @@ const DEMO_PLAYERS = [
   { id: 'p16', name: 'Dorian Finney-Smith', team: 'LAL', cost: 1 },
 ];
 
-// -------------------------------
-// In-memory entries fallback (when Firestore not available)
-// NOTE: This is OK for demo/alpha; Cloud Run instances may reset.
-// -------------------------------
-const memEntriesByUser = new Map();
-// key: username -> array of entries
+// ------------------------------------
+// Tiny file store fallback (works without Firestore)
+// Cloud Run instance storage is ephemeral but good enough for MVP
+// ------------------------------------
+const STORE_PATH = process.env.ENTRIES_STORE_PATH || '/tmp/shfantasy_entries.json';
+
+function safeReadStore() {
+  try {
+    if (!fs.existsSync(STORE_PATH)) return { entries: [] };
+    const raw = fs.readFileSync(STORE_PATH, 'utf8');
+    const obj = JSON.parse(raw || '{}');
+    if (!obj || typeof obj !== 'object') return { entries: [] };
+    if (!Array.isArray(obj.entries)) obj.entries = [];
+    return obj;
+  } catch (e) {
+    return { entries: [] };
+  }
+}
+
+function safeWriteStore(obj) {
+  try {
+    fs.writeFileSync(STORE_PATH, JSON.stringify(obj, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function normalizeUsername(v) {
-  if (typeof v !== 'string') return '';
-  return v.trim().slice(0, 40);
+function normalizeUsername(s) {
+  if (typeof s !== 'string') return '';
+  const v = s.trim();
+  // keep simple, avoid weird chars breaking UI
+  return v.slice(0, 30);
 }
 
-function normalizePoolId(v) {
-  if (typeof v !== 'string') return '';
-  return v.trim().slice(0, 80);
+function normalizePoolId(s) {
+  if (typeof s !== 'string') return '';
+  return s.trim().slice(0, 60);
 }
 
-// -------------------------------
-// Health
-// -------------------------------
-app.get('/health.json', (req, res) => {
+function getPools() {
+  // For now: even LIVE returns demo pools (until real schedule/pools hooked)
+  return DEMO_POOLS;
+}
+
+function getPlayers(/* poolId */) {
+  // For now: demo player set for all pools
+  return DEMO_PLAYERS;
+}
+
+function makeEntryId() {
+  return `e_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+}
+
+// ------------------------------------
+// APIs
+// ------------------------------------
+app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     mode: MODE,
-    firestore: firestoreEnabled,
+    firestore: !!db,
     ts: nowIso(),
   });
 });
 
-// -------------------------------
-// Pools
-// -------------------------------
-function getPools() {
-  // For now: use demo pools even in LIVE unless you later plug real pools
-  return DEMO_POOLS;
-}
-
-app.get('/pools.json', (req, res) => {
-  res.json({ ok: true, mode: MODE, ts: nowIso(), pools: getPools() });
-});
 app.get('/api/pools', (req, res) => {
-  res.json({ ok: true, mode: MODE, ts: nowIso(), pools: getPools() });
+  res.json({
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    pools: getPools(),
+  });
 });
 
-// -------------------------------
-// Players
-// -------------------------------
-function getPlayers() {
-  // For now: demo players; later replace with roster_snapshot query
-  return DEMO_PLAYERS;
-}
-
-app.get('/players.json', (req, res) => {
-  res.json({ ok: true, mode: MODE, ts: nowIso(), players: getPlayers() });
-});
 app.get('/api/players', (req, res) => {
-  res.json({ ok: true, mode: MODE, ts: nowIso(), players: getPlayers() });
-});
-
-// -------------------------------
-// My Entries
-// -------------------------------
-async function listEntries(username) {
-  if (!username) return [];
-  if (firestoreEnabled) {
-    // If you have a Firestore schema, implement here.
-    // To avoid breaking LIVE now, we fallback to memory unless you already built it.
-    // return await firestoreListEntries(db, username);
-  }
-  return memEntriesByUser.get(username) || [];
-}
-
-app.get('/my-entries.json', async (req, res) => {
-  const username = normalizeUsername(req.query.username || req.query.user || '');
-  const entries = await listEntries(username);
-  res.json({ ok: true, mode: MODE, ts: nowIso(), entries });
+  const poolId = normalizePoolId(req.query.poolId || '');
+  res.json({
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    players: getPlayers(poolId),
+  });
 });
 
 app.get('/api/my-entries', async (req, res) => {
-  const username = normalizeUsername(req.query.username || req.query.user || '');
-  const entries = await listEntries(username);
-  res.json({ ok: true, mode: MODE, ts: nowIso(), entries });
-});
+  const username = normalizeUsername(req.query.username || '');
+  if (!username) {
+    return res.status(400).json({
+      ok: false,
+      error: 'INVALID_USERNAME',
+      message: 'Provide ?username=...',
+      ts: nowIso(),
+    });
+  }
 
-// -------------------------------
-// JOIN
-// -------------------------------
+  // Firestore optional
+  if (db) {
+    try {
+      const snap = await db
+        .collection('entries')
+        .where('username', '==', username)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get();
+
+      const entries = [];
+      snap.forEach((doc) => entries.push({ id: doc.id, ...doc.data() }));
+      return res.json({ ok: true, mode: MODE, ts: nowIso(), entries });
+    } catch (e) {
+      // fallthrough to file store
+    }
+  }
+
+  const store = safeReadStore();
+  const entries = store.entries
+    .filter((e) => e.username === username)
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    .slice(0, 50);
+
+  return res.json({ ok: true, mode: MODE, ts: nowIso(), entries });
+});
 
 // If someone opens in browser (GET), guide them properly
 app.get('/api/join', (req, res) => {
@@ -164,108 +202,110 @@ app.get('/api/join', (req, res) => {
 });
 
 function parseJoinPayload(body) {
-  // tolerate multiple key names
+  // tolerate multiple key names (front-end may change)
   const username =
     normalizeUsername(body?.username) ||
     normalizeUsername(body?.user) ||
-    normalizeUsername(body?.name);
+    normalizeUsername(body?.name) ||
+    normalizeUsername(body?.handle);
 
   const poolId =
     normalizePoolId(body?.poolId) ||
+    normalizePoolId(body?.pool) ||
     normalizePoolId(body?.pool_id) ||
-    normalizePoolId(body?.pool);
+    normalizePoolId(body?.poolID);
 
-  return { username, poolId };
+  // optional: allow "today" / "tomorrow"
+  let normalizedPoolId = poolId;
+  if (poolId === 'today') normalizedPoolId = 'demo-today';
+  if (poolId === 'tomorrow') normalizedPoolId = 'demo-tomorrow';
+
+  return { username, poolId: normalizedPoolId };
+}
+
+function validateJoin({ username, poolId }) {
+  if (!username) return { ok: false, code: 'INVALID_USERNAME', message: 'username is required' };
+  if (!poolId) return { ok: false, code: 'INVALID_POOL', message: 'poolId is required' };
+
+  const pools = getPools();
+  const found = pools.find((p) => p.id === poolId);
+  if (!found) return { ok: false, code: 'POOL_NOT_FOUND', message: `Unknown poolId: ${poolId}` };
+
+  return { ok: true, pool: found };
 }
 
 app.post('/api/join', async (req, res) => {
-  const { username, poolId } = parseJoinPayload(req.body);
+  const parsed = parseJoinPayload(req.body || {});
+  const v = validateJoin(parsed);
 
-  if (!username || !poolId) {
+  if (!v.ok) {
     return res.status(400).json({
       ok: false,
-      error: 'INVALID_PAYLOAD',
-      message: 'Missing username or poolId',
-      got: { username: !!username, poolId: !!poolId },
+      error: v.code,
+      message: v.message,
+      received: {
+        keys: Object.keys(req.body || {}),
+        username: parsed.username || null,
+        poolId: parsed.poolId || null,
+      },
+      expected: { username: 'string', poolId: 'string' },
       ts: nowIso(),
     });
   }
 
-  // basic pool validation
-  const pools = getPools();
-  const pool = pools.find((p) => p.id === poolId);
-  if (!pool) {
-    return res.status(404).json({
-      ok: false,
-      error: 'POOL_NOT_FOUND',
-      message: `Unknown poolId: ${poolId}`,
-      ts: nowIso(),
-    });
-  }
-
-  // create entry object
-  const entryId = `${poolId}__${username}__${Date.now()}`;
   const entry = {
-    id: entryId,
-    username,
-    poolId,
+    id: makeEntryId(),
+    username: parsed.username,
+    poolId: parsed.poolId,
     createdAt: nowIso(),
-    roster: [], // will be filled in draft
-    salaryCap: pool.salaryCap,
-    rosterSize: pool.rosterSize,
-    dataMode: MODE,
-    storage: firestoreEnabled ? 'firestore' : 'memory',
+    // Draft payload placeholder (lineup saved later)
+    lineup: [],
+    salaryCap: v.pool.salaryCap,
+    rosterSize: v.pool.rosterSize,
   };
 
-  // save (safe fallback)
-  try {
-    if (firestoreEnabled) {
-      // If you already have Firestore collections, implement this section.
-      // Example:
-      // await db.collection('entries').doc(entryId).set(entry);
-      // and maybe user index, etc.
-      //
-      // For now, to prevent LIVE breaking if Firestore wiring is incomplete:
-      // we still fall back to memory unless you confirm schema exists.
-      const arr = memEntriesByUser.get(username) || [];
-      arr.unshift(entry);
-      memEntriesByUser.set(username, arr);
-    } else {
-      const arr = memEntriesByUser.get(username) || [];
-      arr.unshift(entry);
-      memEntriesByUser.set(username, arr);
+  // Firestore optional
+  if (db) {
+    try {
+      const ref = await db.collection('entries').add(entry);
+      return res.json({
+        ok: true,
+        mode: MODE,
+        ts: nowIso(),
+        entryId: ref.id,
+        entry: { ...entry, id: ref.id },
+        // Frontend can open draft by entryId
+        draftUrl: `/draft.html?entryId=${encodeURIComponent(ref.id)}`,
+      });
+    } catch (e) {
+      // fallthrough to file store
     }
-  } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: 'JOIN_SAVE_FAILED',
-      message: String(e?.message || e),
-      ts: nowIso(),
-    });
   }
 
-  // return a consistent response the frontend can use
+  const store = safeReadStore();
+  store.entries.unshift(entry);
+  safeWriteStore(store);
+
   return res.json({
     ok: true,
     mode: MODE,
     ts: nowIso(),
+    entryId: entry.id,
     entry,
-    // optional: provide draft path for frontend routing
-    draftUrl: `/draft?entryId=${encodeURIComponent(entryId)}`,
+    draftUrl: `/draft.html?entryId=${encodeURIComponent(entry.id)}`,
   });
 });
 
-// -------------------------------
-// SPA fallback (if you use client-side routing)
-// -------------------------------
-app.get('*', (req, res) => {
+// ------------------------------------
+// SPA fallback (optional): if you have client-side routing later
+// ------------------------------------
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// -------------------------------
-// Listen for Cloud Run
-// -------------------------------
-const PORT = Number(process.env.PORT || 8080);
+// ------------------------------------
+// Start server
+// ------------------------------------
 app.listen(PORT, () => {
-  console.log(`shfantasy server listening on ${PORT} (mode=${MODE}, firestore=${firestoreEnabled})`);
+  console.log(`[shfantasy] listening on ${PORT} mode=${MODE} firestore=${!!db}`);
 });
