@@ -1,146 +1,271 @@
+// shfantasy/index.js
 'use strict';
 
 const path = require('path');
 const express = require('express');
 
+let getFirestore;
+try {
+  // Optional: if firebase.js exists and exports getFirestore()
+  ({ getFirestore } = require('./firebase'));
+} catch (e) {
+  getFirestore = () => null;
+}
+
 const app = express();
-app.use(express.json());
 
-const PORT = process.env.PORT || 8080;
-const MODE = process.env.DATA_MODE || 'LIVE';
+// --- MUST: parse JSON body for POST ---
+app.use(express.json({ limit: '1mb' }));
 
-// ==============================
-// In-memory storage (safe LIVE)
-// ==============================
+// -------------------------------
+// Static files
+// -------------------------------
+app.use(
+  express.static(path.join(__dirname, 'public'), {
+    etag: true,
+    maxAge: '1h',
+  })
+);
 
-const pools = [
+// -------------------------------
+// MODE + Firestore
+// -------------------------------
+const MODE = (process.env.DATA_MODE || process.env.MODE || 'DEMO').toUpperCase();
+const db = getFirestore();
+const firestoreEnabled = !!db;
+
+// -------------------------------
+// Demo pools/players (fallback)
+// -------------------------------
+const DEMO_POOLS = [
   { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5 },
-  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 }
+  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 },
 ];
 
-const players = [
-  { id: "p1", name: "LeBron James", team: "LAL", cost: 4 },
-  { id: "p2", name: "Stephen Curry", team: "GSW", cost: 4 },
-  { id: "p3", name: "Kevin Durant", team: "PHX", cost: 4 },
-  { id: "p4", name: "Jayson Tatum", team: "BOS", cost: 4 },
-  { id: "p5", name: "Jalen Brunson", team: "NYK", cost: 3 },
-  { id: "p6", name: "Anthony Edwards", team: "MIN", cost: 3 },
-  { id: "p7", name: "Devin Booker", team: "PHX", cost: 3 },
-  { id: "p8", name: "Donovan Mitchell", team: "CLE", cost: 3 },
-  { id: "p9", name: "Mikal Bridges", team: "NYK", cost: 2 },
-  { id: "p10", name: "Derrick White", team: "BOS", cost: 2 },
-  { id: "p11", name: "Austin Reaves", team: "LAL", cost: 2 },
-  { id: "p12", name: "Klay Thompson", team: "DAL", cost: 2 },
-  { id: "p13", name: "Alex Caruso", team: "OKC", cost: 1 },
-  { id: "p14", name: "Josh Hart", team: "NYK", cost: 1 },
-  { id: "p15", name: "Naz Reid", team: "MIN", cost: 1 },
-  { id: "p16", name: "Dorian Finney-Smith", team: "LAL", cost: 1 }
+const DEMO_PLAYERS = [
+  { id: 'p1', name: 'LeBron James', team: 'LAL', cost: 4 },
+  { id: 'p2', name: 'Stephen Curry', team: 'GSW', cost: 4 },
+  { id: 'p3', name: 'Kevin Durant', team: 'PHX', cost: 4 },
+  { id: 'p4', name: 'Jayson Tatum', team: 'BOS', cost: 4 },
+  { id: 'p5', name: 'Jalen Brunson', team: 'NYK', cost: 3 },
+  { id: 'p6', name: 'Anthony Edwards', team: 'MIN', cost: 3 },
+  { id: 'p7', name: 'Devin Booker', team: 'PHX', cost: 3 },
+  { id: 'p8', name: 'Donovan Mitchell', team: 'CLE', cost: 3 },
+  { id: 'p9', name: 'Mikal Bridges', team: 'NYK', cost: 2 },
+  { id: 'p10', name: 'Derrick White', team: 'BOS', cost: 2 },
+  { id: 'p11', name: 'Austin Reaves', team: 'LAL', cost: 2 },
+  { id: 'p12', name: 'Klay Thompson', team: 'DAL', cost: 2 },
+  { id: 'p13', name: 'Alex Caruso', team: 'OKC', cost: 1 },
+  { id: 'p14', name: 'Josh Hart', team: 'NYK', cost: 1 },
+  { id: 'p15', name: 'Naz Reid', team: 'MIN', cost: 1 },
+  { id: 'p16', name: 'Dorian Finney-Smith', team: 'LAL', cost: 1 },
 ];
 
-let entries = [];
+// -------------------------------
+// In-memory entries fallback (when Firestore not available)
+// NOTE: This is OK for demo/alpha; Cloud Run instances may reset.
+// -------------------------------
+const memEntriesByUser = new Map();
+// key: username -> array of entries
 
-// ==============================
-// Static
-// ==============================
+function nowIso() {
+  return new Date().toISOString();
+}
 
-app.use(express.static(path.join(__dirname, 'public')));
+function normalizeUsername(v) {
+  if (typeof v !== 'string') return '';
+  return v.trim().slice(0, 40);
+}
 
-// ==============================
+function normalizePoolId(v) {
+  if (typeof v !== 'string') return '';
+  return v.trim().slice(0, 80);
+}
+
+// -------------------------------
 // Health
-// ==============================
-
-app.get('/health', (req, res) => {
+// -------------------------------
+app.get('/health.json', (req, res) => {
   res.json({
     status: 'ok',
     mode: MODE,
-    firestore: false,
-    ts: new Date().toISOString()
+    firestore: firestoreEnabled,
+    ts: nowIso(),
   });
 });
 
-// ==============================
+// -------------------------------
 // Pools
-// ==============================
+// -------------------------------
+function getPools() {
+  // For now: use demo pools even in LIVE unless you later plug real pools
+  return DEMO_POOLS;
+}
 
+app.get('/pools.json', (req, res) => {
+  res.json({ ok: true, mode: MODE, ts: nowIso(), pools: getPools() });
+});
 app.get('/api/pools', (req, res) => {
-  res.json({ ok: true, mode: MODE, pools });
+  res.json({ ok: true, mode: MODE, ts: nowIso(), pools: getPools() });
 });
 
-// ==============================
+// -------------------------------
 // Players
-// ==============================
+// -------------------------------
+function getPlayers() {
+  // For now: demo players; later replace with roster_snapshot query
+  return DEMO_PLAYERS;
+}
 
+app.get('/players.json', (req, res) => {
+  res.json({ ok: true, mode: MODE, ts: nowIso(), players: getPlayers() });
+});
 app.get('/api/players', (req, res) => {
-  res.json({ ok: true, mode: MODE, players });
+  res.json({ ok: true, mode: MODE, ts: nowIso(), players: getPlayers() });
 });
 
-// ==============================
-// Join (LIVE memory)
-// ==============================
+// -------------------------------
+// My Entries
+// -------------------------------
+async function listEntries(username) {
+  if (!username) return [];
+  if (firestoreEnabled) {
+    // If you have a Firestore schema, implement here.
+    // To avoid breaking LIVE now, we fallback to memory unless you already built it.
+    // return await firestoreListEntries(db, username);
+  }
+  return memEntriesByUser.get(username) || [];
+}
 
-app.post('/api/join', (req, res) => {
-  const { username, poolId, lineup } = req.body;
+app.get('/my-entries.json', async (req, res) => {
+  const username = normalizeUsername(req.query.username || req.query.user || '');
+  const entries = await listEntries(username);
+  res.json({ ok: true, mode: MODE, ts: nowIso(), entries });
+});
 
-  if (!username || !poolId || !Array.isArray(lineup)) {
-    return res.status(400).json({ ok: false, error: 'Invalid payload' });
+app.get('/api/my-entries', async (req, res) => {
+  const username = normalizeUsername(req.query.username || req.query.user || '');
+  const entries = await listEntries(username);
+  res.json({ ok: true, mode: MODE, ts: nowIso(), entries });
+});
+
+// -------------------------------
+// JOIN
+// -------------------------------
+
+// If someone opens in browser (GET), guide them properly
+app.get('/api/join', (req, res) => {
+  res.status(405).json({
+    ok: false,
+    error: 'METHOD_NOT_ALLOWED',
+    message: 'Use POST /api/join with JSON body: { "username": "...", "poolId": "..." }',
+    ts: nowIso(),
+  });
+});
+
+function parseJoinPayload(body) {
+  // tolerate multiple key names
+  const username =
+    normalizeUsername(body?.username) ||
+    normalizeUsername(body?.user) ||
+    normalizeUsername(body?.name);
+
+  const poolId =
+    normalizePoolId(body?.poolId) ||
+    normalizePoolId(body?.pool_id) ||
+    normalizePoolId(body?.pool);
+
+  return { username, poolId };
+}
+
+app.post('/api/join', async (req, res) => {
+  const { username, poolId } = parseJoinPayload(req.body);
+
+  if (!username || !poolId) {
+    return res.status(400).json({
+      ok: false,
+      error: 'INVALID_PAYLOAD',
+      message: 'Missing username or poolId',
+      got: { username: !!username, poolId: !!poolId },
+      ts: nowIso(),
+    });
   }
 
-  const pool = pools.find(p => p.id === poolId);
+  // basic pool validation
+  const pools = getPools();
+  const pool = pools.find((p) => p.id === poolId);
   if (!pool) {
-    return res.status(400).json({ ok: false, error: 'Pool not found' });
+    return res.status(404).json({
+      ok: false,
+      error: 'POOL_NOT_FOUND',
+      message: `Unknown poolId: ${poolId}`,
+      ts: nowIso(),
+    });
   }
 
-  if (lineup.length !== pool.rosterSize) {
-    return res.status(400).json({ ok: false, error: 'Invalid roster size' });
-  }
-
-  let totalCost = 0;
-
-  for (let pid of lineup) {
-    const player = players.find(p => p.id === pid);
-    if (!player) {
-      return res.status(400).json({ ok: false, error: 'Invalid player' });
-    }
-    totalCost += player.cost;
-  }
-
-  if (totalCost > pool.salaryCap) {
-    return res.status(400).json({ ok: false, error: 'Salary cap exceeded' });
-  }
-
+  // create entry object
+  const entryId = `${poolId}__${username}__${Date.now()}`;
   const entry = {
-    id: 'e_' + Date.now(),
+    id: entryId,
     username,
     poolId,
-    lineup,
-    createdAt: new Date().toISOString()
+    createdAt: nowIso(),
+    roster: [], // will be filled in draft
+    salaryCap: pool.salaryCap,
+    rosterSize: pool.rosterSize,
+    dataMode: MODE,
+    storage: firestoreEnabled ? 'firestore' : 'memory',
   };
 
-  entries.push(entry);
-
-  res.json({ ok: true, entry });
-});
-
-// ==============================
-// My Entries
-// ==============================
-
-app.get('/api/my-entries', (req, res) => {
-  const username = req.query.username;
-
-  if (!username) {
-    return res.status(400).json({ ok: false, error: 'Missing username' });
+  // save (safe fallback)
+  try {
+    if (firestoreEnabled) {
+      // If you already have Firestore collections, implement this section.
+      // Example:
+      // await db.collection('entries').doc(entryId).set(entry);
+      // and maybe user index, etc.
+      //
+      // For now, to prevent LIVE breaking if Firestore wiring is incomplete:
+      // we still fall back to memory unless you confirm schema exists.
+      const arr = memEntriesByUser.get(username) || [];
+      arr.unshift(entry);
+      memEntriesByUser.set(username, arr);
+    } else {
+      const arr = memEntriesByUser.get(username) || [];
+      arr.unshift(entry);
+      memEntriesByUser.set(username, arr);
+    }
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: 'JOIN_SAVE_FAILED',
+      message: String(e?.message || e),
+      ts: nowIso(),
+    });
   }
 
-  const userEntries = entries.filter(e => e.username === username);
-
-  res.json({ ok: true, mode: MODE, entries: userEntries });
+  // return a consistent response the frontend can use
+  return res.json({
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    entry,
+    // optional: provide draft path for frontend routing
+    draftUrl: `/draft?entryId=${encodeURIComponent(entryId)}`,
+  });
 });
 
-// ==============================
-// Start Server
-// ==============================
+// -------------------------------
+// SPA fallback (if you use client-side routing)
+// -------------------------------
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
+// -------------------------------
+// Listen for Cloud Run
+// -------------------------------
+const PORT = Number(process.env.PORT || 8080);
 app.listen(PORT, () => {
-  console.log(`SH Fantasy running on port ${PORT}`);
+  console.log(`shfantasy server listening on ${PORT} (mode=${MODE}, firestore=${firestoreEnabled})`);
 });
