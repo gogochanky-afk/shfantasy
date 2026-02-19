@@ -1,291 +1,177 @@
-// /index.js
-const path = require("path");
-const express = require("express");
-const { getFirestore } = require("./firebase-init");
+// index.js
+'use strict';
+
+const path = require('path');
+const express = require('express');
+
+let getFirestore;
+try {
+  // If you have ./firebase.js in your repo (as your screenshot implies), we use it.
+  ({ getFirestore } = require('./firebase'));
+} catch (e) {
+  // Fallback: run even if firebase is not configured (DEMO mode)
+  getFirestore = () => null;
+}
 
 const app = express();
 app.use(express.json());
 
-// Serve static files
-app.use(express.static(path.join(__dirname, "public")));
+// ---------------------------
+// Static files
+// ---------------------------
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: true,
+  maxAge: '1h',
+}));
 
-// Initialize Firestore
+// ---------------------------
+// Firestore (optional)
+// ---------------------------
 const db = getFirestore();
 
-// ===== DEMO POOLS =====
+// ---------------------------
+// Demo data
+// ---------------------------
 const DEMO_POOLS = [
-  { id: "demo-today", name: "Today Arena", salaryCap: 10, rosterSize: 5, date: "today" },
-  { id: "demo-tomorrow", name: "Tomorrow Arena", salaryCap: 10, rosterSize: 5, date: "tomorrow" },
+  { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5 },
+  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 },
 ];
 
-// ===== DEMO PLAYERS (mixed costs 1-4) =====
+// mixed costs 1–4
 const DEMO_PLAYERS = [
   // cost 4 (stars)
-  { id: "p1", name: "Nikola Jokic", cost: 4 },
-  { id: "p2", name: "Luka Doncic", cost: 4 },
-  { id: "p3", name: "Giannis Antetokounmpo", cost: 4 },
-  { id: "p4", name: "Shai Gilgeous-Alexander", cost: 4 },
-  { id: "p5", name: "Joel Embiid", cost: 4 },
+  { id: 'p1', name: 'Nikola Jokic', cost: 4 },
+  { id: 'p2', name: 'Luka Doncic', cost: 4 },
+  { id: 'p3', name: 'Giannis Antetokounmpo', cost: 4 },
+  { id: 'p4', name: 'Shai Gilgeous-Alexander', cost: 4 },
+  { id: 'p5', name: 'Joel Embiid', cost: 4 },
 
   // cost 3 (all-stars)
-  { id: "p6", name: "Stephen Curry", cost: 3 },
-  { id: "p7", name: "Kevin Durant", cost: 3 },
-  { id: "p8", name: "Jayson Tatum", cost: 3 },
-  { id: "p9", name: "LeBron James", cost: 3 },
-  { id: "p10", name: "Anthony Davis", cost: 3 },
-  { id: "p11", name: "Kyrie Irving", cost: 3 },
-  { id: "p12", name: "Jimmy Butler", cost: 3 },
+  { id: 'p6', name: 'Stephen Curry', cost: 3 },
+  { id: 'p7', name: 'Kevin Durant', cost: 3 },
+  { id: 'p8', name: 'Jayson Tatum', cost: 3 },
+  { id: 'p9', name: 'LeBron James', cost: 3 },
+  { id: 'p10', name: 'Anthony Davis', cost: 3 },
+  { id: 'p11', name: 'Kyrie Irving', cost: 3 },
 
-  // cost 2 (solid starters)
-  { id: "p13", name: "Ja Morant", cost: 2 },
-  { id: "p14", name: "Devin Booker", cost: 2 },
-  { id: "p15", name: "Damian Lillard", cost: 2 },
-  { id: "p16", name: "Donovan Mitchell", cost: 2 },
-  { id: "p17", name: "Bam Adebayo", cost: 2 },
+  // cost 2 (solid)
+  { id: 'p12', name: 'Jalen Brunson', cost: 2 },
+  { id: 'p13', name: 'Devin Booker', cost: 2 },
+  { id: 'p14', name: 'Ja Morant', cost: 2 },
+  { id: 'p15', name: 'Jimmy Butler', cost: 2 },
+  { id: 'p16', name: 'Bam Adebayo', cost: 2 },
 
-  // cost 1 (value picks)
-  { id: "p18", name: "Derrick White", cost: 1 },
-  { id: "p19", name: "Mikal Bridges", cost: 1 },
-  { id: "p20", name: "Jarrett Allen", cost: 1 },
-  { id: "p21", name: "Aaron Gordon", cost: 1 },
-  { id: "p22", name: "Austin Reaves", cost: 1 },
+  // cost 1 (value)
+  { id: 'p17', name: 'Derrick White', cost: 1 },
+  { id: 'p18', name: 'Alex Caruso', cost: 1 },
+  { id: 'p19', name: 'Josh Hart', cost: 1 },
+  { id: 'p20', name: 'Herb Jones', cost: 1 },
+  { id: 'p21', name: 'Walker Kessler', cost: 1 },
 ];
 
-// ===== HELPERS =====
-function normUsername(s) {
-  return (s || "").toString().trim().slice(0, 32);
+// ---------------------------
+// Simple helpers
+// ---------------------------
+function nowIso() {
+  return new Date().toISOString();
 }
 
-function getPool(poolId) {
-  return DEMO_POOLS.find((p) => p.id === poolId) || null;
+function safeUsername(req) {
+  // Demo default; later can wire auth
+  const u = (req.query.username || req.body?.username || 'Hugo').toString().trim();
+  return u || 'Hugo';
 }
 
-function toPlayerDetails(playerIds) {
-  const details = (playerIds || []).map((id) => DEMO_PLAYERS.find((p) => p.id === id) || { id, name: "Unknown", cost: 0 });
-  const totalCost = details.reduce((sum, p) => sum + (p.cost || 0), 0);
-  return { details, totalCost };
-}
-
-// ===== HEALTH =====
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
+// ---------------------------
+// Health endpoints (for Cloud Run + your own checking)
+// ---------------------------
+app.get('/health.json', (req, res) => {
+  res.status(200).json({ status: 'ok', ts: nowIso() });
 });
 
-// ===== POOLS =====
-app.get("/api/pools", (req, res) => {
-  res.json({ mode: "DEMO", pools: DEMO_POOLS });
+app.get('/my-entries.json', async (req, res) => {
+  // Keep compatible with your screenshot: {"ok":true,"mode":"DEMO","username":"Hugo","entries":[]}
+  const username = safeUsername(req);
+  res.status(200).json({ ok: true, mode: 'DEMO', username, entries: [] });
 });
 
-// ===== PLAYERS =====
-app.get("/api/players", (req, res) => {
-  res.json({ mode: "DEMO", players: DEMO_PLAYERS });
+// ---------------------------
+// API: pools & players (DEMO for now)
+// ---------------------------
+app.get('/api/pools', async (req, res) => {
+  res.json({
+    ok: true,
+    mode: 'DEMO',
+    ts: nowIso(),
+    pools: DEMO_POOLS,
+  });
 });
 
-/**
- * ===== JOIN POOL (idempotent, professional UX)
- * 如果同一 username + poolId 已經有 entry，就返返同一個（避免 second join 亂）
- * 規則：取最新一個 entry（createdAt desc）
- */
-app.post("/api/join", async (req, res) => {
-  try {
-    const poolId = (req.body?.poolId || "").toString().trim();
-    const username = normUsername(req.body?.username);
-
-    if (!poolId || !username) {
-      return res.status(400).json({ ok: false, error: "poolId and username required" });
-    }
-
-    const pool = getPool(poolId);
-    if (!pool) {
-      return res.status(400).json({ ok: false, error: "Invalid poolId" });
-    }
-
-    // Try find existing latest entry for same user+pool
-    const existingSnap = await db
-      .collection("entries")
-      .where("username", "==", username)
-      .where("poolId", "==", poolId)
-      .orderBy("createdAt", "desc")
-      .limit(1)
-      .get();
-
-    if (!existingSnap.empty) {
-      const doc = existingSnap.docs[0];
-      const data = doc.data();
-      return res.json({
-        ok: true,
-        reused: true,
-        entryId: doc.id, // IMPORTANT: doc.id is the document id used by /api/lineup update
-        poolId: data.poolId,
-        username: data.username,
-        createdAt: data.createdAt,
-      });
-    }
-
-    const createdAt = new Date().toISOString();
-    const entryRef = db.collection("entries").doc();
-
-    await entryRef.set({
-      username,
-      poolId,
-      players: [],
-      createdAt,
-      updatedAt: createdAt,
-    });
-
-    res.json({
-      ok: true,
-      reused: false,
-      entryId: entryRef.id,
-      poolId,
-      username,
-      createdAt,
-    });
-  } catch (error) {
-    console.error("[/api/join] Error:", error);
-    res.status(500).json({ ok: false, error: "Failed to create/reuse entry" });
+app.get('/api/pool/:poolId', async (req, res) => {
+  const poolId = req.params.poolId;
+  const pool = DEMO_POOLS.find(p => p.id === poolId);
+  if (!pool) {
+    return res.status(404).json({ ok: false, error: 'POOL_NOT_FOUND', poolId });
   }
+  res.json({
+    ok: true,
+    mode: 'DEMO',
+    pool,
+    players: DEMO_PLAYERS,
+    ts: nowIso(),
+  });
 });
 
-// ===== MY ENTRIES =====
-app.get("/api/my-entries", async (req, res) => {
-  try {
-    const username = normUsername(req.query.username);
-    if (!username) {
-      return res.status(400).json({ ok: false, error: "username required" });
-    }
+// ---------------------------
+// API: join (idempotent placeholder)
+// ---------------------------
+app.post('/api/join', async (req, res) => {
+  const username = safeUsername(req);
+  const { poolId, playerIds } = req.body || {};
 
-    const snapshot = await db
-      .collection("entries")
-      .where("username", "==", username)
-      .orderBy("createdAt", "desc")
-      .get();
+  // Minimal validation
+  if (!poolId) return res.status(400).json({ ok: false, error: 'MISSING_POOL_ID' });
+  if (!Array.isArray(playerIds)) return res.status(400).json({ ok: false, error: 'MISSING_PLAYER_IDS' });
 
-    const entries = [];
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const { details, totalCost } = toPlayerDetails(data.players || []);
+  const pool = DEMO_POOLS.find(p => p.id === poolId);
+  if (!pool) return res.status(404).json({ ok: false, error: 'POOL_NOT_FOUND', poolId });
 
-      entries.push({
-        id: doc.id,
-        poolId: data.poolId,
-        username: data.username,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt || data.createdAt,
-        lineup: (data.players || []).length
-          ? {
-              players: details,
-              totalCost,
-            }
-          : null,
-      });
-    });
+  // Enforce cap (10) and roster size (5) for your Alpha invariant
+  const rosterSize = pool.rosterSize ?? 5;
+  const salaryCap = pool.salaryCap ?? 10;
 
-    res.json({ ok: true, mode: "DEMO", username, entries });
-  } catch (error) {
-    console.error("[/api/my-entries] Error:", error);
-    res.status(500).json({ ok: false, error: "Failed to fetch entries" });
+  if (playerIds.length !== rosterSize) {
+    return res.status(400).json({ ok: false, error: 'INVALID_ROSTER_SIZE', expected: rosterSize, got: playerIds.length });
   }
-});
 
-// ===== SAVE LINEUP =====
-app.post("/api/lineup", async (req, res) => {
-  try {
-    const entryId = (req.body?.entryId || "").toString().trim();
-    const poolId = (req.body?.poolId || "").toString().trim();
-    const username = normUsername(req.body?.username);
-    const players = req.body?.players;
-
-    if (!entryId || !poolId || !username || !Array.isArray(players)) {
-      return res.status(400).json({ ok: false, error: "entryId, poolId, username, players required" });
-    }
-
-    const pool = getPool(poolId);
-    if (!pool) {
-      return res.status(400).json({ ok: false, error: "Invalid poolId" });
-    }
-
-    if (players.length !== pool.rosterSize) {
-      return res.status(400).json({ ok: false, error: `Roster must be exactly ${pool.rosterSize} players` });
-    }
-
-    const { totalCost } = toPlayerDetails(players);
-    if (totalCost > pool.salaryCap) {
-      return res.status(400).json({ ok: false, error: `Total cost ${totalCost} exceeds cap ${pool.salaryCap}` });
-    }
-
-    const entryRef = db.collection("entries").doc(entryId);
-    const entryDoc = await entryRef.get();
-    if (!entryDoc.exists) {
-      return res.status(404).json({ ok: false, error: "Entry not found" });
-    }
-
-    // Security-ish check: ensure same user & pool
-    const existing = entryDoc.data();
-    if (existing.username !== username || existing.poolId !== poolId) {
-      return res.status(403).json({ ok: false, error: "Entry ownership mismatch" });
-    }
-
-    const updatedAt = new Date().toISOString();
-    await entryRef.update({ players, updatedAt });
-
-    res.json({ ok: true, totalCost, updatedAt });
-  } catch (error) {
-    console.error("[/api/lineup] Error:", error);
-    res.status(500).json({ ok: false, error: "Failed to save lineup" });
+  const picks = playerIds.map(id => DEMO_PLAYERS.find(p => p.id === id)).filter(Boolean);
+  if (picks.length !== rosterSize) {
+    return res.status(400).json({ ok: false, error: 'INVALID_PLAYER_IDS' });
   }
-});
 
-// ===== GET LINEUP (for draft page load) =====
-app.get("/api/lineup", async (req, res) => {
-  try {
-    const entryId = (req.query.entryId || "").toString().trim();
-    if (!entryId) {
-      return res.status(400).json({ ok: false, error: "entryId required" });
-    }
-
-    const entryRef = db.collection("entries").doc(entryId);
-    const entryDoc = await entryRef.get();
-    if (!entryDoc.exists) {
-      return res.status(404).json({ ok: false, error: "Entry not found" });
-    }
-
-    const data = entryDoc.data();
-    const pool = getPool(data.poolId);
-    const { details, totalCost } = toPlayerDetails(data.players || []);
-
-    res.json({
-      ok: true,
-      entry: {
-        id: entryDoc.id,
-        poolId: data.poolId,
-        username: data.username,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt || data.createdAt,
-        players: data.players || [],
-      },
-      pool,
-      lineup: {
-        players: details,
-        totalCost,
-      },
-    });
-  } catch (error) {
-    console.error("[/api/lineup GET] Error:", error);
-    res.status(500).json({ ok: false, error: "Failed to fetch lineup" });
+  const totalCost = picks.reduce((sum, p) => sum + (p.cost || 0), 0);
+  if (totalCost > salaryCap) {
+    return res.status(400).json({ ok: false, error: 'OVER_CAP', salaryCap, totalCost });
   }
+
+  // DEMO: no DB write, just return success
+  return res.json({
+    ok: true,
+    mode: 'DEMO',
+    username,
+    poolId,
+    totalCost,
+    ts: nowIso(),
+    message: 'Joined (DEMO).',
+  });
 });
 
-/**
- * ✅ SPA fallback（關鍵）
- * 任何非 /api/* 都回 index.html，避免你再見到 JSON 畫面
- */
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+// ---------------------------
+// Important: Cloud Run MUST listen on process.env.PORT
+// ---------------------------
+const PORT = Number(process.env.PORT || 8080);
 
-// ===== START SERVER =====
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}/`);
+// Bind to 0.0.0.0 is important in containers / Cloud Run
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[shfantasy] listening on 0.0.0.0:${PORT} @ ${nowIso()}`);
 });
