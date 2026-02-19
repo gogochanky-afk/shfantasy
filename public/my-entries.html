@@ -1,138 +1,117 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SH Fantasy - My Entries</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>My Entries · SH Fantasy</title>
   <style>
-    body{font-family:Arial;background:#111;color:#fff;padding:20px}
-    .header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-    .pill{background:#222;border-radius:999px;padding:8px 12px;display:inline-block}
-    .btn{background:transparent;border:1px solid orange;color:orange;border-radius:999px;padding:10px 14px;cursor:pointer}
-    .btnSolid{background:orange;border:none;color:#111;border-radius:10px;padding:10px 14px;cursor:pointer}
-    .card{background:#1b1b1b;border-radius:12px;padding:14px;margin-top:12px}
-    .muted{opacity:.75}
-    .row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
-    .small{font-size:12px;opacity:.85}
-    a{color:orange}
+    :root { color-scheme: dark; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial; background:#0b0b0c; color:#eee; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    .nav { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; }
+    .brand { font-weight:700; }
+    .btn { background:#f0a500; border:none; color:#111; padding:10px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
+    .btn.secondary { background:transparent; border:1px solid #3a3a3f; color:#eee; }
+    .pill { border:1px solid #2b2b2e; padding:6px 10px; border-radius:999px; font-size:12px; }
+    .card { background:#141416; border:1px solid #232327; border-radius:14px; padding:16px; margin-top:12px; }
+    .muted { color:#b7b7bd; font-size:12px; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .entry { padding:12px 0; border-bottom:1px solid #1f1f22; }
+    .entry:last-child { border-bottom:none; }
+    .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background:#17171a; border:1px solid #2b2b2e; padding:10px 12px; border-radius:12px; font-size:13px; display:none; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div>
-      <div style="font-size:22px;font-weight:700;">📒 My Entries</div>
-      <div class="muted small">Demo mode / localStorage username fallback</div>
+  <div class="wrap">
+    <div class="nav">
+      <div class="brand">📒 My Entries</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="pill" id="modePill">Mode: DEMO</div>
+        <div class="pill" id="userPill">User: -</div>
+        <button class="btn secondary" id="homeBtn">← Home</button>
+        <button class="btn" id="refreshBtn">Refresh</button>
+      </div>
     </div>
-    <div class="row">
-      <span class="pill" id="modePill">Mode: -</span>
-      <span class="pill" id="userPill">User: -</span>
-      <button class="btn" onclick="goHome()">← Back</button>
+
+    <div class="card">
+      <div class="muted">Your entries are saved in Firestore (DEMO). Tap “Open Draft” to edit lineup.</div>
+      <div id="list" style="margin-top:12px;"></div>
     </div>
+
+    <div class="toast" id="toast"></div>
   </div>
 
-  <div class="card">
-    <div class="row">
-      <div>
-        <div style="font-weight:700;">Load Entries</div>
-        <div class="muted small">If no username found, we will ask once and save it.</div>
-      </div>
-      <button class="btnSolid" onclick="load()">Refresh</button>
-    </div>
-  </div>
-
-  <div id="list"></div>
-
-<script>
-  function goHome(){ window.location.href = "/"; }
-
-  function getUsername(){
-    // Try query param first
-    const url = new URL(window.location.href);
-    const q = url.searchParams.get("username");
-    if (q && q.trim()) return q.trim();
-
-    // Then localStorage
-    const a = localStorage.getItem("sh_username");
-    if (a && a.trim()) return a.trim();
-
-    const b = localStorage.getItem("username");
-    if (b && b.trim()) return b.trim();
-
-    return "";
-  }
-
-  function ensureUsername(){
-    let u = getUsername();
-    if (u) return u;
-
-    u = prompt("Enter your name (for My Entries):");
-    if (!u || !u.trim()) return "";
-    u = u.trim();
-    localStorage.setItem("sh_username", u);
-    return u;
-  }
-
-  function renderEmpty(msg){
-    document.getElementById("list").innerHTML = `
-      <div class="card">
-        <div style="font-weight:700;">No entries</div>
-        <div class="muted">${msg || "You have not joined any pool yet."}</div>
-        <div style="margin-top:10px;">
-          <button class="btnSolid" onclick="goHome()">Go Join a Pool</button>
-        </div>
-      </div>
-    `;
-  }
-
-  function openDraft(poolId, entryId){
-    const params = new URLSearchParams();
-    if (poolId) params.set("poolId", poolId);
-    if (entryId) params.set("entryId", entryId);
-    window.location.href = "/draft.html?" + params.toString();
-  }
-
-  async function load(){
-    const username = ensureUsername();
-    if (!username){
-      renderEmpty("No username. Please go back and Join first.");
-      return;
+  <script>
+    const LS_USER = "shf_username";
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.display = "block";
+      setTimeout(() => (el.style.display = "none"), 1600);
+    }
+    function getUsername() {
+      return (localStorage.getItem(LS_USER) || "").trim();
     }
 
-    document.getElementById("userPill").textContent = "User: " + username;
+    async function load() {
+      const u = getUsername();
+      if (!u) {
+        toast("No username. Go Home.");
+        setTimeout(() => window.location.href = "/", 500);
+        return;
+      }
+      document.getElementById("userPill").textContent = "User: " + u;
 
-    const res = await fetch("/api/my-entries?username=" + encodeURIComponent(username));
-    const data = await res.json().catch(()=>null);
+      const r = await fetch("/api/my-entries?username=" + encodeURIComponent(u));
+      const j = await r.json();
+      if (!j.ok) {
+        toast(j.error || "Failed to load");
+        return;
+      }
 
-    if (!data || !data.ok){
-      renderEmpty("API error. Check /api/my-entries.");
-      return;
-    }
+      document.getElementById("modePill").textContent = "Mode: " + (j.mode || "DEMO");
 
-    document.getElementById("modePill").textContent = "Mode: " + (data.mode || "-");
+      const list = document.getElementById("list");
+      list.innerHTML = "";
 
-    const entries = data.entries || [];
-    if (!entries.length){
-      renderEmpty("0 entries found for " + username);
-      return;
-    }
+      const entries = j.entries || [];
+      if (!entries.length) {
+        list.innerHTML = `<div class="muted">No entries yet. Go Home and Join a pool.</div>`;
+        return;
+      }
 
-    document.getElementById("list").innerHTML = entries.map(e => `
-      <div class="card">
-        <div class="row">
-          <div>
-            <div style="font-weight:700;">Pool: ${e.poolId}</div>
-            <div class="small muted">Entry ID: ${e.id}</div>
-            <div class="small muted">Created: ${e.createdAt || "-"}</div>
+      entries.forEach(e => {
+        const div = document.createElement("div");
+        div.className = "entry";
+
+        const lineupText = e.lineup
+          ? `${e.lineup.players.map(p => p.name + " (" + p.cost + ")").join(", ")} · Total ${e.lineup.totalCost}`
+          : "No lineup saved yet";
+
+        div.innerHTML = `
+          <div class="row">
+            <div>
+              <div style="font-weight:700;">Pool: ${e.poolId}</div>
+              <div class="muted">Entry ID: ${e.id}</div>
+              <div class="muted">Updated: ${new Date(e.updatedAt).toLocaleString()}</div>
+              <div style="margin-top:6px;">${lineupText}</div>
+            </div>
+            <button class="btn" data-entry="${e.id}">Open Draft</button>
           </div>
-          <div>
-            <button class="btnSolid" onclick="openDraft('${e.poolId}','${e.id}')">Open Draft</button>
-          </div>
-        </div>
-      </div>
-    `).join("");
-  }
+        `;
 
-  load();
-</script>
+        div.querySelector("button").addEventListener("click", () => {
+          window.location.href = "/draft.html?entryId=" + encodeURIComponent(e.id);
+        });
+
+        list.appendChild(div);
+      });
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", () => load().catch(() => toast("Failed")));
+    document.getElementById("homeBtn").addEventListener("click", () => window.location.href = "/");
+
+    load().catch(() => toast("Failed"));
+  </script>
 </body>
 </html>
