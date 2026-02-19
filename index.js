@@ -1,4 +1,3 @@
-// /index.js
 'use strict';
 
 const express = require('express');
@@ -7,17 +6,11 @@ const fs = require('fs');
 
 const app = express();
 
-// -------------------- config --------------------
 const MODE = process.env.DATA_MODE || process.env.MODE || 'LIVE';
 const PORT = process.env.PORT || 8080;
 
-// Cloud Run behind proxy
 app.set('trust proxy', 1);
-
-// Body
 app.use(express.json({ limit: '1mb' }));
-
-// Static
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 function nowIso() {
@@ -43,13 +36,10 @@ function jsonErr(res, code, message, status = 400, extra = {}) {
 
 function normalizeUsername(x) {
   const s = String(x || '').trim();
-  // allow letters, numbers, space, underscore, dash, dot
   const cleaned = s.replace(/[^\w.\- ]/g, '').trim();
-  // max 24
   return cleaned.slice(0, 24);
 }
 
-// -------------------- demo data (stable schema) --------------------
 const DEMO_POOLS = [
   { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5 },
   { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 },
@@ -77,16 +67,12 @@ const DEMO_PLAYERS = [
 const POOLS_BY_ID = Object.fromEntries(DEMO_POOLS.map(p => [p.id, p]));
 const PLAYERS_BY_ID = Object.fromEntries(DEMO_PLAYERS.map(p => [p.id, p]));
 
-// -------------------- simple persistence (instance-level) --------------------
-// Cloud Run is ephemeral, but /tmp is writable; good enough for MVP demo.
 const STORE_PATH = '/tmp/shfantasy_store.json';
 
 function loadStore() {
   try {
     if (fs.existsSync(STORE_PATH)) {
-      const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-      const obj = JSON.parse(raw);
-      if (obj && typeof obj === 'object') return obj;
+      return JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8'));
     }
   } catch (_) {}
   return { entries: {} };
@@ -100,14 +86,12 @@ function saveStore(store) {
 
 let store = loadStore();
 
-// entry schema:
-// { id, username, poolId, players:[], createdAt, updatedAt }
 function makeEntryId() {
   return 'e_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 }
 
-function getEntry(entryId) {
-  return store.entries[String(entryId || '')] || null;
+function getEntry(id) {
+  return store.entries[id] || null;
 }
 
 function upsertEntry(entry) {
@@ -115,177 +99,90 @@ function upsertEntry(entry) {
   saveStore(store);
 }
 
-// -------------------- routes --------------------
 app.get('/health', (req, res) => {
-  return jsonOk(res, {
-    status: 'ok',
-    mode: MODE,
-    firestore: false,
-    ts: nowIso(),
-  });
+  return jsonOk(res, { status: 'ok', mode: MODE, ts: nowIso() });
 });
 
 app.get('/api/pools', (req, res) => {
-  return jsonOk(res, {
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    pools: DEMO_POOLS,
-  });
+  return jsonOk(res, { ok: true, pools: DEMO_POOLS, mode: MODE, ts: nowIso() });
 });
 
 app.get('/api/players', (req, res) => {
-  return jsonOk(res, {
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    players: DEMO_PLAYERS,
-  });
+  return jsonOk(res, { ok: true, players: DEMO_PLAYERS, mode: MODE, ts: nowIso() });
 });
 
-// If someone opens in browser (GET), guide them properly
-app.get('/api/join', (req, res) => {
-  return res.status(405).json({
-    ok: false,
-    error: 'METHOD_NOT_ALLOWED',
-    message: 'Use POST /api/join with JSON body: { "username": "...", "poolId": "demo-today" }',
-    mode: MODE,
-    ts: nowIso(),
-  });
-});
-
-// JOIN (stable response)
 app.post('/api/join', (req, res) => {
-  const username = normalizeUsername(req.body && req.body.username);
-  const poolId = String((req.body && req.body.poolId) || '').trim();
+  const username = normalizeUsername(req.body?.username);
+  const poolId = String(req.body?.poolId || '').trim();
 
-  if (!username) return jsonErr(res, 'INVALID_USERNAME', 'Username is required.');
-  if (!poolId) return jsonErr(res, 'INVALID_POOL', 'poolId is required.');
-  const pool = POOLS_BY_ID[poolId];
-  if (!pool) return jsonErr(res, 'POOL_NOT_FOUND', 'Pool not found.');
+  if (!username) return jsonErr(res, 'INVALID_USERNAME', 'Username required');
+  if (!POOLS_BY_ID[poolId]) return jsonErr(res, 'POOL_NOT_FOUND', 'Pool not found');
 
-  // Create entry
-  const id = makeEntryId();
   const entry = {
-    id,
+    id: makeEntryId(),
     username,
     poolId,
     players: [],
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
+
   upsertEntry(entry);
 
   return jsonOk(res, {
     ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    entryId: id,
-    poolId,
-    username,
-    redirect: `/draft.html?entryId=${encodeURIComponent(id)}`,
+    entryId: entry.id,
+    redirect: `/draft.html?entryId=${entry.id}`,
   });
 });
 
-// GET lineup
 app.get('/api/lineup', (req, res) => {
-  const entryId = String(req.query.entryId || '').trim();
-  if (!entryId) return jsonErr(res, 'MISSING_ENTRY_ID', 'entryId is required.');
-  const entry = getEntry(entryId);
-  if (!entry) return jsonErr(res, 'ENTRY_NOT_FOUND', 'Entry not found.', 404);
+  const entry = getEntry(req.query.entryId);
+  if (!entry) return jsonErr(res, 'NOT_FOUND', 'Entry not found', 404);
 
-  const pool = POOLS_BY_ID[entry.poolId] || null;
-
-  return jsonOk(res, {
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    entry,
-    pool,
-  });
+  return jsonOk(res, { ok: true, entry, pool: POOLS_BY_ID[entry.poolId] });
 });
 
-// POST lineup (save selected players)
 app.post('/api/lineup', (req, res) => {
-  const entryId = String((req.body && req.body.entryId) || '').trim();
-  const players = (req.body && req.body.players) || [];
-
-  if (!entryId) return jsonErr(res, 'MISSING_ENTRY_ID', 'entryId is required.');
-  const entry = getEntry(entryId);
-  if (!entry) return jsonErr(res, 'ENTRY_NOT_FOUND', 'Entry not found.', 404);
+  const entry = getEntry(req.body?.entryId);
+  if (!entry) return jsonErr(res, 'NOT_FOUND', 'Entry not found', 404);
 
   const pool = POOLS_BY_ID[entry.poolId];
-  if (!pool) return jsonErr(res, 'POOL_NOT_FOUND', 'Pool not found.');
+  const players = Array.from(new Set((req.body.players || []).map(String)));
 
-  if (!Array.isArray(players)) return jsonErr(res, 'INVALID_PLAYERS', 'players must be an array.');
-  const uniq = Array.from(new Set(players.map(x => String(x).trim()).filter(Boolean)));
+  if (players.length !== pool.rosterSize)
+    return jsonErr(res, 'ROSTER_INVALID', 'Wrong roster size');
 
-  if (uniq.length !== pool.rosterSize) {
-    return jsonErr(res, 'ROSTER_SIZE_INVALID', `Must pick exactly ${pool.rosterSize} players.`, 400, {
-      rosterSize: pool.rosterSize,
-      picked: uniq.length,
-    });
-  }
-
-  // Validate ids + salary cap
   let cost = 0;
-  for (const pid of uniq) {
-    const p = PLAYERS_BY_ID[pid];
-    if (!p) return jsonErr(res, 'PLAYER_NOT_FOUND', `Player not found: ${pid}`);
-    cost += Number(p.cost) || 0;
-  }
-  if (cost > pool.salaryCap) {
-    return jsonErr(res, 'SALARY_CAP_EXCEEDED', `Salary cap exceeded (${cost}/${pool.salaryCap}).`, 400, {
-      cost,
-      salaryCap: pool.salaryCap,
-    });
+  for (const id of players) {
+    const p = PLAYERS_BY_ID[id];
+    if (!p) return jsonErr(res, 'PLAYER_NOT_FOUND', id);
+    cost += p.cost;
   }
 
-  entry.players = uniq;
+  if (cost > pool.salaryCap)
+    return jsonErr(res, 'CAP_EXCEEDED', 'Salary cap exceeded');
+
+  entry.players = players;
   entry.updatedAt = nowIso();
   upsertEntry(entry);
 
-  return jsonOk(res, {
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    entryId,
-    savedPlayers: uniq,
-  });
+  return jsonOk(res, { ok: true });
 });
 
-// My entries for a username
 app.get('/api/my-entries', (req, res) => {
   const username = normalizeUsername(req.query.username);
-  if (!username) return jsonErr(res, 'INVALID_USERNAME', 'username is required.');
+  const entries = Object.values(store.entries)
+    .filter(e => e.username === username)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  const all = Object.values(store.entries || {});
-  const entries = all
-    .filter(e => (e.username || '').toLowerCase() === username.toLowerCase())
-    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-
-  return jsonOk(res, {
-    ok: true,
-    mode: MODE,
-    ts: nowIso(),
-    username,
-    entries,
-    pools: DEMO_POOLS,
-  });
+  return jsonOk(res, { ok: true, entries });
 });
 
-// Optional route: document (not required by MVP)
-app.get('/api/document', (req, res) => {
-  return jsonErr(res, 'NOT_FOUND', 'API route not found', 404);
-});
-
-// Root
 app.get('/', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
   return res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
   console.log(`[shfantasy] listening on ${PORT} mode=${MODE}`);
 });
