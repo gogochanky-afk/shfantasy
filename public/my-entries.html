@@ -1,3 +1,4 @@
+<!-- /public/my-entries.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -6,112 +7,119 @@
   <title>My Entries · SH Fantasy</title>
   <style>
     :root { color-scheme: dark; }
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial; background:#0b0b0c; color:#eee; }
-    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
-    .nav { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; }
-    .brand { font-weight:700; }
-    .btn { background:#f0a500; border:none; color:#111; padding:10px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
-    .btn.secondary { background:transparent; border:1px solid #3a3a3f; color:#eee; }
-    .pill { border:1px solid #2b2b2e; padding:6px 10px; border-radius:999px; font-size:12px; }
-    .card { background:#141416; border:1px solid #232327; border-radius:14px; padding:16px; margin-top:12px; }
-    .muted { color:#b7b7bd; font-size:12px; }
-    .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
-    .entry { padding:12px 0; border-bottom:1px solid #1f1f22; }
-    .entry:last-child { border-bottom:none; }
-    .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background:#17171a; border:1px solid #2b2b2e; padding:10px 12px; border-radius:12px; font-size:13px; display:none; }
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;background:#0b0c0f;color:#eaeaea;}
+    .wrap{max-width:720px;margin:0 auto;padding:18px;}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;}
+    .brand{font-weight:800;font-size:20px;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .pill{border:1px solid #2b2b2e;border-radius:999px;padding:8px 10px;font-size:12px;color:#cfcfcf;background:#101114;}
+    .btn{background:#f0a500;border:none;border-radius:10px;padding:10px 14px;font-weight:800;color:#111;cursor:pointer;}
+    .btn.secondary{background:transparent;border:1px solid #2b2b2e;color:#eaeaea;}
+    .card{background:#141416;border:1px solid #242427;border-radius:16px;padding:14px;margin-top:12px;}
+    .title{font-weight:800;font-size:18px;margin:0 0 6px;}
+    .muted{color:#b7b7bd;font-size:12px;}
+    a{color:#f0a500;text-decoration:none;}
+    .item{border:1px solid #242427;border-radius:14px;background:#101114;padding:12px;margin-bottom:10px;}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#1b1c20;border:1px solid #303036;color:#fff;padding:10px 12px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;}
+    .toast.show{opacity:1;}
+    code{font-size:12px;color:#d5d5d5;}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="nav">
       <div class="brand">📒 My Entries</div>
-      <div style="display:flex; gap:10px; align-items:center;">
-        <div class="pill" id="modePill">Mode: DEMO</div>
-        <div class="pill" id="userPill">User: -</div>
-        <button class="btn secondary" id="homeBtn">← Home</button>
-        <button class="btn" id="refreshBtn">Refresh</button>
+      <div class="row">
+        <a class="pill" href="/">← Home</a>
+        <div class="pill" id="userPill">User: —</div>
       </div>
     </div>
 
     <div class="card">
-      <div class="muted">Your entries are saved in Firestore (DEMO). Tap “Open Draft” to edit lineup.</div>
-      <div id="list" style="margin-top:12px;"></div>
+      <div class="title">Entries</div>
+      <div class="muted" id="hint">Loading…</div>
+      <div style="height:10px"></div>
+      <div id="list"></div>
     </div>
-
-    <div class="toast" id="toast"></div>
   </div>
 
-  <script>
-    const LS_USER = "shf_username";
-    function toast(msg) {
-      const el = document.getElementById("toast");
-      el.textContent = msg;
-      el.style.display = "block";
-      setTimeout(() => (el.style.display = "none"), 1600);
-    }
-    function getUsername() {
-      return (localStorage.getItem(LS_USER) || "").trim();
+  <div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const toastEl = $('toast');
+  let toastTimer = null;
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1800);
+  }
+
+  function getUsername(){
+    return (localStorage.getItem('shf_username') || '').trim();
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  async function load(){
+    const u = getUsername();
+    $('userPill').textContent = 'User: ' + (u || '—');
+    if(!u){
+      $('hint').textContent = 'No username saved. Go back Home and Save Username.';
+      return;
     }
 
-    async function load() {
-      const u = getUsername();
-      if (!u) {
-        toast("No username. Go Home.");
-        setTimeout(() => window.location.href = "/", 500);
-        return;
-      }
-      document.getElementById("userPill").textContent = "User: " + u;
-
-      const r = await fetch("/api/my-entries?username=" + encodeURIComponent(u));
+    try{
+      const r = await fetch('/api/my-entries?username=' + encodeURIComponent(u), { cache:'no-store' });
       const j = await r.json();
-      if (!j.ok) {
-        toast(j.error || "Failed to load");
-        return;
-      }
-
-      document.getElementById("modePill").textContent = "Mode: " + (j.mode || "DEMO");
-
-      const list = document.getElementById("list");
-      list.innerHTML = "";
+      if(!j.ok) throw new Error(j.message || j.error || 'failed');
 
       const entries = j.entries || [];
-      if (!entries.length) {
-        list.innerHTML = `<div class="muted">No entries yet. Go Home and Join a pool.</div>`;
+      const pools = j.pools || [];
+      const poolName = (id)=>{
+        const p = pools.find(x=>x.id===id);
+        return p ? p.name : id;
+      };
+
+      if(!entries.length){
+        $('hint').textContent = 'No entries yet.';
+        $('list').innerHTML = '';
         return;
       }
 
-      entries.forEach(e => {
-        const div = document.createElement("div");
-        div.className = "entry";
-
-        const lineupText = e.lineup
-          ? `${e.lineup.players.map(p => p.name + " (" + p.cost + ")").join(", ")} · Total ${e.lineup.totalCost}`
-          : "No lineup saved yet";
-
+      $('hint').textContent = 'Tap an entry to open Draft.';
+      const list = $('list');
+      list.innerHTML = '';
+      for(const e of entries){
+        const div = document.createElement('div');
+        div.className = 'item';
+        const picked = (e.players || []).length;
         div.innerHTML = `
-          <div class="row">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
             <div>
-              <div style="font-weight:700;">Pool: ${e.poolId}</div>
-              <div class="muted">Entry ID: ${e.id}</div>
-              <div class="muted">Updated: ${new Date(e.updatedAt).toLocaleString()}</div>
-              <div style="margin-top:6px;">${lineupText}</div>
+              <div style="font-weight:900;">${escapeHtml(poolName(e.poolId))}</div>
+              <div class="muted">Picked: ${picked} · Updated: ${escapeHtml(e.updatedAt || '')}</div>
+              <div class="muted"><code>${escapeHtml(e.id)}</code></div>
             </div>
-            <button class="btn" data-entry="${e.id}">Open Draft</button>
+            <a class="pill" href="/draft.html?entryId=${encodeURIComponent(e.id)}">Open</a>
           </div>
         `;
-
-        div.querySelector("button").addEventListener("click", () => {
-          window.location.href = "/draft.html?entryId=" + encodeURIComponent(e.id);
-        });
-
         list.appendChild(div);
-      });
+      }
+
+    }catch(e){
+      $('hint').textContent = 'Load failed.';
+      toast('Load failed: ' + (e.message || 'error'));
     }
+  }
 
-    document.getElementById("refreshBtn").addEventListener("click", () => load().catch(() => toast("Failed")));
-    document.getElementById("homeBtn").addEventListener("click", () => window.location.href = "/");
-
-    load().catch(() => toast("Failed"));
-  </script>
+  load();
+})();
+</script>
 </body>
 </html>
