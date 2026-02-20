@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-02-20T03:00:00.000Z",
+  "timezone": "UTC",
+  "pools": [
+    {
+      "id": "sr_game_12345",
+      "name": "LAL @ BOS",
+      "date": "2026-02-20",
+      "lockAt": "2026-02-20T23:55:00.000Z",
+      "salaryCap": 10,
+      "rosterSize": 5
+    },
+    {
+      "id": "sr_game_67890",
+      "name": "NYK @ CLE",
+      "date": "2026-02-21",
+      "lockAt": "2026-02-21T23:55:00.000Z",
+      "salaryCap": 10,
+      "rosterSize": 5
+    }
+  ]
+}
