@@ -1,3 +1,4 @@
+// /index.js
 'use strict';
 
 const express = require('express');
@@ -6,11 +7,27 @@ const fs = require('fs');
 
 const app = express();
 
+// -------------------- config --------------------
 const MODE = process.env.DATA_MODE || process.env.MODE || 'LIVE';
 const PORT = process.env.PORT || 8080;
 
+// IMPORTANT: Demo pool lock times (UTC). Change if you want.
+// e.g. lock today in 10 minutes, tomorrow in 24h
+function minutesFromNowUtc(mins) {
+  return new Date(Date.now() + mins * 60 * 1000).toISOString();
+}
+
+// For MVP demo: set lock times relative to server start
+const DEMO_LOCK_TODAY = process.env.DEMO_LOCK_TODAY || minutesFromNowUtc(60);   // 60 mins
+const DEMO_LOCK_TOMORROW = process.env.DEMO_LOCK_TOMORROW || minutesFromNowUtc(24 * 60); // 24h
+
+// Cloud Run behind proxy
 app.set('trust proxy', 1);
+
+// Body
 app.use(express.json({ limit: '1mb' }));
+
+// Static
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
 function nowIso() {
@@ -40,9 +57,19 @@ function normalizeUsername(x) {
   return cleaned.slice(0, 24);
 }
 
+function safeStr(x) {
+  return String(x || '').trim();
+}
+
+function isLocked(pool) {
+  if (!pool || !pool.lockAt) return false;
+  return Date.now() >= new Date(pool.lockAt).getTime();
+}
+
+// -------------------- demo data (stable schema) --------------------
 const DEMO_POOLS = [
-  { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5 },
-  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5 },
+  { id: 'demo-today', name: 'Today Arena', salaryCap: 10, rosterSize: 5, lockAt: DEMO_LOCK_TODAY },
+  { id: 'demo-tomorrow', name: 'Tomorrow Arena', salaryCap: 10, rosterSize: 5, lockAt: DEMO_LOCK_TOMORROW },
 ];
 
 const DEMO_PLAYERS = [
@@ -67,12 +94,15 @@ const DEMO_PLAYERS = [
 const POOLS_BY_ID = Object.fromEntries(DEMO_POOLS.map(p => [p.id, p]));
 const PLAYERS_BY_ID = Object.fromEntries(DEMO_PLAYERS.map(p => [p.id, p]));
 
+// -------------------- simple persistence (instance-level) --------------------
 const STORE_PATH = '/tmp/shfantasy_store.json';
 
 function loadStore() {
   try {
     if (fs.existsSync(STORE_PATH)) {
-      return JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8'));
+      const raw = fs.readFileSync(STORE_PATH, 'utf-8');
+      const obj = JSON.parse(raw);
+      if (obj && typeof obj === 'object') return obj;
     }
   } catch (_) {}
   return { entries: {} };
@@ -86,12 +116,14 @@ function saveStore(store) {
 
 let store = loadStore();
 
+// entry schema:
+// { id, username, poolId, players:[], createdAt, updatedAt, submittedAt? }
 function makeEntryId() {
   return 'e_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 }
 
-function getEntry(id) {
-  return store.entries[id] || null;
+function getEntry(entryId) {
+  return store.entries[String(entryId || '')] || null;
 }
 
 function upsertEntry(entry) {
@@ -99,87 +131,192 @@ function upsertEntry(entry) {
   saveStore(store);
 }
 
+// -------------------- routes --------------------
 app.get('/health', (req, res) => {
-  return jsonOk(res, { status: 'ok', mode: MODE, ts: nowIso() });
+  return jsonOk(res, {
+    status: 'ok',
+    mode: MODE,
+    firestore: false,
+    ts: nowIso(),
+  });
 });
 
 app.get('/api/pools', (req, res) => {
-  return jsonOk(res, { ok: true, pools: DEMO_POOLS, mode: MODE, ts: nowIso() });
+  // include lock status server-side truth
+  const pools = DEMO_POOLS.map(p => ({
+    ...p,
+    locked: isLocked(p),
+  }));
+  return jsonOk(res, {
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    pools,
+  });
 });
 
 app.get('/api/players', (req, res) => {
-  return jsonOk(res, { ok: true, players: DEMO_PLAYERS, mode: MODE, ts: nowIso() });
+  return jsonOk(res, {
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    players: DEMO_PLAYERS,
+  });
 });
 
+app.get('/api/join', (req, res) => {
+  return res.status(405).json({
+    ok: false,
+    error: 'METHOD_NOT_ALLOWED',
+    message: 'Use POST /api/join with JSON body: { "username": "...", "poolId": "demo-today" }',
+    mode: MODE,
+    ts: nowIso(),
+  });
+});
+
+// JOIN
 app.post('/api/join', (req, res) => {
-  const username = normalizeUsername(req.body?.username);
-  const poolId = String(req.body?.poolId || '').trim();
+  const username = normalizeUsername(req.body && req.body.username);
+  const poolId = safeStr(req.body && req.body.poolId);
 
-  if (!username) return jsonErr(res, 'INVALID_USERNAME', 'Username required');
-  if (!POOLS_BY_ID[poolId]) return jsonErr(res, 'POOL_NOT_FOUND', 'Pool not found');
+  if (!username) return jsonErr(res, 'INVALID_USERNAME', 'Username is required.');
+  if (!poolId) return jsonErr(res, 'INVALID_POOL', 'poolId is required.');
+  const pool = POOLS_BY_ID[poolId];
+  if (!pool) return jsonErr(res, 'POOL_NOT_FOUND', 'Pool not found.');
 
+  // allow join even if locked (view only), but user cannot save later
+  const id = makeEntryId();
   const entry = {
-    id: makeEntryId(),
+    id,
     username,
     poolId,
     players: [],
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
-
   upsertEntry(entry);
 
   return jsonOk(res, {
     ok: true,
-    entryId: entry.id,
-    redirect: `/draft.html?entryId=${entry.id}`,
+    mode: MODE,
+    ts: nowIso(),
+    entryId: id,
+    poolId,
+    username,
+    redirect: `/draft.html?entryId=${encodeURIComponent(id)}`,
   });
 });
 
+// GET lineup
 app.get('/api/lineup', (req, res) => {
-  const entry = getEntry(req.query.entryId);
-  if (!entry) return jsonErr(res, 'NOT_FOUND', 'Entry not found', 404);
+  const entryId = safeStr(req.query.entryId);
+  if (!entryId) return jsonErr(res, 'MISSING_ENTRY_ID', 'entryId is required.');
 
-  return jsonOk(res, { ok: true, entry, pool: POOLS_BY_ID[entry.poolId] });
+  const entry = getEntry(entryId);
+  if (!entry) return jsonErr(res, 'ENTRY_NOT_FOUND', 'Entry not found.', 404);
+
+  const pool = POOLS_BY_ID[entry.poolId] || null;
+  const locked = isLocked(pool);
+
+  return jsonOk(res, {
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    entry,
+    pool: pool ? { ...pool, locked } : null,
+    locked,
+  });
 });
 
+// POST lineup (save selected players) — HARD LOCK ENFORCEMENT
 app.post('/api/lineup', (req, res) => {
-  const entry = getEntry(req.body?.entryId);
-  if (!entry) return jsonErr(res, 'NOT_FOUND', 'Entry not found', 404);
+  const entryId = safeStr(req.body && req.body.entryId);
+  const players = (req.body && req.body.players) || [];
+
+  if (!entryId) return jsonErr(res, 'MISSING_ENTRY_ID', 'entryId is required.');
+
+  const entry = getEntry(entryId);
+  if (!entry) return jsonErr(res, 'ENTRY_NOT_FOUND', 'Entry not found.', 404);
 
   const pool = POOLS_BY_ID[entry.poolId];
-  const players = Array.from(new Set((req.body.players || []).map(String)));
+  if (!pool) return jsonErr(res, 'POOL_NOT_FOUND', 'Pool not found.');
 
-  if (players.length !== pool.rosterSize)
-    return jsonErr(res, 'ROSTER_INVALID', 'Wrong roster size');
-
-  let cost = 0;
-  for (const id of players) {
-    const p = PLAYERS_BY_ID[id];
-    if (!p) return jsonErr(res, 'PLAYER_NOT_FOUND', id);
-    cost += p.cost;
+  if (isLocked(pool)) {
+    return jsonErr(res, 'LOCKED', 'This pool is locked. Lineup cannot be changed.', 403, {
+      lockAt: pool.lockAt,
+    });
   }
 
-  if (cost > pool.salaryCap)
-    return jsonErr(res, 'CAP_EXCEEDED', 'Salary cap exceeded');
+  if (!Array.isArray(players)) return jsonErr(res, 'INVALID_PLAYERS', 'players must be an array.');
+  const uniq = Array.from(new Set(players.map(x => safeStr(x)).filter(Boolean)));
 
-  entry.players = players;
+  if (uniq.length !== pool.rosterSize) {
+    return jsonErr(res, 'ROSTER_SIZE_INVALID', `Must pick exactly ${pool.rosterSize} players.`, 400, {
+      rosterSize: pool.rosterSize,
+      picked: uniq.length,
+    });
+  }
+
+  let cost = 0;
+  for (const pid of uniq) {
+    const p = PLAYERS_BY_ID[pid];
+    if (!p) return jsonErr(res, 'PLAYER_NOT_FOUND', `Player not found: ${pid}`);
+    cost += Number(p.cost) || 0;
+  }
+  if (cost > pool.salaryCap) {
+    return jsonErr(res, 'SALARY_CAP_EXCEEDED', `Salary cap exceeded (${cost}/${pool.salaryCap}).`, 400, {
+      cost,
+      salaryCap: pool.salaryCap,
+    });
+  }
+
+  entry.players = uniq;
   entry.updatedAt = nowIso();
+  entry.submittedAt = nowIso(); // last valid submit time
   upsertEntry(entry);
 
-  return jsonOk(res, { ok: true });
+  return jsonOk(res, {
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    entryId,
+    savedPlayers: uniq,
+    submittedAt: entry.submittedAt,
+  });
 });
 
+// My entries
 app.get('/api/my-entries', (req, res) => {
   const username = normalizeUsername(req.query.username);
-  const entries = Object.values(store.entries)
-    .filter(e => e.username === username)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  if (!username) return jsonErr(res, 'INVALID_USERNAME', 'username is required.');
 
-  return jsonOk(res, { ok: true, entries });
+  const all = Object.values(store.entries || {});
+  const entries = all
+    .filter(e => (e.username || '').toLowerCase() === username.toLowerCase())
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    .map(e => {
+      const pool = POOLS_BY_ID[e.poolId] || null;
+      const locked = isLocked(pool);
+      return {
+        ...e,
+        pool: pool ? { id: pool.id, name: pool.name, salaryCap: pool.salaryCap, rosterSize: pool.rosterSize, lockAt: pool.lockAt, locked } : null,
+        locked,
+      };
+    });
+
+  return jsonOk(res, {
+    ok: true,
+    mode: MODE,
+    ts: nowIso(),
+    username,
+    entries,
+    pools: DEMO_POOLS.map(p => ({ ...p, locked: isLocked(p) })),
+  });
 });
 
+// Root
 app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   return res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
