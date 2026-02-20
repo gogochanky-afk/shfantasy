@@ -1,3 +1,4 @@
+<!-- /public/index.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -95,6 +96,13 @@
     }
   }
 
+  function fmtLock(lockAt){
+    if(!lockAt) return '';
+    const t = new Date(lockAt);
+    if(isNaN(t.getTime())) return '';
+    return 'Lock: ' + t.toLocaleString();
+  }
+
   async function loadPools(){
     $('poolsHint').textContent = 'Loading…';
     $('pools').innerHTML = '';
@@ -111,11 +119,13 @@
       for(const p of pools){
         const div = document.createElement('div');
         div.className = 'card';
+        const locked = !!p.locked;
         div.innerHTML = `
           <div class="poolRow">
             <div>
-              <div class="title">${escapeHtml(p.name || p.id)}</div>
+              <div class="title">${escapeHtml(p.name || p.id)} ${locked ? '<span class="muted">· Locked</span>' : ''}</div>
               <div class="muted">Salary Cap: ${p.salaryCap} · Roster Size: ${p.rosterSize}</div>
+              <div class="muted">${escapeHtml(fmtLock(p.lockAt))}</div>
               <div class="muted">Join will take you directly to Draft.</div>
             </div>
             <button class="btn" data-pool="${escapeAttr(p.id)}">Join</button>
@@ -157,6 +167,7 @@
   }
   function escapeAttr(s){ return escapeHtml(s); }
 
+  // init
   $('username').value = getUsername();
   $('saveBtn').addEventListener('click', ()=>{
     const u = $('username').value.trim();
