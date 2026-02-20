@@ -1,3 +1,4 @@
+<!-- /public/draft.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -46,6 +47,7 @@
       <div class="row">
         <div class="pill" id="userPill">User: —</div>
         <div class="pill" id="poolPill">Pool: —</div>
+        <div class="pill" id="lockPill">Lock: —</div>
         <div class="pill" id="selPill">Selected: 0/5</div>
         <div class="pill" id="costPill">Cost: 0/10</div>
       </div>
@@ -87,6 +89,8 @@
   let salaryCap = 10;
   let poolId = '';
   let username = getUsername();
+  let lockAt = null;
+  let locked = false;
 
   let players = [];
   let selected = new Set();
@@ -94,20 +98,42 @@
   $('backBtn').addEventListener('click', ()=>{ window.location.href = '/'; });
 
   $('resetBtn').addEventListener('click', ()=>{
+    if(locked){
+      toast('Locked. Cannot reset.');
+      return;
+    }
     selected = new Set();
     renderList();
     updatePills();
   });
 
+  function fmtTime(iso){
+    if(!iso) return '—';
+    const t = new Date(iso);
+    if(isNaN(t.getTime())) return '—';
+    return t.toLocaleString();
+  }
+
   function updatePills(){
     $('userPill').textContent = 'User: ' + (username || '—');
     $('poolPill').textContent = 'Pool: ' + (poolId || '—');
+    $('lockPill').textContent = 'Lock: ' + fmtTime(lockAt) + (locked ? ' (Locked)' : '');
+
     $('selPill').textContent = `Selected: ${selected.size}/${rosterSize}`;
     const cost = calcCost();
     $('costPill').textContent = `Cost: ${cost}/${salaryCap}`;
 
+    if(locked){
+      $('saveBtn').disabled = true;
+      $('resetBtn').disabled = true;
+      $('ruleText').textContent = 'Locked. Lineup is read-only.';
+      return;
+    }
+
     const ok = (selected.size === rosterSize) && (cost <= salaryCap);
     $('saveBtn').disabled = !ok;
+    $('resetBtn').disabled = false;
+
     $('ruleText').textContent = ok
       ? 'Ready to save.'
       : `Pick exactly ${rosterSize} players. Stay within salary cap ${salaryCap}.`;
@@ -139,7 +165,17 @@
         </div>
       `;
       const cb = div.querySelector('input[type="checkbox"]');
+
+      // HARD disable when locked
+      cb.disabled = locked;
+
       cb.addEventListener('change', (e)=>{
+        if(locked){
+          e.target.checked = selected.has(p.id);
+          toast('Locked. Cannot change.');
+          return;
+        }
+
         const id = e.target.getAttribute('data-id');
         if(e.target.checked){
           if(selected.size >= rosterSize){
@@ -155,6 +191,7 @@
         if(cost > salaryCap) toast(`Over cap: ${cost}/${salaryCap}`);
         updatePills();
       });
+
       list.appendChild(div);
     }
   }
@@ -180,6 +217,8 @@
       poolId = (ej.entry && ej.entry.poolId) || '';
       rosterSize = (ej.pool && ej.pool.rosterSize) || rosterSize;
       salaryCap = (ej.pool && ej.pool.salaryCap) || salaryCap;
+      lockAt = (ej.pool && ej.pool.lockAt) || null;
+      locked = !!(ej.pool && ej.pool.locked);
 
       selected = new Set(((ej.entry && ej.entry.players) || []).map(String));
 
@@ -202,6 +241,10 @@
   }
 
   async function saveLineup(){
+    if(locked){
+      toast('Locked. Cannot save.');
+      return;
+    }
     try{
       const payload = { entryId, players: Array.from(selected) };
       const r = await fetch('/api/lineup', {
