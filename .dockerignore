@@ -1,20 +1,19 @@
+# /.dockerignore
+
 node_modules
-frontend/node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
 
 .git
 .gitignore
 
-*.md
-*.log
-*.txt
-*.sh
-*.backup
+.DS_Store
 
-shfantasy.db
+# build artifacts / local files
+*.log
+*.sqlite
 *.db
 
-test-*
-A*_VERIFICATION*
-PHASE_*
-CLOUD_*
-DEPLOYMENT.md
+# IMPORTANT: do NOT ignore package-lock.json
+# package-lock.json
