@@ -1,36 +1,52 @@
-// /index.js
+// index.js
+
 const express = require("express");
 const path = require("path");
 
 const app = express();
+
+// =============================
+// Middleware
+// =============================
 app.use(express.json({ limit: "1mb" }));
 
-// --- API routes (keep your existing ones) ---
-// If you already have routes split in files, replace this section with your requires.
-// Example:
-// app.use("/api", require("./api"));
+// =============================
+// Route Imports
+// =============================
+const adminRoutes = require("./routes/admin");
+const poolRoutes = require("./routes/pools");
+const joinRoutes = require("./routes/join");
 
-/**
- * IMPORTANT:
- * 如果你現有係用 app.get("/api/...") 一條條寫，
- * 保留就得；如果你係 require("./api")，就用上面例子。
- */
+// =============================
+// API Route Registration
+// =============================
+app.use("/api/admin", adminRoutes);
+app.use("/api/pools", poolRoutes);
+app.use("/api/join", joinRoutes);
 
-// --- Static UI ---
+// =============================
+// Health Check
+// =============================
+app.get("/healthz", (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+// =============================
+// Static Frontend
+// =============================
 const publicDir = path.join(__dirname, "public");
-app.use(express.static(publicDir, { index: false }));
 
-// Serve UI homepage
+app.use(express.static(publicDir));
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
-// Health check
-app.get("/healthz", (req, res) => {
-  res.status(200).send("ok");
-});
-
+// =============================
+// Server Start
+// =============================
 const PORT = process.env.PORT || 8080;
+
 app.listen(PORT, () => {
-  console.log(`listening on ${PORT}`);
+  console.log(`🚀 Server listening on port ${PORT}`);
 });
