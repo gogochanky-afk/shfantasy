@@ -1,33 +1,27 @@
-// routes/admin.js
-"use strict";
-
+// /routes/admin.js
 const express = require("express");
 const router = express.Router();
 
-/**
- * POST /api/admin/sync
- * Header: x-admin-token: <token>
- * Env: ADMIN_TOKEN
- */
-router.post("/sync", async (req, res) => {
+// POST /api/admin/sync
+router.post("/sync", (req, res) => {
   const token = req.headers["x-admin-token"];
   const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
+  // 如果未設 ADMIN_TOKEN，直接報 500（避免你以為 token 問題）
   if (!ADMIN_TOKEN) {
     return res.status(500).json({
       ok: false,
-      error: "ADMIN_TOKEN_NOT_SET",
+      error: "ADMIN_TOKEN is not set in environment variables",
     });
   }
 
-  if (!token || token !== ADMIN_TOKEN) {
+  if (token !== ADMIN_TOKEN) {
     return res.status(401).json({
       ok: false,
-      error: "UNAUTHORIZED",
+      error: "Unauthorized (bad x-admin-token)",
     });
   }
 
-  // TODO: put real sync logic here (seed demo pools / fetch data / etc.)
   return res.json({
     ok: true,
     message: "Sync route is working",
