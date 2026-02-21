@@ -1,4 +1,4 @@
-// /index.js
+// index.js
 const express = require("express");
 const path = require("path");
 
@@ -10,43 +10,41 @@ const joinRoutes = require("./routes/join");
 const app = express();
 
 // ---- Core middleware ----
-// Cloud Run / LB 之下建議開 trust proxy（避免某些情況下 header / protocol 判斷怪）
 app.set("trust proxy", true);
-
-// Body parser
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ---- API routes ----
-// IMPORTANT: 所有 API 統一掛喺 /api/...
-app.use("/api/admin", adminRoutes);
-app.use("/api/pools", poolRoutes);
-app.use("/api/join", joinRoutes);
-
-// ---- Health & debug ----
+// ---- Debug / health ----
+// IMPORTANT: 用嚟確認「而家你打到嘅係邊個 revision」
+// 你見到 JSON 就代表 Express 真係收到了 request（唔係 Google 404 backend）
 app.get("/healthz", (req, res) => {
   res.status(200).json({
     ok: true,
     service: "shfantasy",
     ts: new Date().toISOString(),
+    host: req.headers.host,
+    path: req.path,
   });
 });
 
-// 用嚟確認你而家連到邊個 Cloud Run revision（避免「你以為最新」但其實唔係）
+// 有時前面 proxy / LB 會 probe 呢種路徑；加返可視化 debug
 app.get("/__whoami", (req, res) => {
   res.status(200).json({
     ok: true,
     service: "shfantasy",
-    node_env: process.env.NODE_ENV || null,
-    port: process.env.PORT || null,
-    // Cloud Run 會自動提供：
-    k_service: process.env.K_SERVICE || null,
-    k_revision: process.env.K_REVISION || null,
-    k_configuration: process.env.K_CONFIGURATION || null,
-    region_hint: process.env.GOOGLE_CLOUD_REGION || null,
     ts: new Date().toISOString(),
+    ip: req.ip,
+    ua: req.headers["user-agent"] || "",
+    host: req.headers.host,
   });
 });
+
+// ---- API routes ----
+// IMPORTANT: 所有 API 統一掛喺 /api
+// 你 Hoppscotch 打 /api/admin/sync 就一定會落到 routes/admin.js
+app.use("/api/admin", adminRoutes);
+app.use("/api/pools", poolRoutes);
+app.use("/api/join", joinRoutes);
 
 // ---- Static UI ----
 const publicDir = path.join(__dirname, "public");
@@ -57,18 +55,24 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
-// SPA fallback（如果你係單頁 app，避免刷新 404）
-// 注意：唔會影響 /api/*、/healthz、/__whoami
-app.get("*", (req, res) => {
-  // 如果係 API 路徑就唔好兜底
-  if (req.path.startsWith("/api/")) {
-    return res.status(404).json({ ok: false, error: "API route not found" });
-  }
-  // 其他路徑當 SPA
-  return res.sendFile(path.join(publicDir, "index.html"));
+// SPA fallback (如果你係 single-page app)
+// 任何非 /api 的路徑，都回 index.html，避免 404
+app.get(/^\/(?!api\/).*/, (req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
 });
 
+// ---- 404 for API ----
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    ok: false,
+    error: "API_ROUTE_NOT_FOUND",
+    method: req.method,
+    path: req.path,
+  });
+});
+
+// ---- Start server ----
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`listening on ${PORT}`);
+  console.log(`shfantasy listening on :${PORT}`);
 });
