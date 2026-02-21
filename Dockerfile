@@ -1,35 +1,20 @@
 # /Dockerfile
+FROM node:20-slim
 
-# ---------- build stage ----------
-FROM node:20-alpine AS build
 WORKDIR /app
 
+# 先 copy package + lockfile，確保 npm ci 一定搵到 package-lock.json
 COPY package.json package-lock.json ./
-RUN npm ci
 
+# 用 npm ci 做 deterministic install（production only）
+RUN npm ci --omit=dev
+
+# 再 copy 其餘檔案
 COPY . .
-
-# If your project has a build step, keep this.
-# If you DON'T have build, you can remove this line.
-RUN npm run build
-
-# ---------- runtime stage ----------
-FROM node:20-alpine AS runtime
-WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=8080
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-
-# Copy server code + built assets
-COPY --from=build /app /app
-
-# Sanity: make sure public exists (and ideally has index.html)
-RUN test -d /app/public
-# Optional extra sanity check:
-# RUN test -f /app/public/index.html
-
 EXPOSE 8080
-CMD ["node", "index.js"]
+
+CMD ["npm", "start"]
