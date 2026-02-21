@@ -1,14 +1,15 @@
 {
   "name": "shfantasy",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "main": "index.js",
   "type": "commonjs",
+  "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",
+    "axios": "^1.6.7",
     "express": "^4.19.2"
   }
 }
