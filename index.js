@@ -4,7 +4,7 @@
 const express = require("express");
 const path = require("path");
 
-// Routes (your repo already has these)
+// Routes
 const adminRoutes = require("./routes/admin");
 const poolRoutes = require("./routes/pools");
 const joinRoutes = require("./routes/join");
@@ -22,6 +22,12 @@ app.get("/healthz", (req, res) => {
     ok: true,
     service: "shfantasy",
     ts: new Date().toISOString(),
+    // Cloud Run built-ins:
+    k_service: process.env.K_SERVICE || null,
+    k_revision: process.env.K_REVISION || null,
+    k_configuration: process.env.K_CONFIGURATION || null,
+    // Helpful:
+    node: process.version,
   });
 });
 
@@ -34,17 +40,11 @@ app.use("/api/join", joinRoutes);
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir, { index: false }));
 
-// Serve UI homepage
 app.get("/", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
-// Optional: handle SPA routes (if you have frontend routing)
-// app.get("*", (req, res) => {
-//   res.sendFile(path.join(publicDir, "index.html"));
-// });
-
-// --- 404 handler (returns JSON for API, text for others) ---
+// --- 404 handler ---
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
     return res.status(404).json({
