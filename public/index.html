@@ -64,6 +64,11 @@
   const toastEl = $('toast');
   let toastTimer = null;
 
+  // ---- Storage keys (stable) ----
+  const K_USERNAME = 'shf_username';
+  const K_POOL_ID  = 'shf_poolId';
+  const K_ENTRY_ID = 'shf_entryId';
+
   function toast(msg){
     toastEl.textContent = msg;
     toastEl.classList.add('show');
@@ -72,13 +77,18 @@
   }
 
   function getUsername(){
-    return (localStorage.getItem('shf_username') || '').trim();
+    return (localStorage.getItem(K_USERNAME) || '').trim();
   }
   function setUsername(u){
-    localStorage.setItem('shf_username', u);
+    localStorage.setItem(K_USERNAME, u);
   }
   function clearUsername(){
-    localStorage.removeItem('shf_username');
+    localStorage.removeItem(K_USERNAME);
+  }
+  function setLastJoinState({ poolId, entryId, username }){
+    if (username) localStorage.setItem(K_USERNAME, username);
+    if (poolId)  localStorage.setItem(K_POOL_ID, poolId);
+    if (entryId) localStorage.setItem(K_ENTRY_ID, entryId);
   }
 
   function setUserPill(){
@@ -88,9 +98,11 @@
 
   async function loadMode(){
     try{
-      const r = await fetch('/health', { cache:'no-store' });
+      // ✅ 你 server 係 /healthz（唔係 /health）
+      const r = await fetch('/healthz', { cache:'no-store' });
       const j = await r.json();
-      $('modePill').textContent = 'Mode: ' + (j.mode || 'LIVE');
+      if (j && j.ok) $('modePill').textContent = 'Mode: LIVE';
+      else $('modePill').textContent = 'Mode: —';
     }catch(e){
       $('modePill').textContent = 'Mode: —';
     }
@@ -103,6 +115,17 @@
     return 'Lock: ' + t.toLocaleString();
   }
 
+  function normPool(p){
+    // 兼容唔同 schema：name/title 都接受
+    const id = p.id;
+    const name = p.name || p.title || p.id;
+    const lockAt = p.lockAt;
+    const salaryCap = (p.salaryCap ?? 10);
+    const rosterSize = (p.rosterSize ?? 5);
+    const locked = !!p.locked || p.status === 'locked' || p.status === 'closed';
+    return { id, name, lockAt, salaryCap, rosterSize, locked };
+  }
+
   async function loadPools(){
     $('poolsHint').textContent = 'Loading…';
     $('pools').innerHTML = '';
@@ -110,25 +133,26 @@
       const r = await fetch('/api/pools', { cache:'no-store' });
       const j = await r.json();
       if(!j.ok) throw new Error(j.error || 'pools failed');
-      const pools = j.pools || [];
+      const pools = (j.pools || []).map(normPool);
+
       if(!pools.length){
         $('poolsHint').textContent = 'No pools right now.';
         return;
       }
+
       $('poolsHint').textContent = 'Pick a pool to join.';
       for(const p of pools){
         const div = document.createElement('div');
         div.className = 'card';
-        const locked = !!p.locked;
         div.innerHTML = `
           <div class="poolRow">
             <div>
-              <div class="title">${escapeHtml(p.name || p.id)} ${locked ? '<span class="muted">· Locked</span>' : ''}</div>
-              <div class="muted">Salary Cap: ${p.salaryCap} · Roster Size: ${p.rosterSize}</div>
+              <div class="title">${escapeHtml(p.name)} ${p.locked ? '<span class="muted">· Locked</span>' : ''}</div>
+              <div class="muted">Salary Cap: ${escapeHtml(String(p.salaryCap))} · Roster Size: ${escapeHtml(String(p.rosterSize))}</div>
               <div class="muted">${escapeHtml(fmtLock(p.lockAt))}</div>
               <div class="muted">Join will take you directly to Draft.</div>
             </div>
-            <button class="btn" data-pool="${escapeAttr(p.id)}">Join</button>
+            <button class="btn" data-pool="${escapeAttr(p.id)}" ${p.locked ? 'disabled' : ''}>Join</button>
           </div>
         `;
         div.querySelector('button').addEventListener('click', ()=>joinPool(p.id));
@@ -153,10 +177,22 @@
         body: JSON.stringify({ username:u, poolId }),
       });
       const j = await r.json();
-      if(!j.ok) throw new Error(j.message || j.error || 'join failed');
+      if(!j.ok) throw new Error(j.error || 'join failed');
+
       const entryId = j.entryId;
+      const returnedPoolId = j.poolId || poolId;
+
       if(!entryId) throw new Error('Missing entryId from server');
-      window.location.href = '/draft.html?entryId=' + encodeURIComponent(entryId);
+
+      // ✅ 1) persist state (hard refresh 仍然有)
+      setLastJoinState({ poolId: returnedPoolId, entryId, username: u });
+
+      // ✅ 2) redirect 帶齊 poolId + entryId，Draft 就唔會再 Pool: —
+      const url = '/draft.html'
+        + '?poolId=' + encodeURIComponent(returnedPoolId)
+        + '&entryId=' + encodeURIComponent(entryId);
+
+      window.location.href = url;
     }catch(e){
       toast('Join failed: ' + (e.message || 'error'));
     }
