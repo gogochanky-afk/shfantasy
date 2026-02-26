@@ -1,4 +1,3 @@
-// /index.js
 const express = require("express");
 const path = require("path");
 
@@ -39,12 +38,11 @@ app.get("/__whoami", (req, res) => {
 });
 
 // ---- API routes ----
-// IMPORTANT: 所有 API 統一掛喺 /api
 app.use("/api/admin", adminRoutes);
 app.use("/api/pools", poolRoutes);
 app.use("/api/join", joinRoutes);
 
-// ✅ 你 draft.html 會打呢兩條；之前冇掛載所以 404
+// ✅ IMPORTANT: Draft page needs these two routes
 app.use("/api/players", playersRoutes);
 app.use("/api/lineup", lineupRoutes);
 
@@ -52,12 +50,11 @@ app.use("/api/lineup", lineupRoutes);
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir, { index: false }));
 
-// Serve UI homepage
 app.get("/", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
-// SPA fallback (任何非 /api 的路徑，都回 index.html)
+// SPA fallback (anything not /api/*)
 app.get(/^\/(?!api\/).*/, (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
