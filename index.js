@@ -1,65 +1,49 @@
+// index.js
+// SH Fantasy - minimal stable Express server with health checks
+// Full-file replacement
+
 const express = require("express");
-const path = require("path");
+const cors = require("cors");
 
 // Routes
-const adminRoutes = require("./routes/admin");
-const poolRoutes = require("./routes/pools");
-const joinRoutes = require("./routes/join");
-const playersRoutes = require("./routes/players");
-const lineupRoutes = require("./routes/lineup");
+const playersRoute = require("./routes/players");
+const lineupRoute = require("./routes/lineup");
 
 const app = express();
 
-// ---- Core middleware ----
-app.set("trust proxy", true);
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
+// Basic middleware
+app.use(cors());
+app.use(express.json());
 
-// ---- Debug / health ----
+// ---- Health checks (MUST be 200) ----
+// For Cloud Run / uptime checks
 app.get("/healthz", (req, res) => {
   res.status(200).json({
     ok: true,
     service: "shfantasy",
     ts: new Date().toISOString(),
-    host: req.headers.host,
-    path: req.path,
   });
 });
 
-app.get("/__whoami", (req, res) => {
+// Optional: health under /api too (won’t hurt)
+app.get("/api/healthz", (req, res) => {
   res.status(200).json({
     ok: true,
     service: "shfantasy",
     ts: new Date().toISOString(),
-    ip: req.ip,
-    ua: req.headers["user-agent"] || "",
-    host: req.headers.host,
   });
 });
 
 // ---- API routes ----
-app.use("/api/admin", adminRoutes);
-app.use("/api/pools", poolRoutes);
-app.use("/api/join", joinRoutes);
+app.use("/api/players", playersRoute);
+app.use("/api/lineup", lineupRoute);
 
-// ✅ IMPORTANT: Draft page needs these two routes
-app.use("/api/players", playersRoutes);
-app.use("/api/lineup", lineupRoutes);
-
-// ---- Static UI ----
-const publicDir = path.join(__dirname, "public");
-app.use(express.static(publicDir, { index: false }));
-
+// Root (optional)
 app.get("/", (req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
+  res.status(200).send("shfantasy api");
 });
 
-// SPA fallback (anything not /api/*)
-app.get(/^\/(?!api\/).*/, (req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
-});
-
-// ---- 404 for API ----
+// 404 JSON for API routes (avoid Google-style 404 confusion)
 app.use("/api", (req, res) => {
   res.status(404).json({
     ok: false,
@@ -69,8 +53,16 @@ app.use("/api", (req, res) => {
   });
 });
 
-// ---- Start server ----
+// Generic error handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({
+    ok: false,
+    error: "INTERNAL_SERVER_ERROR",
+  });
+});
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`shfantasy listening on :${PORT}`);
+  console.log(`shfantasy listening on ${PORT}`);
 });
