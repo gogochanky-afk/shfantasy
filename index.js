@@ -1,50 +1,55 @@
 // index.js
-// SH Fantasy - minimal stable Express server with health checks
-// Full-file replacement
+// SH Fantasy - Express server with DATA_MODE support
+// DATA_MODE=DEMO (default) | LIVE
 
 const express = require("express");
-const cors = require("cors");
 
 // Routes
 const playersRoute = require("./routes/players");
-const lineupRoute = require("./routes/lineup");
+const lineupRoute  = require("./routes/lineup");
+const poolsRoute   = require("./routes/pools");
+const joinRoute    = require("./routes/join");
+const adminRoute   = require("./routes/admin");
 
 const app = express();
 
 // Basic middleware
-app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ---- Health checks (MUST be 200) ----
-// For Cloud Run / uptime checks
-app.get("/healthz", (req, res) => {
+app.get("/healthz", function(req, res) {
   res.status(200).json({
     ok: true,
     service: "shfantasy",
+    dataMode: process.env.DATA_MODE || "DEMO",
     ts: new Date().toISOString(),
   });
 });
 
-// Optional: health under /api too (won’t hurt)
-app.get("/api/healthz", (req, res) => {
+app.get("/api/healthz", function(req, res) {
   res.status(200).json({
     ok: true,
     service: "shfantasy",
+    dataMode: process.env.DATA_MODE || "DEMO",
     ts: new Date().toISOString(),
   });
 });
 
 // ---- API routes ----
+app.use("/api/pools",   poolsRoute);
 app.use("/api/players", playersRoute);
-app.use("/api/lineup", lineupRoute);
+app.use("/api/lineup",  lineupRoute);
+app.use("/api/join",    joinRoute);
+app.use("/api/admin",   adminRoute);
 
-// Root (optional)
-app.get("/", (req, res) => {
+// Root
+app.get("/", function(req, res) {
   res.status(200).send("shfantasy api");
 });
 
-// 404 JSON for API routes (avoid Google-style 404 confusion)
-app.use("/api", (req, res) => {
+// 404 JSON for any unmatched /api/* routes
+app.use("/api", function(req, res) {
   res.status(404).json({
     ok: false,
     error: "API_ROUTE_NOT_FOUND",
@@ -54,7 +59,7 @@ app.use("/api", (req, res) => {
 });
 
 // Generic error handler
-app.use((err, req, res, next) => {
+app.use(function(err, req, res, next) {
   console.error("Unhandled error:", err);
   res.status(500).json({
     ok: false,
@@ -63,6 +68,6 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`shfantasy listening on ${PORT}`);
+app.listen(PORT, function() {
+  console.log("shfantasy listening on " + PORT + " (DATA_MODE=" + (process.env.DATA_MODE || "DEMO") + ")");
 });
