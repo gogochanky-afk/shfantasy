@@ -6,12 +6,13 @@
     "teamFull": "Utah Jazz",
     "position": "G",
     "jersey": "19",
-    "cost": 4,
+    "cost": 3,
     "valueScore": 14,
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 0
+    "_rosterIdx": 0,
+    "isStar": true
   },
   {
     "id": "espn-4277919",
@@ -25,7 +26,9 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 1
+    "_rosterIdx": 1,
+    "isStar": true,
+    "isElite": true
   },
   {
     "id": "espn-4683766",
@@ -137,7 +140,8 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 0
+    "_rosterIdx": 0,
+    "isStar": true
   },
   {
     "id": "espn-4397136",
@@ -165,7 +169,9 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 2
+    "_rosterIdx": 2,
+    "isStar": true,
+    "isElite": true
   },
   {
     "id": "espn-5144091",
@@ -174,7 +180,7 @@
     "teamFull": "New Orleans Pelicans",
     "position": "G",
     "jersey": "0",
-    "cost": 2,
+    "cost": 3,
     "valueScore": 12.24,
     "injuryStatus": "active",
     "injuryNote": null,
@@ -230,7 +236,7 @@
     "teamFull": "New Orleans Pelicans",
     "position": "F",
     "jersey": "55",
-    "cost": 2,
+    "cost": 1,
     "valueScore": 7.88,
     "injuryStatus": "active",
     "injuryNote": null,

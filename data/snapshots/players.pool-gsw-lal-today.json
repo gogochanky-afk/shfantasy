@@ -11,7 +11,8 @@
     "injuryStatus": "questionable",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 4
+    "_rosterIdx": 4,
+    "isStar": true
   },
   {
     "id": "espn-3213",
@@ -25,7 +26,8 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 5
+    "_rosterIdx": 5,
+    "isStar": true
   },
   {
     "id": "espn-4897449",
@@ -48,7 +50,7 @@
     "teamFull": "Golden State Warriors",
     "position": "G",
     "jersey": "8",
-    "cost": 2,
+    "cost": 1,
     "valueScore": 6.88,
     "injuryStatus": "active",
     "injuryNote": null,
@@ -137,7 +139,9 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 0
+    "_rosterIdx": 0,
+    "isStar": true,
+    "isElite": true
   },
   {
     "id": "espn-4683736",
@@ -193,7 +197,9 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 4
+    "_rosterIdx": 4,
+    "isStar": true,
+    "isElite": true
   },
   {
     "id": "espn-4683774",

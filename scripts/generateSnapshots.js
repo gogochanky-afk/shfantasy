@@ -48,15 +48,17 @@ var MAX_PER_TEAM   = 9;   // rotation limit per team
 var MIN_PER_TEAM   = 7;   // minimum per team before relaxing
 var MIN_TOTAL      = 14;  // minimum total players per pool
 
-// Salary 2A tier thresholds (applied pool-wide across both teams)
-var TIER4_PCT = 0.15;  // top 15%  → cost 4
-var TIER3_PCT = 0.40;  // top 40%  → cost 3 (15%+25%)
-var TIER2_PCT = 0.75;  // top 75%  → cost 2 (15%+25%+35%)
+// Salary 2B tier thresholds
+var ELITE_PCT  = 0.10;  // top 10%  → cost 4 (Elite)
+var TIER3_PCT  = 0.30;  // top 30% of remaining → cost 3
+var TIER2_PCT  = 0.65;  // top 65% of remaining → cost 2
 // rest → cost 1
-
+// Star Candidate thresholds (minCost=3)
+var STAR_MIN_AVG_MIN = 32;   // avgMinutes >= 32
+var STAR_MIN_AVG_PTS = 22;   // avgPoints  >= 22
 // Per-team salary cap constraints
-var MAX_COST4_PER_TEAM = 2;  // max 2 players with cost=4 per team
-var MAX_COST3UP_PER_TEAM = 4; // max 4 players with cost>=3 per team
+var MAX_COST4_PER_TEAM   = 2;  // max 2 players with cost=4 per team
+var MAX_COST3UP_PER_TEAM = 4;  // max 4 players with cost>=3 per team
 
 // CLI flag: --include-inactive writes all players (for debugging)
 var INCLUDE_INACTIVE = process.argv.indexOf("--include-inactive") !== -1;
@@ -246,77 +248,121 @@ function enrichWithValueScore(players) {
 }
 
 /**
- * Assign cost tiers pool-wide (across both teams combined).
- * S3 tier rules:
- *   top 15%  → cost 4
- *   next 25% → cost 3  (cumulative 40%)
- *   next 35% → cost 2  (cumulative 75%)
- *   rest     → cost 1
+ * Salary 2B: upgraded tier assignment.
  *
- * Then enforce per-team cap:
- *   max 2 cost=4 per team; max 4 cost>=3 per team (excess → cost-1)
+ * Step 1 – Identify Star Candidates (minCost=3):
+ *   avgMinutes >= STAR_MIN_AVG_MIN  OR
+ *   avgPoints  >= STAR_MIN_AVG_PTS  OR
+ *   usageRate proxy: in team top-2 by valueScore
+ *
+ * Step 2 – Elite (top ELITE_PCT by valueScore pool-wide) → cost=4
+ *
+ * Step 3 – Re-normalise remaining (non-Elite, non-Star) by percentile:
+ *   top TIER3_PCT  → cost 3
+ *   top TIER2_PCT  → cost 2
+ *   rest           → cost 1
+ *   Star Candidates (non-Elite) keep minCost=3.
+ *
+ * Step 4 – Per-team cap:
+ *   max MAX_COST4_PER_TEAM   at cost=4 per team (excess → 3)
+ *   max MAX_COST3UP_PER_TEAM at cost>=3 per team (excess → cost-1)
  */
 function assignCostsByValueScore(players) {
   if (!players || players.length === 0) return players;
   var n = players.length;
 
-  // Sort by valueScore DESC for tier assignment
+  // ── Step 0: per-team top-2 valueScore threshold (usageRate proxy) ──────────
+  var teamVS = {};
+  players.forEach(function(p) {
+    if (!teamVS[p.team]) teamVS[p.team] = [];
+    teamVS[p.team].push(p.valueScore || 0);
+  });
+  var teamTop2Thresh = {};
+  Object.keys(teamVS).forEach(function(team) {
+    var sv = teamVS[team].slice().sort(function(a, b){ return b - a; });
+    teamTop2Thresh[team] = sv.length >= 2 ? sv[1] : sv[0];
+  });
+
+  // ── Step 1: identify Star Candidates ──────────────────────────────────────
+  var starSet = {};
+  players.forEach(function(p) {
+    var isStar = false;
+    if (p.avgMin != null && p.avgMin >= STAR_MIN_AVG_MIN) isStar = true;
+    if (p.avgPts != null && p.avgPts >= STAR_MIN_AVG_PTS) isStar = true;
+    var thresh = teamTop2Thresh[p.team];
+    if (thresh != null && (p.valueScore || 0) >= thresh) isStar = true;
+    if (isStar) starSet[p.id] = true;
+  });
+
+  // ── Step 2: Elite = top ELITE_PCT pool-wide ────────────────────────────────
   var sorted = players.slice().sort(function(a, b) {
     var va = a.valueScore || 0, vb = b.valueScore || 0;
     if (vb !== va) return vb - va;
     return (a.name || "").localeCompare(b.name || "");
   });
+  var eliteCount = Math.max(1, Math.round(n * ELITE_PCT));
+  var eliteSet = {};
+  sorted.slice(0, eliteCount).forEach(function(p) { eliteSet[p.id] = true; });
 
-  // Assign raw tiers
-  var t4 = Math.max(1, Math.round(n * TIER4_PCT));
-  var t3 = Math.max(1, Math.round(n * TIER3_PCT));
-  var t2 = Math.max(1, Math.round(n * TIER2_PCT));
-
-  var withRawCost = sorted.map(function(p, i) {
-    var cost;
-    if (i < t4)      cost = 4;
-    else if (i < t3) cost = 3;
-    else if (i < t2) cost = 2;
-    else             cost = 1;
-    return Object.assign({}, p, { cost: cost });
+  // ── Step 3: re-normalise remaining (non-Elite, non-Star) ──────────────────
+  var remaining = sorted.filter(function(p) {
+    return !eliteSet[p.id] && !starSet[p.id];
+  });
+  var rn = remaining.length;
+  var r3 = Math.round(rn * TIER3_PCT);
+  var r2 = Math.round(rn * TIER2_PCT);
+  var remCostMap = {};
+  remaining.forEach(function(p, i) {
+    remCostMap[p.id] = (i < r3) ? 3 : (i < r2) ? 2 : 1;
   });
 
-  // Enforce per-team cap: group by team
+  // ── Build initial cost map ─────────────────────────────────────────────────
+  var costMap = {};
+  players.forEach(function(p) {
+    if (eliteSet[p.id]) {
+      costMap[p.id] = 4;
+    } else if (starSet[p.id]) {
+      // Star Candidate: minCost=3 (may already be in remCostMap as 3 or less)
+      costMap[p.id] = Math.max(3, remCostMap[p.id] || 1);
+    } else {
+      costMap[p.id] = remCostMap[p.id] || 1;
+    }
+  });
+
+  // ── Step 4: enforce per-team cap ──────────────────────────────────────────
   var byTeam = {};
-  withRawCost.forEach(function(p) {
+  players.forEach(function(p) {
     if (!byTeam[p.team]) byTeam[p.team] = [];
     byTeam[p.team].push(p);
   });
-
-  // For each team, sort by cost DESC, then apply cap
   Object.keys(byTeam).forEach(function(team) {
-    var teamPlayers = byTeam[team].sort(function(a, b) { return b.cost - a.cost; });
+    var tp = byTeam[team].slice().sort(function(a, b) {
+      var ca = costMap[a.id] || 1, cb = costMap[b.id] || 1;
+      if (cb !== ca) return cb - ca;
+      return (b.valueScore || 0) - (a.valueScore || 0);
+    });
     var count4 = 0, count3up = 0;
-    teamPlayers.forEach(function(p) {
-      if (p.cost === 4) {
+    tp.forEach(function(p) {
+      var c = costMap[p.id] || 1;
+      if (c === 4) {
         count4++;
-        if (count4 > MAX_COST4_PER_TEAM) {
-          p.cost = 3;
-          count4--; // revert increment since we changed it
-          count4 = MAX_COST4_PER_TEAM; // cap at max
-        }
+        if (count4 > MAX_COST4_PER_TEAM) { c = 3; count4 = MAX_COST4_PER_TEAM; }
       }
-      if (p.cost >= 3) {
+      if (c >= 3) {
         count3up++;
-        if (count3up > MAX_COST3UP_PER_TEAM) {
-          p.cost = Math.max(1, p.cost - 1);
-          count3up--;
-          count3up = MAX_COST3UP_PER_TEAM;
-        }
+        if (count3up > MAX_COST3UP_PER_TEAM) { c = Math.max(1, c - 1); count3up = MAX_COST3UP_PER_TEAM; }
       }
+      costMap[p.id] = c;
     });
   });
 
-  // Restore original player order (preserve team grouping from buildTeamPlayers)
-  var costMap = {};
-  withRawCost.forEach(function(p) { costMap[p.id] = p.cost; });
+  // ── Restore original order ─────────────────────────────────────────────────
   return players.map(function(p) {
-    return Object.assign({}, p, { cost: costMap[p.id] || 1 });
+    return Object.assign({}, p, {
+      cost:    costMap[p.id] || 1,
+      isStar:  starSet[p.id]  ? true : undefined,
+      isElite: eliteSet[p.id] ? true : undefined,
+    });
   });
 }
 
@@ -671,7 +717,7 @@ async function generateFromBDL(today, tomorrow) {
 async function main() {
   console.log("[gen] SH Fantasy Snapshot Generator v2.3");
   console.log("[gen] Include inactive:", INCLUDE_INACTIVE ? "YES (debug)" : "NO (default)");
-  console.log("[gen] Salary mode: 2A (valueScore + pool-wide tiers + per-team cap)");
+  console.log("[gen] Salary mode: 2B (Star minCost=3, Elite top10%=$4, per-team cap, re-normalize)");
 
   var todayUTC = new Date();
   todayUTC.setUTCHours(0, 0, 0, 0);

@@ -6,12 +6,13 @@
     "teamFull": "Charlotte Hornets",
     "position": "G",
     "jersey": "1",
-    "cost": 4,
+    "cost": 3,
     "valueScore": 14,
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 0
+    "_rosterIdx": 0,
+    "isStar": true
   },
   {
     "id": "espn-4565201",
@@ -39,7 +40,8 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 2
+    "_rosterIdx": 2,
+    "isStar": true
   },
   {
     "id": "espn-2578239",
@@ -90,7 +92,7 @@
     "teamFull": "Charlotte Hornets",
     "position": "G",
     "jersey": "10",
-    "cost": 2,
+    "cost": 1,
     "valueScore": 7.84,
     "injuryStatus": "active",
     "injuryNote": null,
@@ -137,7 +139,9 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 1
+    "_rosterIdx": 1,
+    "isStar": true,
+    "isElite": true
   },
   {
     "id": "espn-5081727",
@@ -165,7 +169,9 @@
     "injuryStatus": "active",
     "injuryNote": null,
     "isPlayable": true,
-    "_rosterIdx": 3
+    "_rosterIdx": 3,
+    "isStar": true,
+    "isElite": true
   },
   {
     "id": "espn-4597259",
