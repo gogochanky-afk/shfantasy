@@ -5,20 +5,22 @@
 // DATA_MODE=LIVE:
 //   1. Return in-memory cache if < 120 s old (prevents repeated API calls)
 //   2. On cache miss, call Sportradar
-//   3. On 429 (rate-limit): enter cooldown, serve DEMO_FALLBACK (or stale cache if exists)
-//   4. On other error / empty result: fall back to DEMO pools with dataMode="DEMO_FALLBACK"
+//   3. On 429: enter cooldown, serve SNAPSHOT if exists, else DEMO_FALLBACK
+//   4. On other error: serve SNAPSHOT if exists, else DEMO_FALLBACK
+//   5. On success: save DB snapshot (last-good)
 
 "use strict";
 
 const express = require("express");
 const router  = express.Router();
 const { getOrFetch } = require("../lib/cache");
+const { saveSnapshot, loadLatestSnapshot } = require("../lib/poolsSnapshot");
 
 const CACHE_TTL_S = 120; // seconds
 const CACHE_KEY   = "pools:live";
 
 // ---- Rate-limit cooldown (STOP hammering Sportradar) ----
-let rateLimitUntilMs = 0;          // epoch ms
+let rateLimitUntilMs = 0;                 // epoch ms
 const RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
 
 function inCooldown() {
@@ -90,6 +92,26 @@ function gameToPool(game, day) {
   };
 }
 
+function respondSnapshotOrDemo(res, nowIso, note) {
+  const snap = loadLatestSnapshot();
+  if (snap && Array.isArray(snap.pools) && snap.pools.length > 0) {
+    return res.json({
+      ok: true,
+      dataMode: "SNAPSHOT",
+      updatedAt: snap.createdAt || nowIso,
+      pools: snap.pools,
+      note: note || "serving DB snapshot",
+    });
+  }
+  return res.json({
+    ok: true,
+    dataMode: "DEMO_FALLBACK",
+    updatedAt: nowIso,
+    pools: getDemoPools(),
+    note: note || "no snapshot available; demo fallback",
+  });
+}
+
 // ---- Route ----
 router.get("/", async function(req, res) {
   const DATA_MODE = (process.env.DATA_MODE || "DEMO").toUpperCase();
@@ -106,15 +128,9 @@ router.get("/", async function(req, res) {
   }
 
   // ---- LIVE mode ----
-  // If we are in cooldown, DO NOT call Sportradar. Prevent quota death spiral.
+  // If we are in cooldown, DO NOT call Sportradar.
   if (inCooldown()) {
-    return res.json({
-      ok:        true,
-      dataMode:  "DEMO_FALLBACK",
-      updatedAt: nowIso,
-      pools:     getDemoPools(),
-      note:      "rate-limit cooldown (skipping Sportradar)",
-    });
+    return respondSnapshotOrDemo(res, nowIso, "rate-limit cooldown (skipping Sportradar)");
   }
 
   const { fetchGames } = require("../lib/sportradar");
@@ -125,30 +141,32 @@ router.get("/", async function(req, res) {
       const { today, tomorrow } = getTodayTomorrow();
       const todayGames    = await fetchGames(today);
       const tomorrowGames = await fetchGames(tomorrow);
+
       const pools = todayGames.map(function(g) { return gameToPool(g, "today"); })
         .concat(tomorrowGames.map(function(g) { return gameToPool(g, "tomorrow"); }));
-      if (pools.length === 0) {
-        throw new Error("no games returned from Sportradar");
+
+      if (pools.length === 0) throw new Error("no games returned from Sportradar");
+
+      // Save last-good snapshot to DB
+      try {
+        saveSnapshot("sportradar", pools);
+      } catch (e) {
+        console.warn("[pools] snapshot save failed:", e && e.message ? e.message : e);
       }
+
       return pools;
     });
   } catch (err) {
     const isRateLimit = err && err.isRateLimit;
 
     if (isRateLimit) {
-      console.warn("[pools] 429 rate-limit → enter cooldown 15m (no more Sportradar calls).");
+      console.warn("[pools] 429 rate-limit → enter cooldown 15m");
       enterCooldown();
-    } else {
-      console.error("[pools] fetch error (non-429):", err && err.message ? err.message : err);
+      return respondSnapshotOrDemo(res, nowIso, "429 rate-limit; served snapshot if available");
     }
 
-    // If we have no usable cache (likely), serve DEMO fallback.
-    return res.json({
-      ok:        true,
-      dataMode:  "DEMO_FALLBACK",
-      updatedAt: nowIso,
-      pools:     getDemoPools(),
-    });
+    console.error("[pools] fetch error (non-429):", err && err.message ? err.message : err);
+    return respondSnapshotOrDemo(res, nowIso, "fetch error; served snapshot if available");
   }
 
   const dataMode = cacheResult.stale ? "LIVE_STALE" : "LIVE";
