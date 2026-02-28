@@ -6,7 +6,10 @@
     "teamFull": "Orlando Magic",
     "position": "C",
     "jersey": "14",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4348700",
@@ -15,25 +18,10 @@
     "teamFull": "Orlando Magic",
     "position": "C",
     "jersey": "35",
-    "cost": 4
-  },
-  {
-    "id": "espn-4566434",
-    "name": "Franz Wagner",
-    "team": "ORL",
-    "teamFull": "Orlando Magic",
-    "position": "F",
-    "jersey": "22",
-    "cost": 3
-  },
-  {
-    "id": "espn-4278572",
-    "name": "Jamal Cain",
-    "team": "ORL",
-    "teamFull": "Orlando Magic",
-    "position": "F",
-    "jersey": "8",
-    "cost": 3
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4277847",
@@ -42,7 +30,22 @@
     "teamFull": "Orlando Magic",
     "position": "C",
     "jersey": "34",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4278572",
+    "name": "Jamal Cain",
+    "team": "ORL",
+    "teamFull": "Orlando Magic",
+    "position": "F",
+    "jersey": "8",
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4065654",
@@ -51,7 +54,10 @@
     "teamFull": "Orlando Magic",
     "position": "F",
     "jersey": "1",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-3150844",
@@ -60,7 +66,10 @@
     "teamFull": "Orlando Magic",
     "position": "F",
     "jersey": "21",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5214637",
@@ -69,7 +78,10 @@
     "teamFull": "Orlando Magic",
     "position": "F",
     "jersey": "93",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4432573",
@@ -78,7 +90,22 @@
     "teamFull": "Orlando Magic",
     "position": "F",
     "jersey": "5",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4702382",
+    "name": "Tristan da Silva",
+    "team": "ORL",
+    "teamFull": "Orlando Magic",
+    "position": "F",
+    "jersey": "23",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5107818",
@@ -87,7 +114,10 @@
     "teamFull": "Detroit Pistons",
     "position": "C",
     "jersey": "3",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4433621",
@@ -96,7 +126,10 @@
     "teamFull": "Detroit Pistons",
     "position": "C",
     "jersey": "0",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4906923",
@@ -105,7 +138,10 @@
     "teamFull": "Detroit Pistons",
     "position": "F",
     "jersey": "34",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-3157465",
@@ -114,7 +150,10 @@
     "teamFull": "Detroit Pistons",
     "position": "F",
     "jersey": "55",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4432810",
@@ -123,7 +162,10 @@
     "teamFull": "Detroit Pistons",
     "position": "F",
     "jersey": "28",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "unknown",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4278562",
@@ -132,7 +174,10 @@
     "teamFull": "Detroit Pistons",
     "position": "F",
     "jersey": "7",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4683771",
@@ -141,7 +186,10 @@
     "teamFull": "Detroit Pistons",
     "position": "F",
     "jersey": "5",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-6440",
@@ -150,7 +198,10 @@
     "teamFull": "Detroit Pistons",
     "position": "F",
     "jersey": "12",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4397882",
@@ -159,6 +210,9 @@
     "teamFull": "Detroit Pistons",
     "position": "F",
     "jersey": "35",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   }
 ]

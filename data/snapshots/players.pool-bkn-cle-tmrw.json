@@ -6,7 +6,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "C",
     "jersey": "20",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4278067",
@@ -15,7 +18,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "C",
     "jersey": "33",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5174655",
@@ -24,7 +30,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "F",
     "jersey": "31",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5107173",
@@ -33,7 +42,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "F",
     "jersey": "2",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4432821",
@@ -42,7 +54,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "F",
     "jersey": "9",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4702670",
@@ -51,7 +66,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "F",
     "jersey": "",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4431714",
@@ -60,7 +78,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "F",
     "jersey": "22",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4687718",
@@ -69,7 +90,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "F",
     "jersey": "00",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4278104",
@@ -78,7 +102,10 @@
     "teamFull": "Brooklyn Nets",
     "position": "F",
     "jersey": "17",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4432158",
@@ -87,7 +114,10 @@
     "teamFull": "Cleveland Cavaliers",
     "position": "C",
     "jersey": "4",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4066328",
@@ -96,25 +126,10 @@
     "teamFull": "Cleveland Cavaliers",
     "position": "C",
     "jersey": "31",
-    "cost": 4
-  },
-  {
-    "id": "espn-3912848",
-    "name": "Dean Wade",
-    "team": "CLE",
-    "teamFull": "Cleveland Cavaliers",
-    "position": "F",
-    "jersey": "32",
-    "cost": 3
-  },
-  {
-    "id": "espn-2580365",
-    "name": "Larry Nance Jr.",
-    "team": "CLE",
-    "teamFull": "Cleveland Cavaliers",
-    "position": "F",
-    "jersey": "22",
-    "cost": 3
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-3934723",
@@ -123,16 +138,34 @@
     "teamFull": "Cleveland Cavaliers",
     "position": "C",
     "jersey": "3",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
-    "id": "espn-4701233",
-    "name": "Craig Porter Jr.",
+    "id": "espn-3912848",
+    "name": "Dean Wade",
     "team": "CLE",
     "teamFull": "Cleveland Cavaliers",
-    "position": "G",
-    "jersey": "9",
-    "cost": 2
+    "position": "F",
+    "jersey": "32",
+    "cost": 3,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-2580365",
+    "name": "Larry Nance Jr.",
+    "team": "CLE",
+    "teamFull": "Cleveland Cavaliers",
+    "position": "F",
+    "jersey": "22",
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5106268",
@@ -141,7 +174,10 @@
     "teamFull": "Cleveland Cavaliers",
     "position": "F",
     "jersey": "35",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5177362",
@@ -150,7 +186,10 @@
     "teamFull": "Cleveland Cavaliers",
     "position": "F",
     "jersey": "12",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4431734",
@@ -159,6 +198,21 @@
     "teamFull": "Cleveland Cavaliers",
     "position": "F",
     "jersey": "21",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4701233",
+    "name": "Craig Porter Jr.",
+    "team": "CLE",
+    "teamFull": "Cleveland Cavaliers",
+    "position": "G",
+    "jersey": "9",
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   }
 ]

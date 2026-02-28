@@ -1,30 +1,15 @@
 [
   {
-    "id": "espn-4017837",
-    "name": "Ivica Zubac",
-    "team": "IND",
-    "teamFull": "Indiana Pacers",
-    "position": "C",
-    "jersey": "40",
-    "cost": 4
-  },
-  {
     "id": "espn-4065731",
     "name": "Jay Huff",
     "team": "IND",
     "teamFull": "Indiana Pacers",
     "position": "C",
     "jersey": "32",
-    "cost": 4
-  },
-  {
-    "id": "espn-5106060",
-    "name": "Jarace Walker",
-    "team": "IND",
-    "teamFull": "Indiana Pacers",
-    "position": "F",
-    "jersey": "5",
-    "cost": 3
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4066399",
@@ -33,7 +18,22 @@
     "teamFull": "Indiana Pacers",
     "position": "C",
     "jersey": "11",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-5106060",
+    "name": "Jarace Walker",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "F",
+    "jersey": "5",
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4278355",
@@ -42,34 +42,10 @@
     "teamFull": "Indiana Pacers",
     "position": "F",
     "jersey": "1",
-    "cost": 3
-  },
-  {
-    "id": "espn-4396909",
-    "name": "Aaron Nesmith",
-    "team": "IND",
-    "teamFull": "Indiana Pacers",
-    "position": "G",
-    "jersey": "23",
-    "cost": 2
-  },
-  {
-    "id": "espn-4395712",
-    "name": "Andrew Nembhard",
-    "team": "IND",
-    "teamFull": "Indiana Pacers",
-    "position": "G",
-    "jersey": "2",
-    "cost": 2
-  },
-  {
-    "id": "espn-4433076",
-    "name": "Ben Sheppard",
-    "team": "IND",
-    "teamFull": "Indiana Pacers",
-    "position": "G",
-    "jersey": "26",
-    "cost": 2
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-3149673",
@@ -78,34 +54,58 @@
     "teamFull": "Indiana Pacers",
     "position": "F",
     "jersey": "43",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
-    "id": "espn-3906665",
-    "name": "Brandon Clarke",
-    "team": "MEM",
-    "teamFull": "Memphis Grizzlies",
-    "position": "F",
-    "jersey": "15",
-    "cost": 4
+    "id": "espn-4395712",
+    "name": "Andrew Nembhard",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "G",
+    "jersey": "2",
+    "cost": 2,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
-    "id": "espn-4600663",
-    "name": "Zach Edey",
-    "team": "MEM",
-    "teamFull": "Memphis Grizzlies",
-    "position": "C",
-    "jersey": "14",
-    "cost": 4
+    "id": "espn-4433076",
+    "name": "Ben Sheppard",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "G",
+    "jersey": "26",
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
-    "id": "espn-4903027",
-    "name": "Cedric Coward",
-    "team": "MEM",
-    "teamFull": "Memphis Grizzlies",
-    "position": "F",
-    "jersey": "23",
-    "cost": 3
+    "id": "espn-4278516",
+    "name": "Ethan Thompson",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "G",
+    "jersey": "55",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4697268",
+    "name": "Kam Jones",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "G",
+    "jersey": "7",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5105550",
@@ -114,7 +114,10 @@
     "teamFull": "Memphis Grizzlies",
     "position": "F",
     "jersey": "45",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5112087",
@@ -123,7 +126,10 @@
     "teamFull": "Memphis Grizzlies",
     "position": "F",
     "jersey": "0",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4595400",
@@ -132,16 +138,10 @@
     "teamFull": "Memphis Grizzlies",
     "position": "F",
     "jersey": "18",
-    "cost": 2
-  },
-  {
-    "id": "espn-4593125",
-    "name": "Santi Aldama",
-    "team": "MEM",
-    "teamFull": "Memphis Grizzlies",
-    "position": "F",
-    "jersey": "7",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-3986",
@@ -150,7 +150,10 @@
     "teamFull": "Memphis Grizzlies",
     "position": "F",
     "jersey": "",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4684806",
@@ -159,6 +162,57 @@
     "teamFull": "Memphis Grizzlies",
     "position": "F",
     "jersey": "22",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4433083",
+    "name": "Cam Spencer",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "G",
+    "jersey": "24",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4683934",
+    "name": "Jahmai Mashack",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "G",
+    "jersey": "21",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4781746",
+    "name": "Javon Small",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "G",
+    "jersey": "10",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-5099752",
+    "name": "Rayan Rupert",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "G",
+    "jersey": "32",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   }
 ]

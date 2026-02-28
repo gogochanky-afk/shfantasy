@@ -1,30 +1,15 @@
 [
   {
-    "id": "espn-5160992",
-    "name": "Alex Sarr",
-    "team": "WAS",
-    "teamFull": "Washington Wizards",
-    "position": "C",
-    "jersey": "20",
-    "cost": 4
-  },
-  {
     "id": "espn-3936296",
     "name": "Skal Labissiere",
     "team": "WAS",
     "teamFull": "Washington Wizards",
     "position": "C",
     "jersey": "17",
-    "cost": 4
-  },
-  {
-    "id": "espn-6583",
-    "name": "Anthony Davis",
-    "team": "WAS",
-    "teamFull": "Washington Wizards",
-    "position": "F",
-    "jersey": "23",
-    "cost": 3
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-2581184",
@@ -33,16 +18,10 @@
     "teamFull": "Washington Wizards",
     "position": "F",
     "jersey": "16",
-    "cost": 3
-  },
-  {
-    "id": "espn-5105592",
-    "name": "Cam Whitmore",
-    "team": "WAS",
-    "teamFull": "Washington Wizards",
-    "position": "F",
-    "jersey": "1",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4432907",
@@ -51,7 +30,10 @@
     "teamFull": "Washington Wizards",
     "position": "F",
     "jersey": "9",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5174563",
@@ -60,7 +42,10 @@
     "teamFull": "Washington Wizards",
     "position": "F",
     "jersey": "18",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4395650",
@@ -69,7 +54,10 @@
     "teamFull": "Washington Wizards",
     "position": "F",
     "jersey": "12",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4997537",
@@ -78,16 +66,46 @@
     "teamFull": "Washington Wizards",
     "position": "F",
     "jersey": "00",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
-    "id": "espn-3913176",
-    "name": "Brandon Ingram",
-    "team": "TOR",
-    "teamFull": "Toronto Raptors",
-    "position": "F",
-    "jersey": "3",
-    "cost": 4
+    "id": "espn-4592216",
+    "name": "Alondes Williams",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "G",
+    "jersey": "31",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-5104155",
+    "name": "Bilal Coulibaly",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "G",
+    "jersey": "0",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4845374",
+    "name": "Bub Carrington",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "G",
+    "jersey": "7",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-3134908",
@@ -96,7 +114,22 @@
     "teamFull": "Toronto Raptors",
     "position": "C",
     "jersey": "19",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-3913176",
+    "name": "Brandon Ingram",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "3",
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5093267",
@@ -105,7 +138,10 @@
     "teamFull": "Toronto Raptors",
     "position": "F",
     "jersey": "12",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4431893",
@@ -114,7 +150,10 @@
     "teamFull": "Toronto Raptors",
     "position": "F",
     "jersey": "77",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5107897",
@@ -123,7 +162,10 @@
     "teamFull": "Toronto Raptors",
     "position": "F",
     "jersey": "2",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4395625",
@@ -132,7 +174,10 @@
     "teamFull": "Toronto Raptors",
     "position": "F",
     "jersey": "9",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4278580",
@@ -141,7 +186,10 @@
     "teamFull": "Toronto Raptors",
     "position": "F",
     "jersey": "54",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4433134",
@@ -150,7 +198,10 @@
     "teamFull": "Toronto Raptors",
     "position": "F",
     "jersey": "4",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4431684",
@@ -159,6 +210,9 @@
     "teamFull": "Toronto Raptors",
     "position": "F",
     "jersey": "32",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   }
 ]

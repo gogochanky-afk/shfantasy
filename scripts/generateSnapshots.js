@@ -1,28 +1,31 @@
 #!/usr/bin/env node
 "use strict";
 /**
- * scripts/generateSnapshots.js
+ * scripts/generateSnapshots.js  v2.2
  * ─────────────────────────────────────────────────────────────────────────────
- * Generates data/snapshots/pools.snapshot.json and
- * data/snapshots/players.<poolId>.json for today + tomorrow.
+ * Phase-1 additions over v2.1:
+ *   - Each player now carries: injuryStatus, injuryNote, isPlayable
+ *   - injuryStatus: "active" | "questionable" | "out" | "inactive" | "unknown"
+ *   - isPlayable:   true for active/questionable/unknown; false for out/inactive
+ *   - Snapshot default: only isPlayable=true players written to JSON
+ *     (out/inactive excluded from snapshot; use --include-inactive flag to keep all)
+ *   - Rotation limit: top MAX_PER_TEAM (9) per team after status filter
+ *   - Fallback safety: if filtered list < MIN_TOTAL (14), relax by including
+ *     "unknown" first, then "questionable", never "out"/"inactive"
  *
- * Source priority:
- *   1. Sportradar (if SPORTRADAR_API_KEY is set)
- *   2. ESPN public API (no key required, always current rosters)
- *   3. BallDontLie schedule + ESPN rosters (if BDL_KEY available)
- *   4. Keep existing snapshots unchanged (if all sources fail)
+ * Source priority (unchanged):
+ *   1. Sportradar (if SPORTRADAR_API_KEY set)
+ *   2. ESPN public API (no key required, always current rosters + injury status)
+ *   3. BallDontLie schedule + ESPN rosters
+ *   4. Keep existing snapshots unchanged
  *
- * Throttling:
- *   - All HTTP requests are serial with >= THROTTLE_MS (1200ms) gap
- *   - 429: exponential backoff (2s → 4s → 8s → 16s → 20s cap), max 5 retries
- *
- * Zero sqlite / better-sqlite3 / DB dependencies.
- * Runtime (Cloud Run) NEVER calls this script — only reads the output JSON.
+ * Throttling (unchanged):
+ *   Serial requests + 1200ms gap; 429 → exponential backoff (2s→20s), max 5 retries
  *
  * Usage:
  *   node scripts/generateSnapshots.js
  *   SPORTRADAR_API_KEY=xxx node scripts/generateSnapshots.js
- *   BALLDONTLIE_API_KEY=xxx node scripts/generateSnapshots.js
+ *   node scripts/generateSnapshots.js --include-inactive   (write all players)
  */
 
 var https = require("https");
@@ -33,15 +36,19 @@ var path  = require("path");
 var SR_KEY         = process.env.SPORTRADAR_API_KEY          || "";
 var SR_LEVEL       = process.env.SPORTRADAR_NBA_ACCESS_LEVEL || "trial";
 var BDL_KEY        = process.env.BALLDONTLIE_API_KEY         || "";
-var THROTTLE_MS    = 1200;   // min gap between requests (ms)
+var THROTTLE_MS    = 1200;
 var MAX_RETRIES    = 5;
 var MAX_BACKOFF_MS = 20000;
 var ROSTER_SIZE    = 5;
 var SALARY_CAP     = 10;
-var MAX_PER_TEAM   = 9;      // max players per team in a pool
-var MIN_PER_TEAM   = 7;      // min players per team in a pool
+var MAX_PER_TEAM   = 9;   // rotation limit per team
+var MIN_PER_TEAM   = 7;   // minimum per team before relaxing
+var MIN_TOTAL      = 14;  // minimum total players per pool
 
-// ESPN uses non-standard abbreviations for some teams — normalise to standard
+// CLI flag: --include-inactive writes all players (for debugging)
+var INCLUDE_INACTIVE = process.argv.indexOf("--include-inactive") !== -1;
+
+// ESPN non-standard abbreviation normalisation
 var ESPN_ABBR_FIX = {
   "GS":   "GSW",
   "NY":   "NYK",
@@ -51,7 +58,7 @@ var ESPN_ABBR_FIX = {
   "WSH":  "WAS",
 };
 
-// ESPN team id → slug (for roster endpoint)
+// ESPN team id → slug (unused but kept for reference)
 var ESPN_SLUG = {
   "1":"atlanta-hawks","2":"boston-celtics","17":"brooklyn-nets","30":"charlotte-hornets",
   "4":"chicago-bulls","5":"cleveland-cavaliers","6":"dallas-mavericks","7":"denver-nuggets",
@@ -114,7 +121,6 @@ async function fetchWithRetry(url, extraHeaders) {
   var backoff  = 2000;
 
   while (attempt <= MAX_RETRIES) {
-    // Throttle: ensure >= THROTTLE_MS since last request
     var now  = Date.now();
     var wait = THROTTLE_MS - (now - _lastRequestTime);
     if (wait > 0) await sleep(wait);
@@ -143,7 +149,7 @@ function _httpGet(url, extraHeaders) {
   return new Promise(function(resolve) {
     var opts = new URL(url);
     var headers = Object.assign({
-      "User-Agent": "SHFantasy-SnapshotGen/2.0 (compatible)",
+      "User-Agent": "SHFantasy-SnapshotGen/2.2 (compatible)",
       "Accept":     "application/json",
     }, extraHeaders);
     https.get({
@@ -160,12 +166,36 @@ function _httpGet(url, extraHeaders) {
   });
 }
 
-// ── Cost tier assignment ───────────────────────────────────────────────────────
+// ── Player Status Model ───────────────────────────────────────────────────────
 /**
- * Assign 1-4 cost tiers to a list of players.
- * Uses position-based star weight:
- *   top 2 → $4, next 3 → $3, next 4 → $2, rest → $1
+ * Normalise ESPN injury status string to our standard enum:
+ *   "active" | "questionable" | "out" | "inactive" | "unknown"
+ *
+ * ESPN injuries[0].status values observed:
+ *   null / undefined  → active
+ *   "Out"             → out
+ *   "Day-To-Day"      → questionable
+ *   "Questionable"    → questionable
+ *   "Probable"        → questionable (treat as likely active)
+ *   "Inactive"        → inactive
+ *   "Suspended"       → inactive
+ *   anything else     → unknown
  */
+function normaliseInjuryStatus(espnInjuryStatus) {
+  if (!espnInjuryStatus) return "active";
+  var s = String(espnInjuryStatus).toLowerCase().trim();
+  if (s === "out")                          return "out";
+  if (s === "inactive" || s === "suspended") return "inactive";
+  if (s === "day-to-day" || s === "questionable") return "questionable";
+  if (s === "probable")                     return "questionable";
+  return "unknown";
+}
+
+function isPlayable(injuryStatus) {
+  return injuryStatus !== "out" && injuryStatus !== "inactive";
+}
+
+// ── Cost tier assignment ───────────────────────────────────────────────────────
 function posWeight(pos) {
   if (!pos) return 1;
   var p = pos.toUpperCase();
@@ -189,13 +219,45 @@ function assignCosts(players) {
   });
 }
 
-function pickPlayers(players, max, min) {
-  if (players.length <= max) return players;
-  var sorted = players.slice().sort(function(a, b) {
-    if (b.cost !== a.cost) return b.cost - a.cost;
-    return (a.name || "").localeCompare(b.name || "");
-  });
-  return sorted.slice(0, Math.max(min || 0, max));
+/**
+ * Apply rotation limit + playable filter to one team's players.
+ * Steps:
+ *   1. Assign costs (position-based sort)
+ *   2. Filter to isPlayable=true (exclude out/inactive)
+ *   3. Keep top MAX_PER_TEAM by cost
+ *   4. If result < MIN_PER_TEAM, relax by including "unknown" (already included),
+ *      then "questionable" (already included), then "out" as last resort
+ *      (but never "inactive")
+ */
+function buildTeamPlayers(rawPlayers, max, min) {
+  // Step 1: assign costs on full roster
+  var withCost = assignCosts(rawPlayers);
+
+  if (INCLUDE_INACTIVE) {
+    // Debug mode: return all players with cost
+    return withCost.slice(0, max);
+  }
+
+  // Step 2: playable filter
+  var playable = withCost.filter(function(p) { return p.isPlayable; });
+
+  // Step 3: rotation limit
+  var result = playable.length <= max ? playable : playable.slice(0, max);
+
+  // Step 4: relax if too few
+  if (result.length < min) {
+    // Try adding "out" players to meet minimum (last resort)
+    var outPlayers = withCost.filter(function(p) {
+      return p.injuryStatus === "out";
+    });
+    var needed = min - result.length;
+    if (outPlayers.length > 0 && needed > 0) {
+      console.warn("[gen] Relaxing filter for team — adding", Math.min(needed, outPlayers.length), "OUT players to meet minimum");
+      result = result.concat(outPlayers.slice(0, needed));
+    }
+  }
+
+  return result;
 }
 
 // ── ESPN Source ───────────────────────────────────────────────────────────────
@@ -235,30 +297,44 @@ async function espnSchedule(dateYYYYMMDD) {
   }
 }
 
+/**
+ * Fetch ESPN roster with injury status enrichment.
+ * Returns players with: injuryStatus, injuryNote, isPlayable fields.
+ */
 async function espnRoster(teamId, teamAbbr, teamName) {
-  // Use numeric team ID — slug-based URLs return 400
   var url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/" + teamId + "/roster";
   var r = await fetchWithRetry(url);
   if (r.status !== 200) {
-    console.warn("[ESPN] Roster team", teamId, "("+teamAbbr+") returned HTTP", r.status);
+    console.warn("[ESPN] Roster team", teamId, "(" + teamAbbr + ") returned HTTP", r.status);
     return [];
   }
   try {
     var d = JSON.parse(r.body);
     var athletes = d.athletes || [];
     return athletes.map(function(a) {
+      // Extract injury info from ESPN
+      var injuries    = a.injuries || [];
+      var latestInj   = injuries.length > 0 ? injuries[0] : null;
+      var espnInjStat = latestInj ? (latestInj.status || null) : null;
+      var injNote     = latestInj ? (latestInj.shortComment || latestInj.longComment || null) : null;
+      var injStatus   = normaliseInjuryStatus(espnInjStat);
+      var playable    = isPlayable(injStatus);
+
       return {
-        id:       "espn-" + a.id,
-        name:     a.displayName || ((a.firstName || "") + " " + (a.lastName || "")).trim(),
-        team:     teamAbbr,
-        teamFull: teamName,
-        position: (a.position && a.position.abbreviation) || "G",
-        jersey:   a.jersey || "",
-        cost:     1, // overwritten by assignCosts
+        id:           "espn-" + a.id,
+        name:         a.displayName || ((a.firstName || "") + " " + (a.lastName || "")).trim(),
+        team:         teamAbbr,
+        teamFull:     teamName,
+        position:     (a.position && a.position.abbreviation) || "G",
+        jersey:       a.jersey || "",
+        cost:         1, // overwritten by assignCosts
+        injuryStatus: injStatus,
+        injuryNote:   injNote || null,
+        isPlayable:   playable,
       };
     });
   } catch (e) {
-    console.warn("[ESPN] Roster parse error:", slug, e.message);
+    console.warn("[ESPN] Roster parse error:", e.message);
     return [];
   }
 }
@@ -307,21 +383,28 @@ async function generateFromESPN(today, tomorrow) {
 
       console.log("[ESPN] Fetching home roster:", g.homeTeam.abbr, "(id:", g.homeTeam.id + ")");
       var homePlayers = await espnRoster(g.homeTeam.id, g.homeTeam.abbr, g.homeTeam.name);
-      console.log("[ESPN]  ->", homePlayers.length, "players");
+      console.log("[ESPN]  ->", homePlayers.length, "raw players (" +
+        homePlayers.filter(function(p){return p.isPlayable;}).length + " playable, " +
+        homePlayers.filter(function(p){return !p.isPlayable;}).length + " out/inactive)");
 
       console.log("[ESPN] Fetching away roster:", g.awayTeam.abbr, "(id:", g.awayTeam.id + ")");
       var awayPlayers = await espnRoster(g.awayTeam.id, g.awayTeam.abbr, g.awayTeam.name);
-      console.log("[ESPN]  ->", awayPlayers.length, "players");
+      console.log("[ESPN]  ->", awayPlayers.length, "raw players (" +
+        awayPlayers.filter(function(p){return p.isPlayable;}).length + " playable, " +
+        awayPlayers.filter(function(p){return !p.isPlayable;}).length + " out/inactive)");
 
-      var homeWithCost = assignCosts(homePlayers);
-      var awayWithCost = assignCosts(awayPlayers);
-      var combined = pickPlayers(homeWithCost, MAX_PER_TEAM, MIN_PER_TEAM)
-                     .concat(pickPlayers(awayWithCost, MAX_PER_TEAM, MIN_PER_TEAM));
+      var homeFiltered = buildTeamPlayers(homePlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+      var awayFiltered = buildTeamPlayers(awayPlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+      var combined = homeFiltered.concat(awayFiltered);
 
-      if (combined.length >= 10) {
+      if (combined.length >= MIN_TOTAL) {
         playerMap[pid] = combined;
       } else {
-        console.warn("[ESPN] Not enough players for pool:", pid, "(got:", combined.length + ")");
+        console.warn("[ESPN] Not enough playable players for pool:", pid, "(got:", combined.length + ") — relaxing to include all");
+        // Last resort: use full roster with cost
+        var homeAll = assignCosts(homePlayers).slice(0, MAX_PER_TEAM);
+        var awayAll = assignCosts(awayPlayers).slice(0, MAX_PER_TEAM);
+        playerMap[pid] = homeAll.concat(awayAll);
       }
     }
   }
@@ -342,16 +425,32 @@ async function srGet(urlPath) {
   return JSON.parse(r.body);
 }
 
+/**
+ * Map Sportradar player to standard shape with injury status.
+ * SR injury_designations: "Out", "Questionable", "Probable", "Day-To-Day", "Inactive"
+ */
 function srMapPlayer(p, teamAbbr, teamFull) {
   var name = ((p.full_name || ((p.first_name || "") + " " + (p.last_name || "")).trim()) || "Unknown");
+  var espnInjStat = null;
+  if (p.injury_designations && p.injury_designations.length > 0) {
+    espnInjStat = p.injury_designations[0].designation || null;
+  } else if (p.status) {
+    // SR sometimes puts "Active" / "Inactive" in status field
+    if (p.status.toLowerCase() === "inactive") espnInjStat = "Inactive";
+  }
+  var injStatus = normaliseInjuryStatus(espnInjStat);
+  var playable  = isPlayable(injStatus);
   return {
-    id:       "sr-" + (p.id || p.sr_id || name.replace(/\s+/g, "-").toLowerCase()),
-    name:     name,
-    team:     teamAbbr,
-    teamFull: teamFull,
-    position: p.primary_position || p.position || "G",
-    jersey:   p.jersey_number || "",
-    cost:     1, // overwritten by assignCosts
+    id:           "sr-" + (p.id || p.sr_id || name.replace(/\s+/g, "-").toLowerCase()),
+    name:         name,
+    team:         teamAbbr,
+    teamFull:     teamFull,
+    position:     p.primary_position || p.position || "G",
+    jersey:       p.jersey_number || "",
+    cost:         1,
+    injuryStatus: injStatus,
+    injuryNote:   (p.injury_designations && p.injury_designations[0] && p.injury_designations[0].comment) || null,
+    isPlayable:   playable,
   };
 }
 
@@ -417,11 +516,10 @@ async function generateFromSportradar(today, tomorrow) {
         if (e.message.indexOf("429") !== -1) throw e;
       }
 
-      var homeWithCost = assignCosts(homePlayers);
-      var awayWithCost = assignCosts(awayPlayers);
-      var combined = pickPlayers(homeWithCost, MAX_PER_TEAM, MIN_PER_TEAM)
-                     .concat(pickPlayers(awayWithCost, MAX_PER_TEAM, MIN_PER_TEAM));
-      if (combined.length >= 10) playerMap[pid] = combined;
+      var homeFiltered = buildTeamPlayers(homePlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+      var awayFiltered = buildTeamPlayers(awayPlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+      var combined = homeFiltered.concat(awayFiltered);
+      if (combined.length >= MIN_TOTAL) playerMap[pid] = combined;
     }
   }
 
@@ -494,11 +592,16 @@ async function generateFromBDL(today, tomorrow) {
         console.log("[BDL+ESPN]  ->", awayPlayers.length, "players");
       }
 
-      var homeWithCost = assignCosts(homePlayers);
-      var awayWithCost = assignCosts(awayPlayers);
-      var combined = pickPlayers(homeWithCost, MAX_PER_TEAM, MIN_PER_TEAM)
-                     .concat(pickPlayers(awayWithCost, MAX_PER_TEAM, MIN_PER_TEAM));
-      if (combined.length >= 10) playerMap[pid] = combined;
+      var homeFiltered = buildTeamPlayers(homePlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+      var awayFiltered = buildTeamPlayers(awayPlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+      var combined = homeFiltered.concat(awayFiltered);
+      if (combined.length >= MIN_TOTAL) {
+        playerMap[pid] = combined;
+      } else {
+        var homeAll = assignCosts(homePlayers).slice(0, MAX_PER_TEAM);
+        var awayAll = assignCosts(awayPlayers).slice(0, MAX_PER_TEAM);
+        playerMap[pid] = homeAll.concat(awayAll);
+      }
     }
   }
 
@@ -513,11 +616,12 @@ async function main() {
   var tmrwUTC  = new Date(todayUTC.getTime() + 86400000);
 
   console.log("[gen] ============================================================");
-  console.log("[gen] SH Fantasy Snapshot Generator v2.1");
+  console.log("[gen] SH Fantasy Snapshot Generator v2.2");
   console.log("[gen] Started:", nowISO());
   console.log("[gen] Today (UTC):", dateStr(todayUTC), "| Tomorrow (UTC):", dateStr(tmrwUTC));
   console.log("[gen] Sportradar key:", SR_KEY ? "SET (" + SR_KEY.slice(0,8) + "...)" : "NOT SET");
   console.log("[gen] BallDontLie key:", BDL_KEY ? "SET (" + BDL_KEY.slice(0,8) + "...)" : "NOT SET");
+  console.log("[gen] Include inactive:", INCLUDE_INACTIVE ? "YES (--include-inactive)" : "NO (default)");
   console.log("[gen] ============================================================");
 
   var result = null;
@@ -543,7 +647,7 @@ async function main() {
 
   // ── Source 2: ESPN ────────────────────────────────────────────────────────
   if (!result) {
-    console.log("\n[gen] Trying Source 2: ESPN (free, current rosters)...");
+    console.log("\n[gen] Trying Source 2: ESPN (free, current rosters + injury status)...");
     try {
       result = await generateFromESPN(todayUTC, tmrwUTC);
       if (result && result.pools.length > 0) {
@@ -612,8 +716,11 @@ async function main() {
   console.log("[gen] Pools:", result.pools.length, "| Player files written:", writtenCount);
   console.log("[gen] Pool IDs:");
   result.pools.forEach(function(p) {
-    var cnt = (result.playerMap[p.id] || []).length;
-    console.log("[gen]   ", p.id, "|", p.title, "| players:", cnt);
+    var players = result.playerMap[p.id] || [];
+    var playableCount = players.filter(function(pl){return pl.isPlayable;}).length;
+    var outCount = players.filter(function(pl){return !pl.isPlayable;}).length;
+    console.log("[gen]   ", p.id, "|", p.title, "| players:", players.length,
+      "(playable:", playableCount + ", out/inactive:", outCount + ")");
   });
 
   // ── Quick smoke test ──────────────────────────────────────────────────────
@@ -630,7 +737,7 @@ async function main() {
       console.log("[gen] /api/players?poolId=" + firstPool.id + " would return:", pp.length, "players");
       console.log("[gen] First 5 players:");
       pp.slice(0, 5).forEach(function(p) {
-        console.log("[gen]   ", p.name, "(" + p.team + ", $" + p.cost + ", " + p.position + ")");
+        console.log("[gen]   ", p.name, "(" + p.team + ", $" + p.cost + ", " + p.position + ", status:" + p.injuryStatus + ", playable:" + p.isPlayable + ")");
       });
     }
   }
@@ -642,21 +749,20 @@ async function main() {
     var players = result.playerMap[pool.id] || [];
     players.forEach(function(p) {
       if (p.name === "Stephen Curry") {
-        console.log("[gen] Stephen Curry: team=" + p.team + " (expected: GSW) pool=" + pool.id);
-        if (p.team !== "GSW") console.warn("[gen] WARNING: Stephen Curry team mismatch! Got:", p.team);
+        console.log("[gen] Stephen Curry: team=" + p.team + " status=" + p.injuryStatus + " playable=" + p.isPlayable + " pool=" + pool.id);
         foundCurry = true;
       }
       if (p.name === "Anthony Davis") {
-        console.log("[gen] Anthony Davis: team=" + p.team + " pool=" + pool.id);
-        if (p.team === "LAL") console.warn("[gen] WARNING: Anthony Davis still showing LAL — check roster source");
+        console.log("[gen] Anthony Davis: team=" + p.team + " status=" + p.injuryStatus + " pool=" + pool.id);
+        if (p.team === "LAL") console.warn("[gen] WARNING: Anthony Davis still showing LAL");
         foundAD = true;
       }
       if (p.name === "Luka Doncic") {
-        console.log("[gen] Luka Doncic: team=" + p.team + " pool=" + pool.id);
+        console.log("[gen] Luka Doncic: team=" + p.team + " status=" + p.injuryStatus + " pool=" + pool.id);
         foundDoncic = true;
       }
       if (p.name === "LeBron James") {
-        console.log("[gen] LeBron James: team=" + p.team + " pool=" + pool.id);
+        console.log("[gen] LeBron James: team=" + p.team + " status=" + p.injuryStatus + " pool=" + pool.id);
       }
     });
   });

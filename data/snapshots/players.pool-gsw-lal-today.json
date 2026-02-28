@@ -6,34 +6,10 @@
     "teamFull": "Golden State Warriors",
     "position": "C",
     "jersey": "20",
-    "cost": 4
-  },
-  {
-    "id": "espn-3102531",
-    "name": "Kristaps Porzingis",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "C",
-    "jersey": "7",
-    "cost": 4
-  },
-  {
-    "id": "espn-6589",
-    "name": "Draymond Green",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "F",
-    "jersey": "23",
-    "cost": 3
-  },
-  {
-    "id": "espn-4997536",
-    "name": "Gui Santos",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "F",
-    "jersey": "15",
-    "cost": 3
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4593016",
@@ -42,34 +18,34 @@
     "teamFull": "Golden State Warriors",
     "position": "C",
     "jersey": "21",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
-    "id": "espn-4709138",
-    "name": "Brandin Podziemski",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "G",
-    "jersey": "2",
-    "cost": 2
-  },
-  {
-    "id": "espn-4066436",
-    "name": "De'Anthony Melton",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "G",
-    "jersey": "8",
-    "cost": 2
-  },
-  {
-    "id": "espn-6430",
-    "name": "Jimmy Butler III",
+    "id": "espn-6589",
+    "name": "Draymond Green",
     "team": "GSW",
     "teamFull": "Golden State Warriors",
     "position": "F",
-    "jersey": "10",
-    "cost": 2
+    "jersey": "23",
+    "cost": 3,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4997536",
+    "name": "Gui Santos",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "F",
+    "jersey": "15",
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4897449",
@@ -78,7 +54,58 @@
     "teamFull": "Golden State Warriors",
     "position": "F",
     "jersey": "33",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4709138",
+    "name": "Brandin Podziemski",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "G",
+    "jersey": "2",
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4066436",
+    "name": "De'Anthony Melton",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "G",
+    "jersey": "8",
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-3134903",
+    "name": "Gary Payton II",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "G",
+    "jersey": "0",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
+  },
+  {
+    "id": "espn-4432171",
+    "name": "Moses Moody",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "G",
+    "jersey": "4",
+    "cost": 1,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4278129",
@@ -87,7 +114,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "C",
     "jersey": "5",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4397077",
@@ -96,7 +126,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "C",
     "jersey": "11",
-    "cost": 4
+    "cost": 4,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-5060631",
@@ -105,7 +138,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "F",
     "jersey": "1",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4897943",
@@ -114,7 +150,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "F",
     "jersey": "4",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4431695",
@@ -123,7 +162,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "F",
     "jersey": "17",
-    "cost": 3
+    "cost": 3,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4592691",
@@ -132,7 +174,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "F",
     "jersey": "12",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-4278077",
@@ -141,7 +186,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "F",
     "jersey": "2",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-1966",
@@ -150,7 +198,10 @@
     "teamFull": "Los Angeles Lakers",
     "position": "F",
     "jersey": "23",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   },
   {
     "id": "espn-2960236",
@@ -159,6 +210,9 @@
     "teamFull": "Los Angeles Lakers",
     "position": "F",
     "jersey": "14",
-    "cost": 2
+    "cost": 2,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true
   }
 ]
