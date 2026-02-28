@@ -3,85 +3,134 @@
 /**
  * scripts/generateSnapshots.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Server-side snapshot generator — NEVER called by user traffic.
- * Calls Sportradar NBA API to fetch today+tomorrow scheduled games and
- * team rosters, then writes:
- *   data/snapshots/pools.snapshot.json
- *   data/snapshots/players.<poolId>.json  (one per game)
- *   data/snapshots/players.fallback.json  (all players combined)
+ * Generates today + tomorrow NBA pools + player snapshots.
+ *
+ * Priority:
+ *   1. Sportradar (if SPORTRADAR_API_KEY set and no 429)
+ *   2. BallDontLie free API (no key required) — automatic fallback
+ *   3. Keep existing snapshots unchanged (if both sources fail)
+ *
+ * Zero sqlite / better-sqlite3 / DB dependencies.
+ * Runtime (Cloud Run) NEVER calls this script — it only reads the output JSON.
  *
  * Usage:
+ *   node scripts/generateSnapshots.js
  *   SPORTRADAR_API_KEY=xxx node scripts/generateSnapshots.js
- *   or via admin endpoint: POST /api/admin/generate-snapshots
- *
- * Fallback policy:
- *   If Sportradar fails (quota / rate-limit / network), existing snapshot
- *   files are preserved and an error is logged. Runtime is NEVER broken.
- *   Zero sqlite / better-sqlite3 / DB dependencies.
- * ─────────────────────────────────────────────────────────────────────────────
  */
+
 const https = require("https");
-const http  = require("http");
 const fs    = require("fs");
 const path  = require("path");
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const API_KEY      = process.env.SPORTRADAR_API_KEY || "";
-const ACCESS_LEVEL = (process.env.SPORTRADAR_NBA_ACCESS_LEVEL || "trial").toLowerCase();
-const BASE_URL     = "https://api.sportradar.com/nba/" + ACCESS_LEVEL + "/v8/en";
-const SNAP_DIR     = path.join(__dirname, "..", "data", "snapshots");
-const LOCK_OFFSET_MS = 10 * 60 * 1000; // lock 10 min before tip-off
-const MAX_POOLS    = 4;  // max pools to generate (today + tomorrow combined)
-const MAX_PER_TEAM = 9;  // max players to keep per team
+const SNAP_DIR       = path.join(__dirname, "..", "data", "snapshots");
+const SR_KEY         = process.env.SPORTRADAR_API_KEY || "";
+const SR_LEVEL       = process.env.SPORTRADAR_NBA_ACCESS_LEVEL || "trial";
+const SR_BASE        = `https://api.sportradar.com/nba/${SR_LEVEL}/v8/en`;
+const BDL_BASE       = "https://api.balldontlie.io/v1";
+const BDL_KEY        = process.env.BALLDONTLIE_API_KEY || "";
+const THROTTLE_MS    = 1200;   // 1.2 s between requests
+const MAX_PER_TEAM   = 9;      // max players to keep per team
+const ROSTER_SIZE    = 5;
+const SALARY_CAP     = 10;
 
-// ── Cost tiers ────────────────────────────────────────────────────────────────
-// Tier 4 ($4): franchise stars
+// ── Cost tier lookup (by last name or full name) ──────────────────────────────
 const TIER4 = new Set([
-  "lebron james","stephen curry","kevin durant","giannis antetokounmpo",
-  "luka doncic","nikola jokic","joel embiid","jayson tatum","damian lillard",
-  "devin booker","trae young","ja morant","zion williamson","anthony davis",
-  "kawhi leonard","shai gilgeous-alexander","victor wembanyama",
-  "cade cunningham","jalen brunson","anthony edwards","jaylen brown",
+  "LeBron James","Anthony Davis","Stephen Curry","Kevin Durant","Giannis Antetokounmpo",
+  "Nikola Jokic","Luka Doncic","Joel Embiid","Jayson Tatum","Damian Lillard",
+  "Shai Gilgeous-Alexander","Devin Booker","Trae Young","Donovan Mitchell",
+  "Kawhi Leonard","Paul George","Jimmy Butler","Bam Adebayo","Tyrese Haliburton",
+  "Ja Morant","Zion Williamson","Anthony Edwards","Cade Cunningham","Evan Mobley",
+  "Scottie Barnes","Franz Wagner","Lauri Markkanen","Darius Garland","Jalen Brunson",
+  "Karl-Anthony Towns","Rudy Gobert","De\'Aaron Fox","Khris Middleton","Bradley Beal",
+  "Kyrie Irving","Klay Thompson","Draymond Green","Jaylen Brown","Marcus Smart",
 ]);
-// Tier 3 ($3): all-stars / near-stars
 const TIER3 = new Set([
-  "paul george","jimmy butler","bam adebayo","donovan mitchell",
-  "tyrese haliburton","pascal siakam","darius garland","lauri markkanen",
-  "julius randle","karl-anthony towns","rudy gobert","de'aaron fox",
-  "brandon ingram","zach lavine","kyrie irving","james harden",
-  "klay thompson","draymond green","andrew wiggins","austin reaves",
-  "d'angelo russell","mikal bridges","jalen green","scottie barnes",
-  "evan mobley","jarrett allen","desmond bane","jaren jackson jr.",
-  "alperen sengun","max christie","rui hachimura","cam thomas",
+  "Austin Reaves","D\'Angelo Russell","Rui Hachimura","Lonnie Walker","Max Christie",
+  "Jalen Williams","Luguentz Dort","Josh Giddey","Aaron Wiggins","Kenrich Williams",
+  "Mikal Bridges","OG Anunoby","Julius Randle","Immanuel Quickley","RJ Barrett",
+  "Tobias Harris","Tyrese Maxey","De\'Anthony Melton","Kelly Oubre","Nicolas Batum",
+  "Andrew Wiggins","Jonathan Kuminga","Moses Moody","Gary Payton II","Kevon Looney",
+  "Derrick White","Al Horford","Robert Williams","Grant Williams","Sam Hauser",
+  "Tyler Herro","Duncan Robinson","Caleb Martin","Kyle Lowry","Udonis Haslem",
+  "Jaren Jackson Jr.","Desmond Bane","Luke Kennard","Brandon Clarke","Steven Adams",
 ]);
-// Tier 2 ($2): rotation starters
 const TIER2 = new Set([
-  "jonathan kuminga","moses moody","kevon looney","gary payton ii",
-  "donte divincenzo","kyle anderson","brandin podziemski","pat spencer",
-  "jarred vanderbilt","taurean prince","jaxson hayes","naz reid",
-  "monte morris","shake milton","tobias harris","kelly oubre jr.",
-  "nic claxton","cam johnson","royce o'neale","dorian finney-smith",
-  "spencer dinwiddie","seth curry","tim hardaway jr.","pat connaughton",
-  "khris middleton","brook lopez","bobby portis","malik beasley",
+  "Taurean Prince","Jarred Vanderbilt","Wenyen Gabriel","Damian Jones","Jaxson Hayes",
+  "Hamidou Diallo","Tre Mann","Isaiah Joe","Aleksej Pokusevski","Lindy Waters",
+  "Obi Toppin","Quentin Grimes","Miles McBride","Jericho Sims","Evan Fournier",
+  "Shake Milton","Furkan Korkmaz","Paul Reed","Montrezl Harrell","Matisse Thybulle",
+  "Nemanja Bjelica","Damion Lee","Andre Iguodala","James Wiseman","Patrick Baldwin",
+  "Payton Pritchard","Luke Kornet","Brodric Thomas","Nik Stauskas","Jabari Parker",
+  "Udoka Azubuike","Killian Tillie","Svi Mykhailiuk","Gabe Vincent","Omer Yurtseven",
+  "Nikola Jovic","Jamal Cain","Orlando Robinson","KZ Okpala","Dru Smith",
 ]);
-// All others default to Tier 1 ($1)
+
+function costForPlayer(name) {
+  if (TIER4.has(name)) return 4;
+  if (TIER3.has(name)) return 3;
+  if (TIER2.has(name)) return 2;
+  return 1;
+}
+
+function pickPlayers(players, max) {
+  return players
+    .sort(function(a, b) { return b.cost - a.cost; })
+    .slice(0, max);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function fetchJSON(url) {
+function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+function nowISO() { return new Date().toISOString(); }
+
+function dateStr(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, "0");
+  var day = String(d.getDate()).padStart(2, "0");
+  return y + "/" + m + "/" + day;
+}
+
+function poolId(homeAbbr, awayAbbr, dateTag) {
+  return "pool-" + homeAbbr.toLowerCase() + "-" + awayAbbr.toLowerCase() + "-" + dateTag;
+}
+
+function safeWrite(filePath, data) {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+    console.log("[gen] Wrote:", filePath);
+    return true;
+  } catch (e) {
+    console.error("[gen] Failed to write", filePath, e.message);
+    return false;
+  }
+}
+
+function fileExists(p) {
+  try { fs.accessSync(p); return true; } catch (_) { return false; }
+}
+
+// ── HTTP fetch ────────────────────────────────────────────────────────────────
+function fetchJSON(url, headers) {
   return new Promise(function(resolve, reject) {
-    var mod = url.startsWith("https") ? https : http;
-    var req = mod.get(url, { headers: { "Accept": "application/json" } }, function(res) {
+    var opts = { headers: Object.assign({ "Accept": "application/json" }, headers || {}) };
+    var req = https.get(url, opts, function(res) {
       var body = "";
       res.on("data", function(c) { body += c; });
       res.on("end", function() {
         if (res.statusCode === 429) {
-          return reject(Object.assign(new Error("RATE_LIMITED"), { code: 429 }));
+          var err = new Error("RATE_LIMITED");
+          err.statusCode = 429;
+          return reject(err);
         }
-        if (res.statusCode !== 200) {
-          return reject(new Error("HTTP " + res.statusCode + " for " + url));
+        if (res.statusCode >= 400) {
+          var err2 = new Error("HTTP_" + res.statusCode);
+          err2.statusCode = res.statusCode;
+          return reject(err2);
         }
         try { resolve(JSON.parse(body)); }
-        catch (e) { reject(new Error("JSON parse error: " + e.message)); }
+        catch (e) { reject(new Error("JSON_PARSE_ERROR: " + e.message)); }
       });
     });
     req.on("error", reject);
@@ -89,268 +138,294 @@ function fetchJSON(url) {
   });
 }
 
-function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
-
-function writeJSON(fp, data) {
-  fs.mkdirSync(path.dirname(fp), { recursive: true });
-  fs.writeFileSync(fp, JSON.stringify(data, null, 2), "utf8");
-}
-
-/** Format Date as YYYY/MM/DD for Sportradar schedule endpoint */
-function dateStr(d) {
-  var y  = d.getUTCFullYear();
-  var m  = String(d.getUTCMonth() + 1).padStart(2, "0");
-  var dd = String(d.getUTCDate()).padStart(2, "0");
-  return y + "/" + m + "/" + dd;
-}
-
-/** Format Date as YYYYMMDD for pool IDs */
-function datePart(d) {
-  return d.getUTCFullYear() +
-    String(d.getUTCMonth() + 1).padStart(2, "0") +
-    String(d.getUTCDate()).padStart(2, "0");
-}
-
-function buildPoolId(homeAbbr, awayAbbr, dateObj) {
-  return "pool-" + homeAbbr.toLowerCase() + "-" + awayAbbr.toLowerCase() + "-" + datePart(dateObj);
-}
-
-/** Assign cost tier based on player name */
-function playerCost(name) {
-  var n = (name || "").toLowerCase().trim();
-  if (TIER4.has(n)) return 4;
-  if (TIER3.has(n)) return 3;
-  if (TIER2.has(n)) return 2;
-  return 1;
-}
-
-/** Normalise Sportradar position codes */
-function mapPosition(pos) {
-  var p = (pos || "").toUpperCase().trim();
-  if (p === "PG" || p === "G")  return "PG";
-  if (p === "SG")               return "SG";
-  if (p === "SF" || p === "F")  return "SF";
-  if (p === "PF")               return "PF";
-  if (p === "C")                return "C";
-  return pos || "F";
-}
-
-/**
- * Pick up to MAX_PER_TEAM players, prioritising higher-cost players.
- */
-function pickPlayers(players, max) {
-  if (players.length <= max) return players;
-  var sorted = players.slice().sort(function(a, b) {
-    if (b.cost !== a.cost) return b.cost - a.cost;
-    return a.name.localeCompare(b.name);
-  });
-  return sorted.slice(0, max);
-}
-
-// ── Sportradar API calls ───────────────────────────────────────────────────────
-async function fetchSchedule(dateObj) {
-  var ds  = dateStr(dateObj);
-  var url = BASE_URL + "/games/" + ds + "/schedule.json?api_key=" + API_KEY;
-  console.log("[generateSnapshots] Fetching schedule:", ds);
+// ── Sportradar source ─────────────────────────────────────────────────────────
+async function srFetchSchedule(dateStr) {
+  var url = SR_BASE + "/games/" + dateStr + "/schedule.json?api_key=" + SR_KEY;
+  console.log("[SR] Fetching schedule:", dateStr);
   return fetchJSON(url);
 }
 
-async function fetchRoster(teamId) {
-  var url = BASE_URL + "/teams/" + teamId + "/profile.json?api_key=" + API_KEY;
-  console.log("[generateSnapshots] Fetching roster for team:", teamId);
+async function srFetchRoster(teamId) {
+  var url = SR_BASE + "/teams/" + teamId + "/profile.json?api_key=" + SR_KEY;
+  console.log("[SR] Fetching roster:", teamId);
   return fetchJSON(url);
 }
 
-// ── Map Sportradar game → pool object ─────────────────────────────────────────
-function gameToPool(g, day, dateObj) {
-  var home     = g.home || {};
-  var away     = g.away || {};
-  var homeAbbr = (home.alias || home.abbr || "HOM").toUpperCase();
-  var awayAbbr = (away.alias || away.abbr || "AWY").toUpperCase();
-  var pid      = buildPoolId(homeAbbr, awayAbbr, dateObj);
-
-  var lockAtISO;
-  if (g.scheduled) {
-    lockAtISO = new Date(new Date(g.scheduled).getTime() - LOCK_OFFSET_MS).toISOString();
-  } else {
-    var hoursAhead = day === "today" ? 4 : 28;
-    lockAtISO = new Date(Date.now() + hoursAhead * 3600000).toISOString();
-  }
-
+function srMapPlayer(p, teamAbbr) {
+  var name = (p.full_name || ((p.first_name || "") + " " + (p.last_name || "")).trim());
   return {
-    id:         pid,
-    srGameId:   g.id || null,
-    label:      homeAbbr + " vs " + awayAbbr,
-    title:      (home.name || homeAbbr) + " vs " + (away.name || awayAbbr),
-    homeTeam:   { abbr: homeAbbr, name: home.name || homeAbbr, id: home.id || null },
-    awayTeam:   { abbr: awayAbbr, name: away.name || awayAbbr, id: away.id || null },
-    lockAt:     lockAtISO,
-    rosterSize: 5,
-    salaryCap:  10,
-    status:     "open",
-    day:        day,
-    gameDate:   dateStr(dateObj).replace(/\//g, "-"),
-  };
-}
-
-// ── Map Sportradar player → snapshot player ───────────────────────────────────
-function mapPlayer(p, teamAbbr, teamFull) {
-  var firstName = p.first_name || "";
-  var lastName  = p.last_name  || "";
-  var fullName  = (p.full_name || p.name || (firstName + " " + lastName)).trim();
-  var injStatus = null;
-  if (Array.isArray(p.injuries) && p.injuries.length > 0) {
-    injStatus = (p.injuries[0].status || "QUESTIONABLE").toUpperCase();
-  }
-  return {
-    id:           "sr-" + (p.id || fullName.replace(/\s+/g, "-").toLowerCase()),
-    name:         fullName,
+    id:           "sr-" + (p.id || p.sr_id || name.replace(/\s+/g, "-").toLowerCase()),
+    name:         name,
     team:         teamAbbr,
-    teamFull:     teamFull,
-    position:     mapPosition(p.primary_position || p.position || ""),
-    cost:         playerCost(fullName),
-    injuryStatus: injStatus,
+    teamFull:     "",
+    position:     p.primary_position || p.position || "F",
+    cost:         costForPlayer(name),
+    injuryStatus: (p.injuries && p.injuries.length > 0) ? (p.injuries[0].status || "QUESTIONABLE") : null,
   };
 }
 
-// ── Main generator ─────────────────────────────────────────────────────────────
-async function generate() {
-  if (!API_KEY) {
-    console.error("[generateSnapshots] SPORTRADAR_API_KEY not set — aborting (existing snapshots preserved)");
-    return;
-  }
+async function generateFromSportradar(today, tomorrow) {
+  if (!SR_KEY) { console.log("[SR] No API key — skipping Sportradar"); return null; }
 
-  var now      = new Date();
-  var tomorrow = new Date(now.getTime() + 24 * 3600000);
+  var allPools   = [];
+  var playerMap  = {};
+  var rateHit    = false;
 
-  // ── Step 1: Fetch schedules ────────────────────────────────────────────────
-  var allGames = [];
-  for (var dayInfo of [{ d: now, label: "today" }, { d: tomorrow, label: "tomorrow" }]) {
+  for (var i = 0; i < 2; i++) {
+    var d    = i === 0 ? today : tomorrow;
+    var tag  = i === 0 ? "today" : "tmrw";
+    var ds   = dateStr(d);
+    var sched;
     try {
-      var sched = await fetchSchedule(dayInfo.d);
-      var games = (sched.games || []).filter(function(g) {
-        // Only keep scheduled (not yet started) games
-        var st = (g.status || "").toLowerCase();
-        return st === "scheduled" || st === "created";
-      });
-      console.log("[generateSnapshots]", dayInfo.label, ":", games.length, "scheduled game(s)");
-      games.forEach(function(g) { g._day = dayInfo.label; g._dateObj = dayInfo.d; });
-      allGames = allGames.concat(games);
+      sched = await srFetchSchedule(ds);
+      await sleep(THROTTLE_MS);
     } catch (e) {
-      if (e.code === 429) {
-        console.error("[generateSnapshots] Rate limited fetching schedule for", dayInfo.label, "— skipping");
-      } else {
-        console.error("[generateSnapshots] Error fetching schedule for", dayInfo.label, ":", e.message);
-      }
+      console.warn("[SR] Schedule fetch failed (" + ds + "):", e.message);
+      if (e.statusCode === 429) rateHit = true;
+      continue;
     }
-    await sleep(1500); // respect rate limit between schedule calls
+
+    var games = (sched.games || []).filter(function(g) {
+      return g.status === "scheduled" || g.status === "created";
+    });
+    console.log("[SR] " + ds + ": " + games.length + " scheduled games");
+
+    for (var j = 0; j < games.length; j++) {
+      if (rateHit) break;
+      var g = games[j];
+      var homeAbbr = (g.home && (g.home.alias || g.home.abbr || g.home.market || "HOM")).toUpperCase();
+      var awayAbbr = (g.away && (g.away.alias || g.away.abbr || g.away.market || "AWY")).toUpperCase();
+      var homeName = (g.home && (g.home.name ? g.home.market + " " + g.home.name : g.home.alias)) || homeAbbr;
+      var awayName = (g.away && (g.away.name ? g.away.market + " " + g.away.name : g.away.alias)) || awayAbbr;
+      var pid = poolId(homeAbbr, awayAbbr, tag);
+
+      allPools.push({
+        id:        pid,
+        label:     homeAbbr + " vs " + awayAbbr,
+        title:     homeName + " vs " + awayName,
+        homeTeam:  { abbr: homeAbbr, name: homeName },
+        awayTeam:  { abbr: awayAbbr, name: awayName },
+        lockAt:    g.scheduled || new Date(d.getTime() + 23 * 3600000).toISOString(),
+        rosterSize: ROSTER_SIZE,
+        salaryCap:  SALARY_CAP,
+        status:    "open",
+        day:       tag,
+        source:    "sportradar",
+      });
+
+      // Fetch rosters
+      var homePlayers = [], awayPlayers = [];
+      try {
+        var homeProfile = await srFetchRoster(g.home.id);
+        await sleep(THROTTLE_MS);
+        homePlayers = (homeProfile.players || []).map(function(p) { return srMapPlayer(p, homeAbbr); });
+      } catch (e) {
+        console.warn("[SR] Home roster failed:", e.message);
+        if (e.statusCode === 429) rateHit = true;
+      }
+      try {
+        var awayProfile = await srFetchRoster(g.away.id);
+        await sleep(THROTTLE_MS);
+        awayPlayers = (awayProfile.players || []).map(function(p) { return srMapPlayer(p, awayAbbr); });
+      } catch (e) {
+        console.warn("[SR] Away roster failed:", e.message);
+        if (e.statusCode === 429) rateHit = true;
+      }
+
+      var combined = pickPlayers(homePlayers, MAX_PER_TEAM).concat(pickPlayers(awayPlayers, MAX_PER_TEAM));
+      if (combined.length >= 10) playerMap[pid] = combined;
+    }
   }
 
-  if (allGames.length === 0) {
-    console.warn("[generateSnapshots] No scheduled games found — existing snapshots preserved");
-    return;
+  if (allPools.length === 0) return null;
+  return { pools: allPools, playerMap: playerMap, source: "sportradar" };
+}
+
+// ── BallDontLie fallback source ───────────────────────────────────────────────
+// Free NBA API — no key required for basic endpoints (rate limit: 60 req/min)
+async function bdlFetchGames(dateISO) {
+  // dateISO: "2026-03-01"
+  var url = BDL_BASE + "/games?dates[]=" + dateISO + "&per_page=20";
+  var headers = BDL_KEY ? { "Authorization": BDL_KEY } : {};
+  console.log("[BDL] Fetching games:", dateISO);
+  return fetchJSON(url, headers);
+}
+
+async function bdlFetchRoster(teamId) {
+  var url = BDL_BASE + "/players?team_ids[]=" + teamId + "&per_page=30&active=true";
+  var headers = BDL_KEY ? { "Authorization": BDL_KEY } : {};
+  console.log("[BDL] Fetching roster for team:", teamId);
+  return fetchJSON(url, headers);
+}
+
+function bdlDateStr(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, "0");
+  var day = String(d.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
+
+function bdlMapPlayer(p, teamAbbr) {
+  var name = (p.first_name || "") + " " + (p.last_name || "");
+  name = name.trim();
+  return {
+    id:           "bdl-" + p.id,
+    name:         name,
+    team:         teamAbbr,
+    teamFull:     (p.team && p.team.full_name) || teamAbbr,
+    position:     p.position || "F",
+    cost:         costForPlayer(name),
+    injuryStatus: null,
+  };
+}
+
+async function generateFromBallDontLie(today, tomorrow) {
+  var allPools  = [];
+  var playerMap = {};
+
+  for (var i = 0; i < 2; i++) {
+    var d   = i === 0 ? today : tomorrow;
+    var tag = i === 0 ? "today" : "tmrw";
+    var ds  = bdlDateStr(d);
+    var resp;
+    try {
+      resp = await bdlFetchGames(ds);
+      await sleep(THROTTLE_MS);
+    } catch (e) {
+      console.warn("[BDL] Games fetch failed (" + ds + "):", e.message);
+      continue;
+    }
+
+    var games = resp.data || [];
+    console.log("[BDL] " + ds + ": " + games.length + " games");
+
+    for (var j = 0; j < games.length; j++) {
+      var g = games[j];
+      var homeAbbr = (g.home_team && g.home_team.abbreviation) || "HOM";
+      var awayAbbr = (g.visitor_team && g.visitor_team.abbreviation) || "AWY";
+      var homeName = (g.home_team && g.home_team.full_name) || homeAbbr;
+      var awayName = (g.visitor_team && g.visitor_team.full_name) || awayAbbr;
+      var pid = poolId(homeAbbr, awayAbbr, tag);
+
+      allPools.push({
+        id:        pid,
+        label:     homeAbbr + " vs " + awayAbbr,
+        title:     homeName + " vs " + awayName,
+        homeTeam:  { abbr: homeAbbr, name: homeName },
+        awayTeam:  { abbr: awayAbbr, name: awayName },
+        lockAt:    g.date || new Date(d.getTime() + 23 * 3600000).toISOString(),
+        rosterSize: ROSTER_SIZE,
+        salaryCap:  SALARY_CAP,
+        status:    "open",
+        day:       tag,
+        source:    "balldontlie",
+      });
+
+      // Fetch rosters
+      var homePlayers = [], awayPlayers = [];
+      try {
+        var homeResp = await bdlFetchRoster(g.home_team.id);
+        await sleep(THROTTLE_MS);
+        homePlayers = (homeResp.data || []).map(function(p) { return bdlMapPlayer(p, homeAbbr); });
+      } catch (e) {
+        console.warn("[BDL] Home roster failed:", e.message);
+      }
+      try {
+        var awayResp = await bdlFetchRoster(g.visitor_team.id);
+        await sleep(THROTTLE_MS);
+        awayPlayers = (awayResp.data || []).map(function(p) { return bdlMapPlayer(p, awayAbbr); });
+      } catch (e) {
+        console.warn("[BDL] Away roster failed:", e.message);
+      }
+
+      var combined = pickPlayers(homePlayers, MAX_PER_TEAM).concat(pickPlayers(awayPlayers, MAX_PER_TEAM));
+      if (combined.length >= 10) playerMap[pid] = combined;
+    }
   }
 
-  // Limit total pools
-  var gamesToProcess = allGames.slice(0, MAX_POOLS);
+  if (allPools.length === 0) return null;
+  return { pools: allPools, playerMap: playerMap, source: "balldontlie" };
+}
 
-  // ── Step 2: Build pool objects ─────────────────────────────────────────────
-  var pools = gamesToProcess.map(function(g) {
-    return gameToPool(g, g._day, g._dateObj);
+// ── Main ──────────────────────────────────────────────────────────────────────
+async function main() {
+  var now      = new Date();
+  var today    = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var tomorrow = new Date(today.getTime() + 86400000);
+
+  console.log("[gen] Starting snapshot generation:", nowISO());
+  console.log("[gen] Today:", dateStr(today), "| Tomorrow:", dateStr(tomorrow));
+  console.log("[gen] Sportradar key:", SR_KEY ? "SET" : "NOT SET");
+
+  var result = null;
+
+  // 1. Try Sportradar
+  try {
+    result = await generateFromSportradar(today, tomorrow);
+    if (result) console.log("[gen] Sportradar: got", result.pools.length, "pools");
+  } catch (e) {
+    console.warn("[gen] Sportradar failed:", e.message);
+  }
+
+  // 2. Fallback: BallDontLie
+  if (!result) {
+    console.log("[gen] Falling back to BallDontLie...");
+    try {
+      result = await generateFromBallDontLie(today, tomorrow);
+      if (result) console.log("[gen] BallDontLie: got", result.pools.length, "pools");
+    } catch (e) {
+      console.warn("[gen] BallDontLie failed:", e.message);
+    }
+  }
+
+  // 3. If both fail — keep existing snapshots
+  if (!result || result.pools.length === 0) {
+    console.warn("[gen] All sources failed — existing snapshots preserved (not overwritten)");
+    process.exit(0);
+  }
+
+  // ── Write pools.snapshot.json ──────────────────────────────────────────────
+  var poolsFile = path.join(SNAP_DIR, "pools.snapshot.json");
+  var poolsData = {
+    dataMode:    "SNAPSHOT",
+    source:      result.source,
+    generatedAt: nowISO(),
+    updatedAt:   nowISO(),
+    pools:       result.pools,
+  };
+  safeWrite(poolsFile, poolsData);
+
+  // ── Write players.<poolId>.json ────────────────────────────────────────────
+  result.pools.forEach(function(pool) {
+    var players = result.playerMap[pool.id];
+    if (!players || players.length === 0) {
+      console.warn("[gen] No players for pool:", pool.id, "— skipping player file");
+      return;
+    }
+    var pFile = path.join(SNAP_DIR, "players." + pool.id + ".json");
+    safeWrite(pFile, players);
   });
 
-  var now_iso = new Date().toISOString();
+  console.log("[gen] Done. Pools:", result.pools.length);
+  console.log("[gen] Pool IDs:", result.pools.map(function(p) { return p.id; }).join(", "));
 
-  // Write pools snapshot immediately (available even if roster fetch fails)
-  var poolsSnap = {
-    dataMode:    "SNAPSHOT",
-    generatedAt: now_iso,
-    updatedAt:   now_iso,
-    pools:       pools,
-  };
-  writeJSON(path.join(SNAP_DIR, "pools.snapshot.json"), poolsSnap);
-  console.log("[generateSnapshots] Wrote pools.snapshot.json with", pools.length, "pool(s)");
-
-  // ── Step 3: Fetch rosters for each pool ───────────────────────────────────
-  var allFallbackPlayers = [];
-  var rateHit = false;
-
-  for (var j = 0; j < pools.length; j++) {
-    if (rateHit) break;
-
-    var pool    = pools[j];
-    var players = [];
-
-    // Fetch home team roster
-    if (pool.homeTeam.id) {
-      try {
-        await sleep(1500);
-        var homeData    = await fetchRoster(pool.homeTeam.id);
-        var homePlayers = (homeData.players || homeData.roster || [])
-          .map(function(p) { return mapPlayer(p, pool.homeTeam.abbr, pool.homeTeam.name); })
-          .filter(function(p) { return p.name.length > 2; });
-        homePlayers = pickPlayers(homePlayers, MAX_PER_TEAM);
-        players = players.concat(homePlayers);
-        console.log("[generateSnapshots] Home", pool.homeTeam.abbr, ":", homePlayers.length, "players (kept)");
-      } catch (e) {
-        if (e.code === 429) {
-          console.error("[generateSnapshots] Rate limited on home roster for", pool.homeTeam.abbr, "— stopping roster fetch");
-          rateHit = true;
-        } else {
-          console.error("[generateSnapshots] Error fetching home roster for", pool.homeTeam.abbr, ":", e.message);
-        }
-      }
-    }
-
-    if (rateHit) break;
-
-    // Fetch away team roster
-    if (pool.awayTeam.id) {
-      try {
-        await sleep(1500);
-        var awayData    = await fetchRoster(pool.awayTeam.id);
-        var awayPlayers = (awayData.players || awayData.roster || [])
-          .map(function(p) { return mapPlayer(p, pool.awayTeam.abbr, pool.awayTeam.name); })
-          .filter(function(p) { return p.name.length > 2; });
-        awayPlayers = pickPlayers(awayPlayers, MAX_PER_TEAM);
-        players = players.concat(awayPlayers);
-        console.log("[generateSnapshots] Away", pool.awayTeam.abbr, ":", awayPlayers.length, "players (kept)");
-      } catch (e) {
-        if (e.code === 429) {
-          console.error("[generateSnapshots] Rate limited on away roster for", pool.awayTeam.abbr, "— stopping roster fetch");
-          rateHit = true;
-        } else {
-          console.error("[generateSnapshots] Error fetching away roster for", pool.awayTeam.abbr, ":", e.message);
-        }
-      }
-    }
-
-    if (players.length > 0) {
-      writeJSON(path.join(SNAP_DIR, "players." + pool.id + ".json"), players);
-      console.log("[generateSnapshots] Wrote players." + pool.id + ".json with", players.length, "players");
-      allFallbackPlayers = allFallbackPlayers.concat(players);
-    } else {
-      var existingPath = path.join(SNAP_DIR, "players." + pool.id + ".json");
-      if (!fs.existsSync(existingPath)) {
-        console.warn("[generateSnapshots] No players for pool", pool.id, "and no existing file — pool will use fallback");
-      } else {
-        console.log("[generateSnapshots] Kept existing players file for pool", pool.id);
-      }
+  // ── Quick smoke test ───────────────────────────────────────────────────────
+  console.log("\n[gen] === Quick Smoke Test ===");
+  var poolsCheck = JSON.parse(fs.readFileSync(poolsFile, "utf8"));
+  console.log("[gen] /api/pools would return:", poolsCheck.pools.length, "pools");
+  if (poolsCheck.pools.length > 0) {
+    var firstPool = poolsCheck.pools[0];
+    console.log("[gen] First pool:", firstPool.id, "|", firstPool.title);
+    var pFile2 = path.join(SNAP_DIR, "players." + firstPool.id + ".json");
+    if (fileExists(pFile2)) {
+      var pp = JSON.parse(fs.readFileSync(pFile2, "utf8"));
+      console.log("[gen] /api/players?poolId=" + firstPool.id + " would return:", pp.length, "players");
+      console.log("[gen] First 3 players:", pp.slice(0, 3).map(function(p) { return p.name + " (" + p.team + ", $" + p.cost + ")"; }).join(", "));
     }
   }
-
-  // ── Step 4: Write combined fallback ───────────────────────────────────────
-  if (allFallbackPlayers.length > 0) {
-    writeJSON(path.join(SNAP_DIR, "players.fallback.json"), allFallbackPlayers);
-    console.log("[generateSnapshots] Wrote players.fallback.json with", allFallbackPlayers.length, "players total");
-  }
-
-  console.log("[generateSnapshots] Done. Generated", pools.length, "pool(s).");
 }
 
-// ── Run ────────────────────────────────────────────────────────────────────────
-generate().catch(function(e) {
-  console.error("[generateSnapshots] Fatal error:", e.message);
-  // Do NOT exit(1) — keep existing snapshot files intact
-  process.exit(0);
+main().catch(function(e) {
+  console.error("[gen] Fatal:", e.message || e);
+  process.exit(1);
 });

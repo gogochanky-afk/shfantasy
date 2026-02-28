@@ -20,10 +20,12 @@ app.use(express.urlencoded({ extended: true }));
 // ── Health checks ─────────────────────────────────────────────────────────────
 function healthHandler(req, res) {
   res.status(200).json({
-    ok: true,
-    service: "shfantasy",
-    dataMode: DATA_MODE,
-    ts: new Date().toISOString()
+    ok:        true,
+    service:   "shfantasy",
+    dataMode:  DATA_MODE,
+    source:    "snapshot",
+    updatedAt: new Date().toISOString(),
+    ts:        new Date().toISOString()
   });
 }
 app.get("/healthz",     healthHandler);
