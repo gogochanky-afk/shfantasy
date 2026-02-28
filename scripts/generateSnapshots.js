@@ -1,31 +1,34 @@
 #!/usr/bin/env node
 "use strict";
 /**
- * scripts/generateSnapshots.js  v2.2
+ * scripts/generateSnapshots.js  v2.3
  * ─────────────────────────────────────────────────────────────────────────────
- * Phase-1 additions over v2.1:
- *   - Each player now carries: injuryStatus, injuryNote, isPlayable
- *   - injuryStatus: "active" | "questionable" | "out" | "inactive" | "unknown"
- *   - isPlayable:   true for active/questionable/unknown; false for out/inactive
- *   - Snapshot default: only isPlayable=true players written to JSON
- *     (out/inactive excluded from snapshot; use --include-inactive flag to keep all)
- *   - Rotation limit: top MAX_PER_TEAM (9) per team after status filter
- *   - Fallback safety: if filtered list < MIN_TOTAL (14), relax by including
- *     "unknown" first, then "questionable", never "out"/"inactive"
+ * Phase 2C additions over v2.2 (Salary 2A):
+ *   - valueScore per player: depth/role proxy + position weight
+ *     (ESPN roster order ≈ depth chart; first 5 per team = starters)
+ *   - Tier assignment (pool-wide, deterministic):
+ *       top 15%  → cost 4
+ *       next 25% → cost 3
+ *       next 35% → cost 2
+ *       rest     → cost 1
+ *   - Per-team cap enforcement:
+ *       max 2 cost=4 per team; max 4 cost>=3 per team
+ *       excess pushed down by 1
+ *   - Each player JSON carries: valueScore (for transparency)
+ *   - Pool snapshot carries: playerCount, outCount (for UI badges)
  *
- * Source priority (unchanged):
+ * Source priority (unchanged from v2.2):
  *   1. Sportradar (if SPORTRADAR_API_KEY set)
- *   2. ESPN public API (no key required, always current rosters + injury status)
+ *   2. ESPN public API (no key required)
  *   3. BallDontLie schedule + ESPN rosters
- *   4. Keep existing snapshots unchanged
+ *   4. Preserve existing snapshots
  *
- * Throttling (unchanged):
- *   Serial requests + 1200ms gap; 429 → exponential backoff (2s→20s), max 5 retries
+ * Throttling: serial + 1200ms gap; 429 → backoff (2s→4s→8s→16s→20s), max 5 retries
  *
  * Usage:
  *   node scripts/generateSnapshots.js
  *   SPORTRADAR_API_KEY=xxx node scripts/generateSnapshots.js
- *   node scripts/generateSnapshots.js --include-inactive   (write all players)
+ *   node scripts/generateSnapshots.js --include-inactive
  */
 
 var https = require("https");
@@ -45,6 +48,16 @@ var MAX_PER_TEAM   = 9;   // rotation limit per team
 var MIN_PER_TEAM   = 7;   // minimum per team before relaxing
 var MIN_TOTAL      = 14;  // minimum total players per pool
 
+// Salary 2A tier thresholds (applied pool-wide across both teams)
+var TIER4_PCT = 0.15;  // top 15%  → cost 4
+var TIER3_PCT = 0.40;  // top 40%  → cost 3 (15%+25%)
+var TIER2_PCT = 0.75;  // top 75%  → cost 2 (15%+25%+35%)
+// rest → cost 1
+
+// Per-team salary cap constraints
+var MAX_COST4_PER_TEAM = 2;  // max 2 players with cost=4 per team
+var MAX_COST3UP_PER_TEAM = 4; // max 4 players with cost>=3 per team
+
 // CLI flag: --include-inactive writes all players (for debugging)
 var INCLUDE_INACTIVE = process.argv.indexOf("--include-inactive") !== -1;
 
@@ -58,7 +71,7 @@ var ESPN_ABBR_FIX = {
   "WSH":  "WAS",
 };
 
-// ESPN team id → slug (unused but kept for reference)
+// ESPN team id → slug (kept for reference)
 var ESPN_SLUG = {
   "1":"atlanta-hawks","2":"boston-celtics","17":"brooklyn-nets","30":"charlotte-hornets",
   "4":"chicago-bulls","5":"cleveland-cavaliers","6":"dallas-mavericks","7":"denver-nuggets",
@@ -70,7 +83,6 @@ var ESPN_SLUG = {
   "23":"sacramento-kings","24":"san-antonio-spurs","28":"toronto-raptors",
   "26":"utah-jazz","27":"washington-wizards",
 };
-
 // Standard abbr → ESPN team id
 var ESPN_ID_BY_ABBR = {
   "ATL":"1","BOS":"2","BKN":"17","CHA":"30","CHI":"4","CLE":"5",
@@ -79,26 +91,21 @@ var ESPN_ID_BY_ABBR = {
   "NOP":"3","NYK":"18","OKC":"25","ORL":"19","PHI":"20","PHX":"21",
   "POR":"22","SAC":"23","SAS":"24","TOR":"28","UTA":"26","WAS":"27",
 };
-
 // ── Paths ─────────────────────────────────────────────────────────────────────
 var SNAP_DIR = path.join(__dirname, "..", "data", "snapshots");
 if (!fs.existsSync(SNAP_DIR)) fs.mkdirSync(SNAP_DIR, { recursive: true });
-
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function nowISO() { return new Date().toISOString(); }
 function dateStr(d) { return d.toISOString().slice(0, 10); }
 function espnDateStr(d) { return d.toISOString().slice(0, 10).replace(/-/g, ""); }
 function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 function fileExists(p) { try { return fs.existsSync(p); } catch (_) { return false; } }
-
 function poolId(homeAbbr, awayAbbr, tag) {
   return "pool-" + homeAbbr.toLowerCase() + "-" + awayAbbr.toLowerCase() + "-" + tag;
 }
-
 function normAbbr(abbr) {
   return ESPN_ABBR_FIX[abbr] || abbr;
 }
-
 /** Write JSON safely: write to .tmp then rename (atomic) */
 function safeWrite(filePath, data) {
   var tmp = filePath + ".tmp";
@@ -111,23 +118,18 @@ function safeWrite(filePath, data) {
     try { fs.unlinkSync(tmp); } catch (_) {}
   }
 }
-
 // ── Throttled HTTP GET with exponential backoff on 429 ───────────────────────
 var _lastRequestTime = 0;
-
 async function fetchWithRetry(url, extraHeaders) {
   extraHeaders = extraHeaders || {};
   var attempt = 0;
   var backoff  = 2000;
-
   while (attempt <= MAX_RETRIES) {
     var now  = Date.now();
     var wait = THROTTLE_MS - (now - _lastRequestTime);
     if (wait > 0) await sleep(wait);
     _lastRequestTime = Date.now();
-
     var result = await _httpGet(url, extraHeaders);
-
     if (result.status === 429) {
       attempt++;
       if (attempt > MAX_RETRIES) {
@@ -139,17 +141,15 @@ async function fetchWithRetry(url, extraHeaders) {
       backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
       continue;
     }
-
     return result;
   }
   return { status: 0, body: "" };
 }
-
 function _httpGet(url, extraHeaders) {
   return new Promise(function(resolve) {
     var opts = new URL(url);
     var headers = Object.assign({
-      "User-Agent": "SHFantasy-SnapshotGen/2.2 (compatible)",
+      "User-Agent": "SHFantasy-SnapshotGen/2.3 (compatible)",
       "Accept":     "application/json",
     }, extraHeaders);
     https.get({
@@ -165,172 +165,277 @@ function _httpGet(url, extraHeaders) {
     });
   });
 }
-
 // ── Player Status Model ───────────────────────────────────────────────────────
 /**
  * Normalise ESPN injury status string to our standard enum:
  *   "active" | "questionable" | "out" | "inactive" | "unknown"
- *
- * ESPN injuries[0].status values observed:
- *   null / undefined  → active
- *   "Out"             → out
- *   "Day-To-Day"      → questionable
- *   "Questionable"    → questionable
- *   "Probable"        → questionable (treat as likely active)
- *   "Inactive"        → inactive
- *   "Suspended"       → inactive
- *   anything else     → unknown
  */
 function normaliseInjuryStatus(espnInjuryStatus) {
   if (!espnInjuryStatus) return "active";
   var s = String(espnInjuryStatus).toLowerCase().trim();
-  if (s === "out")                          return "out";
+  if (s === "out")                           return "out";
   if (s === "inactive" || s === "suspended") return "inactive";
   if (s === "day-to-day" || s === "questionable") return "questionable";
-  if (s === "probable")                     return "questionable";
+  if (s === "probable")                      return "questionable";
   return "unknown";
 }
-
 function isPlayable(injuryStatus) {
   return injuryStatus !== "out" && injuryStatus !== "inactive";
 }
 
-// ── Cost tier assignment ───────────────────────────────────────────────────────
+// ── Salary 2A: valueScore + tier assignment ───────────────────────────────────
+/**
+ * Position weight: C > PF/SF > PG/SG > G/F
+ * This is the base for valueScore when stats are unavailable.
+ */
 function posWeight(pos) {
   if (!pos) return 1;
   var p = pos.toUpperCase();
-  if (p === "C")                          return 4;
-  if (p === "PF" || p === "SF")           return 3;
-  if (p === "PG" || p === "SG")           return 2;
-  if (p.indexOf("C") !== -1)              return 3;
-  if (p.indexOf("F") !== -1)              return 2;
+  if (p === "C")                return 4;
+  if (p === "PF" || p === "SF") return 3;
+  if (p === "PG" || p === "SG") return 2;
+  if (p.indexOf("C") !== -1)    return 3;
+  if (p.indexOf("F") !== -1)    return 2;
   return 1;
 }
 
-function assignCosts(players) {
+/**
+ * Compute valueScore for a player.
+ * When stats are available (avgMin, avgPts, avgReb, avgAst), use them.
+ * Otherwise fall back to depth/role proxy:
+ *   - rosterIndex: position in ESPN roster array (0 = first listed = likely starter)
+ *   - rosterSize:  total players on team roster
+ *   - posWeight:   position weight
+ *
+ * Formula (no stats):
+ *   depthScore = (1 - rosterIndex / rosterSize) * 10   → 0..10
+ *   rolebonus  = rosterIndex < 5 ? 3 : 0               → starter bonus
+ *   valueScore = depthScore + roleBonus + posWeight
+ *
+ * Formula (with stats):
+ *   valueScore = avgMin * 0.3 + avgPts * 0.4 + avgReb * 0.15 + avgAst * 0.15
+ *                + posWeight
+ */
+function computeValueScore(player, rosterIndex, rosterSize) {
+  var pw = posWeight(player.position);
+  // If stats are attached (future extension)
+  if (player.avgMin != null && player.avgPts != null) {
+    return (player.avgMin  || 0) * 0.3
+         + (player.avgPts  || 0) * 0.4
+         + (player.avgReb  || 0) * 0.15
+         + (player.avgAst  || 0) * 0.15
+         + pw;
+  }
+  // Depth proxy
+  var n = rosterSize > 0 ? rosterSize : 15;
+  var depthScore = (1 - rosterIndex / n) * 10;
+  var roleBonus  = rosterIndex < 5 ? 3 : 0;
+  return depthScore + roleBonus + pw;
+}
+
+/**
+ * Assign valueScore to each player in a team's roster.
+ * rosterOrder: the order the players appear in the source (ESPN depth order).
+ */
+function enrichWithValueScore(players) {
+  var n = players.length;
+  return players.map(function(p, i) {
+    var vs = computeValueScore(p, i, n);
+    return Object.assign({}, p, { valueScore: Math.round(vs * 100) / 100 });
+  });
+}
+
+/**
+ * Assign cost tiers pool-wide (across both teams combined).
+ * S3 tier rules:
+ *   top 15%  → cost 4
+ *   next 25% → cost 3  (cumulative 40%)
+ *   next 35% → cost 2  (cumulative 75%)
+ *   rest     → cost 1
+ *
+ * Then enforce per-team cap:
+ *   max 2 cost=4 per team; max 4 cost>=3 per team (excess → cost-1)
+ */
+function assignCostsByValueScore(players) {
+  if (!players || players.length === 0) return players;
+  var n = players.length;
+
+  // Sort by valueScore DESC for tier assignment
   var sorted = players.slice().sort(function(a, b) {
-    var wa = posWeight(a.position), wb = posWeight(b.position);
-    if (wb !== wa) return wb - wa;
+    var va = a.valueScore || 0, vb = b.valueScore || 0;
+    if (vb !== va) return vb - va;
     return (a.name || "").localeCompare(b.name || "");
   });
-  return sorted.map(function(p, i) {
-    var cost = i < 2 ? 4 : i < 5 ? 3 : i < 9 ? 2 : 1;
+
+  // Assign raw tiers
+  var t4 = Math.max(1, Math.round(n * TIER4_PCT));
+  var t3 = Math.max(1, Math.round(n * TIER3_PCT));
+  var t2 = Math.max(1, Math.round(n * TIER2_PCT));
+
+  var withRawCost = sorted.map(function(p, i) {
+    var cost;
+    if (i < t4)      cost = 4;
+    else if (i < t3) cost = 3;
+    else if (i < t2) cost = 2;
+    else             cost = 1;
     return Object.assign({}, p, { cost: cost });
+  });
+
+  // Enforce per-team cap: group by team
+  var byTeam = {};
+  withRawCost.forEach(function(p) {
+    if (!byTeam[p.team]) byTeam[p.team] = [];
+    byTeam[p.team].push(p);
+  });
+
+  // For each team, sort by cost DESC, then apply cap
+  Object.keys(byTeam).forEach(function(team) {
+    var teamPlayers = byTeam[team].sort(function(a, b) { return b.cost - a.cost; });
+    var count4 = 0, count3up = 0;
+    teamPlayers.forEach(function(p) {
+      if (p.cost === 4) {
+        count4++;
+        if (count4 > MAX_COST4_PER_TEAM) {
+          p.cost = 3;
+          count4--; // revert increment since we changed it
+          count4 = MAX_COST4_PER_TEAM; // cap at max
+        }
+      }
+      if (p.cost >= 3) {
+        count3up++;
+        if (count3up > MAX_COST3UP_PER_TEAM) {
+          p.cost = Math.max(1, p.cost - 1);
+          count3up--;
+          count3up = MAX_COST3UP_PER_TEAM;
+        }
+      }
+    });
+  });
+
+  // Restore original player order (preserve team grouping from buildTeamPlayers)
+  var costMap = {};
+  withRawCost.forEach(function(p) { costMap[p.id] = p.cost; });
+  return players.map(function(p) {
+    return Object.assign({}, p, { cost: costMap[p.id] || 1 });
   });
 }
 
 /**
  * Apply rotation limit + playable filter to one team's players.
- * Steps:
- *   1. Assign costs (position-based sort)
- *   2. Filter to isPlayable=true (exclude out/inactive)
- *   3. Keep top MAX_PER_TEAM by cost
- *   4. If result < MIN_PER_TEAM, relax by including "unknown" (already included),
- *      then "questionable" (already included), then "out" as last resort
- *      (but never "inactive")
+ * Enriches with valueScore BEFORE filtering (so depth order is preserved).
  */
 function buildTeamPlayers(rawPlayers, max, min) {
-  // Step 1: assign costs on full roster
-  var withCost = assignCosts(rawPlayers);
+  // Step 1: enrich with valueScore (uses roster order as depth proxy)
+  var withVS = enrichWithValueScore(rawPlayers);
 
   if (INCLUDE_INACTIVE) {
-    // Debug mode: return all players with cost
-    return withCost.slice(0, max);
+    return withVS.slice(0, max);
   }
-
   // Step 2: playable filter
-  var playable = withCost.filter(function(p) { return p.isPlayable; });
-
+  var playable = withVS.filter(function(p) { return p.isPlayable; });
   // Step 3: rotation limit
   var result = playable.length <= max ? playable : playable.slice(0, max);
-
-  // Step 4: relax if too few
+  // Step 4: relax if too few (add OUT as last resort)
   if (result.length < min) {
-    // Try adding "out" players to meet minimum (last resort)
-    var outPlayers = withCost.filter(function(p) {
-      return p.injuryStatus === "out";
-    });
+    var outPlayers = withVS.filter(function(p) { return p.injuryStatus === "out"; });
     var needed = min - result.length;
     if (outPlayers.length > 0 && needed > 0) {
-      console.warn("[gen] Relaxing filter for team — adding", Math.min(needed, outPlayers.length), "OUT players to meet minimum");
+      console.warn("[gen] Relaxing filter — adding", Math.min(needed, outPlayers.length), "OUT players");
       result = result.concat(outPlayers.slice(0, needed));
     }
   }
-
   return result;
 }
 
-// ── ESPN Source ───────────────────────────────────────────────────────────────
+/**
+ * Combine home + away players, assign pool-wide cost tiers, return final list.
+ * Also computes playerCount and outCount for pool metadata.
+ */
+function buildPoolPlayers(homePlayers, awayPlayers, homeFull, awayFull) {
+  var homeFiltered = buildTeamPlayers(homePlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+  var awayFiltered = buildTeamPlayers(awayPlayers, MAX_PER_TEAM, MIN_PER_TEAM);
+  var combined = homeFiltered.concat(awayFiltered);
 
+  if (combined.length < MIN_TOTAL) {
+    // Last resort: use full roster
+    console.warn("[gen] Not enough playable players (got:", combined.length + ") — using full roster");
+    var homeAll = enrichWithValueScore(homePlayers).slice(0, MAX_PER_TEAM);
+    var awayAll = enrichWithValueScore(awayPlayers).slice(0, MAX_PER_TEAM);
+    combined = homeAll.concat(awayAll);
+  }
+
+  // Assign costs pool-wide using Salary 2A
+  var withCosts = assignCostsByValueScore(combined);
+  return withCosts;
+}
+
+// ── ESPN Source ───────────────────────────────────────────────────────────────
 async function espnSchedule(dateYYYYMMDD) {
   var url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=" + dateYYYYMMDD;
   var r = await fetchWithRetry(url);
   if (r.status !== 200) {
-    console.warn("[ESPN] Schedule", dateYYYYMMDD, "returned HTTP", r.status);
+    console.warn("[ESPN] Schedule HTTP", r.status, "for", dateYYYYMMDD);
     return [];
   }
   try {
     var d = JSON.parse(r.body);
-    return (d.events || []).map(function(e) {
-      var comps       = e.competitions && e.competitions[0];
+    var events = d.events || [];
+    return events.map(function(ev) {
+      var comps = ev.competitions && ev.competitions[0];
       var competitors = (comps && comps.competitors) || [];
-      var home = competitors.find(function(t) { return t.homeAway === "home"; });
-      var away = competitors.find(function(t) { return t.homeAway === "away"; });
-      if (!home || !away) return null;
+      var home = competitors.find(function(c) { return c.homeAway === "home"; }) || competitors[0] || {};
+      var away = competitors.find(function(c) { return c.homeAway === "away"; }) || competitors[1] || {};
+      var homeAbbr = normAbbr((home.team && home.team.abbreviation) || "HOM");
+      var awayAbbr = normAbbr((away.team && away.team.abbreviation) || "AWY");
       return {
         homeTeam: {
-          id:   home.team.id,
-          abbr: normAbbr(home.team.abbreviation),
-          name: home.team.displayName,
+          id:   String((home.team && home.team.id) || ""),
+          abbr: homeAbbr,
+          name: (home.team && home.team.displayName) || homeAbbr,
         },
         awayTeam: {
-          id:   away.team.id,
-          abbr: normAbbr(away.team.abbreviation),
-          name: away.team.displayName,
+          id:   String((away.team && away.team.id) || ""),
+          abbr: awayAbbr,
+          name: (away.team && away.team.displayName) || awayAbbr,
         },
-        datetime: comps && comps.date,
+        datetime: (comps && comps.date) || null,
       };
-    }).filter(Boolean);
+    });
   } catch (e) {
     console.warn("[ESPN] Schedule parse error:", e.message);
     return [];
   }
 }
 
-/**
- * Fetch ESPN roster with injury status enrichment.
- * Returns players with: injuryStatus, injuryNote, isPlayable fields.
- */
-async function espnRoster(teamId, teamAbbr, teamName) {
+async function espnRoster(teamId, teamAbbr, teamFull) {
   var url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/" + teamId + "/roster";
   var r = await fetchWithRetry(url);
   if (r.status !== 200) {
-    console.warn("[ESPN] Roster team", teamId, "(" + teamAbbr + ") returned HTTP", r.status);
+    console.warn("[ESPN] Roster HTTP", r.status, "for team", teamId, teamAbbr);
     return [];
   }
   try {
     var d = JSON.parse(r.body);
     var athletes = d.athletes || [];
-    return athletes.map(function(a) {
-      // Extract injury info from ESPN
-      var injuries    = a.injuries || [];
-      var latestInj   = injuries.length > 0 ? injuries[0] : null;
-      var espnInjStat = latestInj ? (latestInj.status || null) : null;
-      var injNote     = latestInj ? (latestInj.shortComment || latestInj.longComment || null) : null;
-      var injStatus   = normaliseInjuryStatus(espnInjStat);
-      var playable    = isPlayable(injStatus);
-
+    return athletes.map(function(a, idx) {
+      var injRaw  = (a.injuries && a.injuries.length > 0) ? a.injuries[0].status : null;
+      var injNote = (a.injuries && a.injuries.length > 0) ? a.injuries[0].longComment : null;
+      var injStatus = normaliseInjuryStatus(injRaw);
+      var playable  = isPlayable(injStatus);
       return {
-        id:           "espn-" + a.id,
-        name:         a.displayName || ((a.firstName || "") + " " + (a.lastName || "")).trim(),
+        id:           "espn-" + (a.id || (teamAbbr + "-" + idx)),
+        name:         a.displayName || a.fullName || "Unknown",
         team:         teamAbbr,
-        teamFull:     teamName,
+        teamFull:     teamFull,
         position:     (a.position && a.position.abbreviation) || "G",
         jersey:       a.jersey || "",
-        cost:         1, // overwritten by assignCosts
+        cost:         1, // overwritten by assignCostsByValueScore
+        valueScore:   0, // overwritten by enrichWithValueScore
         injuryStatus: injStatus,
         injuryNote:   injNote || null,
         isPlayable:   playable,
+        // roster index preserved for depth proxy (idx = ESPN roster order)
+        _rosterIdx:   idx,
       };
     });
   } catch (e) {
@@ -343,43 +448,25 @@ async function generateFromESPN(today, tomorrow) {
   console.log("[ESPN] Fetching today schedule:", dateStr(today));
   var todayGames = await espnSchedule(espnDateStr(today));
   console.log("[ESPN] Today games:", todayGames.length);
-
   console.log("[ESPN] Fetching tomorrow schedule:", dateStr(tomorrow));
   var tmrwGames  = await espnSchedule(espnDateStr(tomorrow));
   console.log("[ESPN] Tomorrow games:", tmrwGames.length);
-
   if (todayGames.length === 0 && tmrwGames.length === 0) {
     console.warn("[ESPN] No games found for either day");
     return null;
   }
-
   var allPools  = [];
   var playerMap = {};
   var days = [
     { games: todayGames, tag: "today", date: today },
     { games: tmrwGames,  tag: "tmrw",  date: tomorrow },
   ];
-
   for (var di = 0; di < days.length; di++) {
     var day = days[di];
     for (var gi = 0; gi < day.games.length; gi++) {
       var g   = day.games[gi];
       var pid = poolId(g.homeTeam.abbr, g.awayTeam.abbr, day.tag);
       var lockAt = g.datetime || new Date(day.date.getTime() + 23 * 3600000).toISOString();
-
-      allPools.push({
-        id:        pid,
-        label:     g.homeTeam.abbr + " vs " + g.awayTeam.abbr,
-        title:     g.homeTeam.name + " vs " + g.awayTeam.name,
-        homeTeam:  g.homeTeam,
-        awayTeam:  g.awayTeam,
-        lockAt:    lockAt,
-        rosterSize: ROSTER_SIZE,
-        salaryCap:  SALARY_CAP,
-        status:    "open",
-        day:       day.tag,
-        source:    "espn",
-      });
 
       console.log("[ESPN] Fetching home roster:", g.homeTeam.abbr, "(id:", g.homeTeam.id + ")");
       var homePlayers = await espnRoster(g.homeTeam.id, g.homeTeam.abbr, g.homeTeam.name);
@@ -393,30 +480,34 @@ async function generateFromESPN(today, tomorrow) {
         awayPlayers.filter(function(p){return p.isPlayable;}).length + " playable, " +
         awayPlayers.filter(function(p){return !p.isPlayable;}).length + " out/inactive)");
 
-      var homeFiltered = buildTeamPlayers(homePlayers, MAX_PER_TEAM, MIN_PER_TEAM);
-      var awayFiltered = buildTeamPlayers(awayPlayers, MAX_PER_TEAM, MIN_PER_TEAM);
-      var combined = homeFiltered.concat(awayFiltered);
+      var poolPlayers = buildPoolPlayers(homePlayers, awayPlayers, g.homeTeam.name, g.awayTeam.name);
+      var outCount = (homePlayers.filter(function(p){return !p.isPlayable;}).length +
+                      awayPlayers.filter(function(p){return !p.isPlayable;}).length);
 
-      if (combined.length >= MIN_TOTAL) {
-        playerMap[pid] = combined;
-      } else {
-        console.warn("[ESPN] Not enough playable players for pool:", pid, "(got:", combined.length + ") — relaxing to include all");
-        // Last resort: use full roster with cost
-        var homeAll = assignCosts(homePlayers).slice(0, MAX_PER_TEAM);
-        var awayAll = assignCosts(awayPlayers).slice(0, MAX_PER_TEAM);
-        playerMap[pid] = homeAll.concat(awayAll);
-      }
+      allPools.push({
+        id:          pid,
+        label:       g.homeTeam.abbr + " vs " + g.awayTeam.abbr,
+        title:       g.homeTeam.name + " vs " + g.awayTeam.name,
+        homeTeam:    g.homeTeam,
+        awayTeam:    g.awayTeam,
+        lockAt:      lockAt,
+        rosterSize:  ROSTER_SIZE,
+        salaryCap:   SALARY_CAP,
+        status:      "open",
+        day:         day.tag,
+        source:      "espn",
+        playerCount: poolPlayers.length,
+        outCount:    outCount,
+      });
+      playerMap[pid] = poolPlayers;
     }
   }
-
   if (allPools.length === 0) return null;
   return { pools: allPools, playerMap: playerMap, source: "espn" };
 }
 
 // ── Sportradar Source ─────────────────────────────────────────────────────────
-
 var SR_BASE = "https://api.sportradar.com/nba/" + SR_LEVEL + "/v8/en";
-
 async function srGet(urlPath) {
   var url = SR_BASE + urlPath + "?api_key=" + SR_KEY;
   var r = await fetchWithRetry(url);
@@ -424,19 +515,13 @@ async function srGet(urlPath) {
   if (r.status !== 200) throw new Error("SR HTTP " + r.status + " for " + urlPath);
   return JSON.parse(r.body);
 }
-
-/**
- * Map Sportradar player to standard shape with injury status.
- * SR injury_designations: "Out", "Questionable", "Probable", "Day-To-Day", "Inactive"
- */
-function srMapPlayer(p, teamAbbr, teamFull) {
+function srMapPlayer(p, teamAbbr, teamFull, idx) {
   var name = ((p.full_name || ((p.first_name || "") + " " + (p.last_name || "")).trim()) || "Unknown");
   var espnInjStat = null;
   if (p.injury_designations && p.injury_designations.length > 0) {
     espnInjStat = p.injury_designations[0].designation || null;
-  } else if (p.status) {
-    // SR sometimes puts "Active" / "Inactive" in status field
-    if (p.status.toLowerCase() === "inactive") espnInjStat = "Inactive";
+  } else if (p.status && p.status.toLowerCase() === "inactive") {
+    espnInjStat = "Inactive";
   }
   var injStatus = normaliseInjuryStatus(espnInjStat);
   var playable  = isPlayable(injStatus);
@@ -448,87 +533,73 @@ function srMapPlayer(p, teamAbbr, teamFull) {
     position:     p.primary_position || p.position || "G",
     jersey:       p.jersey_number || "",
     cost:         1,
+    valueScore:   0,
     injuryStatus: injStatus,
-    injuryNote:   (p.injury_designations && p.injury_designations[0] && p.injury_designations[0].comment) || null,
+    injuryNote:   null,
     isPlayable:   playable,
+    _rosterIdx:   idx || 0,
   };
 }
-
 async function generateFromSportradar(today, tomorrow) {
-  if (!SR_KEY) throw new Error("SPORTRADAR_API_KEY not set");
-
+  var schedule = await srGet("/games/" + dateStr(today) + "/schedule.json");
+  var tmrwSched = await srGet("/games/" + dateStr(tomorrow) + "/schedule.json");
+  var allGames = [];
+  ((schedule.games || [])).forEach(function(g) { allGames.push({ g: g, tag: "today", date: today }); });
+  ((tmrwSched.games || [])).forEach(function(g) { allGames.push({ g: g, tag: "tmrw", date: tomorrow }); });
   var allPools  = [];
   var playerMap = {};
-  var days = [
-    { date: today,    tag: "today" },
-    { date: tomorrow, tag: "tmrw"  },
-  ];
-
-  for (var di = 0; di < days.length; di++) {
-    var day = days[di];
-    var ds  = dateStr(day.date).replace(/-/g, "/");
-    console.log("[SR] Fetching schedule:", ds);
-    var sched = await srGet("/games/" + ds + "/schedule.json");
-    var games = (sched.games || []).filter(function(g) {
-      return !g.status || g.status === "scheduled" || g.status === "created";
+  for (var i = 0; i < allGames.length; i++) {
+    var item = allGames[i];
+    var g    = item.g;
+    var homeAbbr = normAbbr((g.home && g.home.alias) || "HOM");
+    var awayAbbr = normAbbr((g.away && g.away.alias) || "AWY");
+    var homeName = (g.home && g.home.name) || homeAbbr;
+    var awayName = (g.away && g.away.name) || awayAbbr;
+    var homeId   = (g.home && g.home.id) || "";
+    var awayId   = (g.away && g.away.id) || "";
+    var pid = poolId(homeAbbr, awayAbbr, item.tag);
+    allPools.push({
+      id:        pid,
+      label:     homeAbbr + " vs " + awayAbbr,
+      title:     homeName + " vs " + awayName,
+      homeTeam:  { id: homeId, abbr: homeAbbr, name: homeName },
+      awayTeam:  { id: awayId, abbr: awayAbbr, name: awayName },
+      lockAt:    g.scheduled || new Date(item.date.getTime() + 23 * 3600000).toISOString(),
+      rosterSize: ROSTER_SIZE,
+      salaryCap:  SALARY_CAP,
+      status:    "open",
+      day:       item.tag,
+      source:    "sportradar",
     });
-    console.log("[SR] Games:", games.length);
-
-    for (var gi = 0; gi < games.length; gi++) {
-      var g = games[gi];
-      var homeAbbr = ((g.home && (g.home.alias || g.home.abbr)) || "HOM").toUpperCase();
-      var awayAbbr = ((g.away && (g.away.alias || g.away.abbr)) || "AWY").toUpperCase();
-      var homeName = (g.home && g.home.market ? g.home.market + " " + g.home.name : homeAbbr) || homeAbbr;
-      var awayName = (g.away && g.away.market ? g.away.market + " " + g.away.name : awayAbbr) || awayAbbr;
-      var homeId   = g.home && g.home.id;
-      var awayId   = g.away && g.away.id;
-      var pid      = poolId(homeAbbr, awayAbbr, day.tag);
-
-      allPools.push({
-        id:        pid,
-        label:     homeAbbr + " vs " + awayAbbr,
-        title:     homeName + " vs " + awayName,
-        homeTeam:  { id: homeId, abbr: homeAbbr, name: homeName },
-        awayTeam:  { id: awayId, abbr: awayAbbr, name: awayName },
-        lockAt:    g.scheduled || new Date(day.date.getTime() + 23 * 3600000).toISOString(),
-        rosterSize: ROSTER_SIZE,
-        salaryCap:  SALARY_CAP,
-        status:    "open",
-        day:       day.tag,
-        source:    "sportradar",
-      });
-
-      var homePlayers = [], awayPlayers = [];
-      try {
-        console.log("[SR] Fetching home roster:", homeAbbr);
-        var homeProfile = await srGet("/teams/" + homeId + "/profile.json");
-        homePlayers = (homeProfile.players || []).map(function(p) { return srMapPlayer(p, homeAbbr, homeName); });
-      } catch (e) {
-        console.warn("[SR] Home roster failed:", e.message);
-        if (e.message.indexOf("429") !== -1) throw e;
-      }
-      try {
-        console.log("[SR] Fetching away roster:", awayAbbr);
-        var awayProfile = await srGet("/teams/" + awayId + "/profile.json");
-        awayPlayers = (awayProfile.players || []).map(function(p) { return srMapPlayer(p, awayAbbr, awayName); });
-      } catch (e) {
-        console.warn("[SR] Away roster failed:", e.message);
-        if (e.message.indexOf("429") !== -1) throw e;
-      }
-
-      var homeFiltered = buildTeamPlayers(homePlayers, MAX_PER_TEAM, MIN_PER_TEAM);
-      var awayFiltered = buildTeamPlayers(awayPlayers, MAX_PER_TEAM, MIN_PER_TEAM);
-      var combined = homeFiltered.concat(awayFiltered);
-      if (combined.length >= MIN_TOTAL) playerMap[pid] = combined;
+    var homePlayers = [], awayPlayers = [];
+    try {
+      console.log("[SR] Fetching home roster:", homeAbbr);
+      var homeProfile = await srGet("/teams/" + homeId + "/profile.json");
+      homePlayers = (homeProfile.players || []).map(function(p, idx) { return srMapPlayer(p, homeAbbr, homeName, idx); });
+    } catch (e) {
+      console.warn("[SR] Home roster failed:", e.message);
+      if (e.message.indexOf("429") !== -1) throw e;
     }
+    try {
+      console.log("[SR] Fetching away roster:", awayAbbr);
+      var awayProfile = await srGet("/teams/" + awayId + "/profile.json");
+      awayPlayers = (awayProfile.players || []).map(function(p, idx) { return srMapPlayer(p, awayAbbr, awayName, idx); });
+    } catch (e) {
+      console.warn("[SR] Away roster failed:", e.message);
+      if (e.message.indexOf("429") !== -1) throw e;
+    }
+    var poolPlayers = buildPoolPlayers(homePlayers, awayPlayers, homeName, awayName);
+    var outCount = (homePlayers.filter(function(p){return !p.isPlayable;}).length +
+                    awayPlayers.filter(function(p){return !p.isPlayable;}).length);
+    allPools[allPools.length - 1].playerCount = poolPlayers.length;
+    allPools[allPools.length - 1].outCount    = outCount;
+    if (poolPlayers.length >= MIN_TOTAL) playerMap[pid] = poolPlayers;
   }
-
   if (allPools.length === 0) return null;
   return { pools: allPools, playerMap: playerMap, source: "sportradar" };
 }
 
 // ── BallDontLie schedule + ESPN rosters ──────────────────────────────────────
-
 async function bdlGet(urlPath) {
   var url = "https://api.balldontlie.io/v1" + urlPath;
   var headers = {};
@@ -539,7 +610,6 @@ async function bdlGet(urlPath) {
   if (r.status !== 200) throw new Error("BDL HTTP " + r.status + " for " + urlPath);
   return JSON.parse(r.body);
 }
-
 async function generateFromBDL(today, tomorrow) {
   var allPools  = [];
   var playerMap = {};
@@ -547,7 +617,6 @@ async function generateFromBDL(today, tomorrow) {
     { date: today,    tag: "today" },
     { date: tomorrow, tag: "tmrw"  },
   ];
-
   for (var di = 0; di < days.length; di++) {
     var day = days[di];
     var ds  = dateStr(day.date);
@@ -555,7 +624,6 @@ async function generateFromBDL(today, tomorrow) {
     var sched = await bdlGet("/games?dates[]=" + ds + "&per_page=20");
     var games = sched.data || [];
     console.log("[BDL] Games:", games.length);
-
     for (var gi = 0; gi < games.length; gi++) {
       var g        = games[gi];
       var homeAbbr = normAbbr((g.home_team && g.home_team.abbreviation) || "HOM");
@@ -565,95 +633,83 @@ async function generateFromBDL(today, tomorrow) {
       var homeEspnId = ESPN_ID_BY_ABBR[homeAbbr];
       var awayEspnId = ESPN_ID_BY_ABBR[awayAbbr];
       var pid = poolId(homeAbbr, awayAbbr, day.tag);
-
-      allPools.push({
-        id:        pid,
-        label:     homeAbbr + " vs " + awayAbbr,
-        title:     homeName + " vs " + awayName,
-        homeTeam:  { id: homeEspnId, abbr: homeAbbr, name: homeName },
-        awayTeam:  { id: awayEspnId, abbr: awayAbbr, name: awayName },
-        lockAt:    g.datetime || new Date(day.date.getTime() + 23 * 3600000).toISOString(),
-        rosterSize: ROSTER_SIZE,
-        salaryCap:  SALARY_CAP,
-        status:    "open",
-        day:       day.tag,
-        source:    "bdl+espn",
-      });
-
       var homePlayers = [], awayPlayers = [];
       if (homeEspnId) {
         console.log("[BDL+ESPN] Fetching home roster:", homeAbbr, "(ESPN id:", homeEspnId + ")");
         homePlayers = await espnRoster(homeEspnId, homeAbbr, homeName);
-        console.log("[BDL+ESPN]  ->", homePlayers.length, "players");
       }
       if (awayEspnId) {
         console.log("[BDL+ESPN] Fetching away roster:", awayAbbr, "(ESPN id:", awayEspnId + ")");
         awayPlayers = await espnRoster(awayEspnId, awayAbbr, awayName);
-        console.log("[BDL+ESPN]  ->", awayPlayers.length, "players");
       }
-
-      var homeFiltered = buildTeamPlayers(homePlayers, MAX_PER_TEAM, MIN_PER_TEAM);
-      var awayFiltered = buildTeamPlayers(awayPlayers, MAX_PER_TEAM, MIN_PER_TEAM);
-      var combined = homeFiltered.concat(awayFiltered);
-      if (combined.length >= MIN_TOTAL) {
-        playerMap[pid] = combined;
-      } else {
-        var homeAll = assignCosts(homePlayers).slice(0, MAX_PER_TEAM);
-        var awayAll = assignCosts(awayPlayers).slice(0, MAX_PER_TEAM);
-        playerMap[pid] = homeAll.concat(awayAll);
-      }
+      var poolPlayers = buildPoolPlayers(homePlayers, awayPlayers, homeName, awayName);
+      var outCount = (homePlayers.filter(function(p){return !p.isPlayable;}).length +
+                      awayPlayers.filter(function(p){return !p.isPlayable;}).length);
+      allPools.push({
+        id:          pid,
+        label:       homeAbbr + " vs " + awayAbbr,
+        title:       homeName + " vs " + awayName,
+        homeTeam:    { id: homeEspnId, abbr: homeAbbr, name: homeName },
+        awayTeam:    { id: awayEspnId, abbr: awayAbbr, name: awayName },
+        lockAt:      g.datetime || new Date(day.date.getTime() + 23 * 3600000).toISOString(),
+        rosterSize:  ROSTER_SIZE,
+        salaryCap:   SALARY_CAP,
+        status:      "open",
+        day:         day.tag,
+        source:      "bdl+espn",
+        playerCount: poolPlayers.length,
+        outCount:    outCount,
+      });
+      playerMap[pid] = poolPlayers;
     }
   }
-
   if (allPools.length === 0) return null;
   return { pools: allPools, playerMap: playerMap, source: "bdl+espn" };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  var now      = new Date();
-  var todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  console.log("[gen] SH Fantasy Snapshot Generator v2.3");
+  console.log("[gen] Include inactive:", INCLUDE_INACTIVE ? "YES (debug)" : "NO (default)");
+  console.log("[gen] Salary mode: 2A (valueScore + pool-wide tiers + per-team cap)");
+
+  var todayUTC = new Date();
+  todayUTC.setUTCHours(0, 0, 0, 0);
   var tmrwUTC  = new Date(todayUTC.getTime() + 86400000);
 
-  console.log("[gen] ============================================================");
-  console.log("[gen] SH Fantasy Snapshot Generator v2.2");
-  console.log("[gen] Started:", nowISO());
-  console.log("[gen] Today (UTC):", dateStr(todayUTC), "| Tomorrow (UTC):", dateStr(tmrwUTC));
-  console.log("[gen] Sportradar key:", SR_KEY ? "SET (" + SR_KEY.slice(0,8) + "...)" : "NOT SET");
-  console.log("[gen] BallDontLie key:", BDL_KEY ? "SET (" + BDL_KEY.slice(0,8) + "...)" : "NOT SET");
-  console.log("[gen] Include inactive:", INCLUDE_INACTIVE ? "YES (--include-inactive)" : "NO (default)");
-  console.log("[gen] ============================================================");
+  console.log("[gen] Today (UTC):", dateStr(todayUTC));
+  console.log("[gen] Tomorrow (UTC):", dateStr(tmrwUTC));
 
   var result = null;
 
   // ── Source 1: Sportradar ──────────────────────────────────────────────────
   if (SR_KEY) {
-    console.log("\n[gen] Trying Source 1: Sportradar...");
+    console.log("\n[gen] Trying Source 1: Sportradar (key present)...");
     try {
       result = await generateFromSportradar(todayUTC, tmrwUTC);
       if (result && result.pools.length > 0) {
         console.log("[gen] Sportradar: SUCCESS -", result.pools.length, "pools");
       } else {
-        console.warn("[gen] Sportradar: 0 pools, trying fallback");
+        console.warn("[gen] Sportradar: 0 pools");
         result = null;
       }
     } catch (e) {
-      console.warn("[gen] Sportradar FAILED:", e.message);
+      console.warn("[gen] Sportradar FAILED:", e.message, "→ falling back to ESPN");
       result = null;
     }
   } else {
-    console.log("[gen] Skipping Sportradar (no API key)");
+    console.log("[gen] Source 1: Sportradar skipped (no SPORTRADAR_API_KEY)");
   }
 
   // ── Source 2: ESPN ────────────────────────────────────────────────────────
   if (!result) {
-    console.log("\n[gen] Trying Source 2: ESPN (free, current rosters + injury status)...");
+    console.log("\n[gen] Trying Source 2: ESPN (no key required)...");
     try {
       result = await generateFromESPN(todayUTC, tmrwUTC);
       if (result && result.pools.length > 0) {
         console.log("[gen] ESPN: SUCCESS -", result.pools.length, "pools");
       } else {
-        console.warn("[gen] ESPN: 0 pools, trying fallback");
+        console.warn("[gen] ESPN: 0 pools");
         result = null;
       }
     } catch (e) {
@@ -662,7 +718,7 @@ async function main() {
     }
   }
 
-  // ── Source 3: BallDontLie schedule + ESPN rosters ────────────────────────
+  // ── Source 3: BallDontLie + ESPN rosters ─────────────────────────────────
   if (!result) {
     console.log("\n[gen] Trying Source 3: BallDontLie schedule + ESPN rosters...");
     try {
@@ -727,7 +783,6 @@ async function main() {
   console.log("\n[gen] === Quick Smoke Test ===");
   var poolsCheck = JSON.parse(fs.readFileSync(poolsFile, "utf8"));
   console.log("[gen] /api/pools would return:", poolsCheck.pools.length, "pools");
-
   if (poolsCheck.pools.length > 0) {
     var firstPool = poolsCheck.pools[0];
     console.log("[gen] First pool:", firstPool.id, "|", firstPool.title);
@@ -735,21 +790,25 @@ async function main() {
     if (fileExists(pFile2)) {
       var pp = JSON.parse(fs.readFileSync(pFile2, "utf8"));
       console.log("[gen] /api/players?poolId=" + firstPool.id + " would return:", pp.length, "players");
+      // Cost distribution
+      var costDist = {};
+      pp.forEach(function(p) { costDist[p.cost] = (costDist[p.cost] || 0) + 1; });
+      console.log("[gen] Cost distribution:", JSON.stringify(costDist));
       console.log("[gen] First 5 players:");
       pp.slice(0, 5).forEach(function(p) {
-        console.log("[gen]   ", p.name, "(" + p.team + ", $" + p.cost + ", " + p.position + ", status:" + p.injuryStatus + ", playable:" + p.isPlayable + ")");
+        console.log("[gen]   ", p.name, "(" + p.team + ", $" + p.cost + ", " + p.position + ", vs=" + p.valueScore + ", status:" + p.injuryStatus + ")");
       });
     }
   }
 
   // ── Roster correctness checks ─────────────────────────────────────────────
   console.log("\n[gen] === Roster Correctness Check ===");
-  var foundCurry = false, foundAD = false, foundDoncic = false;
+  var foundCurry = false, foundAD = false, foundLeBron = false;
   result.pools.forEach(function(pool) {
     var players = result.playerMap[pool.id] || [];
     players.forEach(function(p) {
       if (p.name === "Stephen Curry") {
-        console.log("[gen] Stephen Curry: team=" + p.team + " status=" + p.injuryStatus + " playable=" + p.isPlayable + " pool=" + pool.id);
+        console.log("[gen] Stephen Curry: team=" + p.team + " cost=$" + p.cost + " vs=" + p.valueScore + " status=" + p.injuryStatus + " pool=" + pool.id);
         foundCurry = true;
       }
       if (p.name === "Anthony Davis") {
@@ -757,18 +816,15 @@ async function main() {
         if (p.team === "LAL") console.warn("[gen] WARNING: Anthony Davis still showing LAL");
         foundAD = true;
       }
-      if (p.name === "Luka Doncic") {
-        console.log("[gen] Luka Doncic: team=" + p.team + " status=" + p.injuryStatus + " pool=" + pool.id);
-        foundDoncic = true;
-      }
       if (p.name === "LeBron James") {
-        console.log("[gen] LeBron James: team=" + p.team + " status=" + p.injuryStatus + " pool=" + pool.id);
+        console.log("[gen] LeBron James: team=" + p.team + " cost=$" + p.cost + " vs=" + p.valueScore + " status=" + p.injuryStatus + " pool=" + pool.id);
+        foundLeBron = true;
       }
     });
   });
   if (!foundCurry)  console.log("[gen] (Stephen Curry not in any pool today/tomorrow)");
   if (!foundAD)     console.log("[gen] (Anthony Davis not in any pool today/tomorrow)");
-  if (!foundDoncic) console.log("[gen] (Luka Doncic not in any pool today/tomorrow)");
+  if (!foundLeBron) console.log("[gen] (LeBron James not in any pool today/tomorrow)");
   console.log("[gen] ============================================================");
 }
 

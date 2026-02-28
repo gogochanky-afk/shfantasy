@@ -1,8 +1,8 @@
 {
   "dataMode": "SNAPSHOT",
   "source": "espn",
-  "generatedAt": "2026-02-28T17:23:48.999Z",
-  "updatedAt": "2026-02-28T17:23:48.999Z",
+  "generatedAt": "2026-02-28T17:49:49.639Z",
+  "updatedAt": "2026-02-28T17:49:49.639Z",
   "pools": [
     {
       "id": "pool-cha-por-today",
@@ -23,7 +23,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "today",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 3
     },
     {
       "id": "pool-mia-hou-today",
@@ -44,7 +46,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "today",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 7
     },
     {
       "id": "pool-was-tor-today",
@@ -65,7 +69,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "today",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 6
     },
     {
       "id": "pool-gsw-lal-today",
@@ -86,7 +92,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "today",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 5
     },
     {
       "id": "pool-uta-nop-today",
@@ -107,7 +115,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "today",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 9
     },
     {
       "id": "pool-nyk-sas-tmrw",
@@ -128,7 +138,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 2
     },
     {
       "id": "pool-bkn-cle-tmrw",
@@ -149,7 +161,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 1
     },
     {
       "id": "pool-chi-mil-tmrw",
@@ -170,7 +184,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 8
     },
     {
       "id": "pool-den-min-tmrw",
@@ -191,7 +207,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 3
     },
     {
       "id": "pool-ind-mem-tmrw",
@@ -212,7 +230,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 10
     },
     {
       "id": "pool-atl-por-tmrw",
@@ -233,7 +253,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 3
     },
     {
       "id": "pool-orl-det-tmrw",
@@ -254,7 +276,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 1
     },
     {
       "id": "pool-bos-phi-tmrw",
@@ -275,7 +299,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 2
     },
     {
       "id": "pool-dal-okc-tmrw",
@@ -296,7 +322,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 7
     },
     {
       "id": "pool-lac-nop-tmrw",
@@ -317,7 +345,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 6
     },
     {
       "id": "pool-lal-sac-tmrw",
@@ -338,7 +368,9 @@
       "salaryCap": 10,
       "status": "open",
       "day": "tmrw",
-      "source": "espn"
+      "source": "espn",
+      "playerCount": 18,
+      "outCount": 5
     }
   ]
 }

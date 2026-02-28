@@ -1,29 +1,5 @@
 [
   {
-    "id": "espn-3213",
-    "name": "Al Horford",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "C",
-    "jersey": "20",
-    "cost": 4,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
-  },
-  {
-    "id": "espn-4593016",
-    "name": "Quinten Post",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "C",
-    "jersey": "21",
-    "cost": 3,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
-  },
-  {
     "id": "espn-6589",
     "name": "Draymond Green",
     "team": "GSW",
@@ -31,21 +7,25 @@
     "position": "F",
     "jersey": "23",
     "cost": 3,
+    "valueScore": 12.65,
     "injuryStatus": "questionable",
     "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 4
   },
   {
-    "id": "espn-4997536",
-    "name": "Gui Santos",
+    "id": "espn-3213",
+    "name": "Al Horford",
     "team": "GSW",
     "teamFull": "Golden State Warriors",
-    "position": "F",
-    "jersey": "15",
+    "position": "C",
+    "jersey": "20",
     "cost": 3,
+    "valueScore": 11.06,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 5
   },
   {
     "id": "espn-4897449",
@@ -55,21 +35,11 @@
     "position": "F",
     "jersey": "33",
     "cost": 2,
+    "valueScore": 8.47,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
-  },
-  {
-    "id": "espn-4709138",
-    "name": "Brandin Podziemski",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "G",
-    "jersey": "2",
-    "cost": 2,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 6
   },
   {
     "id": "espn-4066436",
@@ -79,21 +49,11 @@
     "position": "G",
     "jersey": "8",
     "cost": 2,
+    "valueScore": 6.88,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
-  },
-  {
-    "id": "espn-3134903",
-    "name": "Gary Payton II",
-    "team": "GSW",
-    "teamFull": "Golden State Warriors",
-    "position": "G",
-    "jersey": "0",
-    "cost": 1,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 7
   },
   {
     "id": "espn-4432171",
@@ -103,9 +63,67 @@
     "position": "G",
     "jersey": "4",
     "cost": 1,
+    "valueScore": 6.29,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 8
+  },
+  {
+    "id": "espn-3134903",
+    "name": "Gary Payton II",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "G",
+    "jersey": "0",
+    "cost": 1,
+    "valueScore": 5.71,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 9
+  },
+  {
+    "id": "espn-4709138",
+    "name": "Brandin Podziemski",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "G",
+    "jersey": "2",
+    "cost": 1,
+    "valueScore": 5.12,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 10
+  },
+  {
+    "id": "espn-4593016",
+    "name": "Quinten Post",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "C",
+    "jersey": "21",
+    "cost": 2,
+    "valueScore": 6.94,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 12
+  },
+  {
+    "id": "espn-4897262",
+    "name": "Will Richard",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "G",
+    "jersey": "3",
+    "cost": 1,
+    "valueScore": 3.35,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 13
   },
   {
     "id": "espn-4278129",
@@ -115,9 +133,53 @@
     "position": "C",
     "jersey": "5",
     "cost": 4,
+    "valueScore": 17,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 0
+  },
+  {
+    "id": "espn-4683736",
+    "name": "Kobe Bufkin",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "G",
+    "jersey": "18",
+    "cost": 3,
+    "valueScore": 13.44,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 1
+  },
+  {
+    "id": "espn-3945274",
+    "name": "Luka Doncic",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "G",
+    "jersey": "77",
+    "cost": 2,
+    "valueScore": 12.89,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 2
+  },
+  {
+    "id": "espn-4066648",
+    "name": "Rui Hachimura",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "F",
+    "jersey": "28",
+    "cost": 3,
+    "valueScore": 13.33,
+    "injuryStatus": "questionable",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 3
   },
   {
     "id": "espn-4397077",
@@ -127,69 +189,25 @@
     "position": "C",
     "jersey": "11",
     "cost": 4,
+    "valueScore": 14.78,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 4
   },
   {
-    "id": "espn-5060631",
-    "name": "Adou Thiero",
+    "id": "espn-4683774",
+    "name": "Bronny James",
     "team": "LAL",
     "teamFull": "Los Angeles Lakers",
-    "position": "F",
-    "jersey": "1",
-    "cost": 3,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
-  },
-  {
-    "id": "espn-4897943",
-    "name": "Dalton Knecht",
-    "team": "LAL",
-    "teamFull": "Los Angeles Lakers",
-    "position": "F",
-    "jersey": "4",
-    "cost": 3,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
-  },
-  {
-    "id": "espn-4431695",
-    "name": "Drew Timme",
-    "team": "LAL",
-    "teamFull": "Los Angeles Lakers",
-    "position": "F",
-    "jersey": "17",
-    "cost": 3,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
-  },
-  {
-    "id": "espn-4592691",
-    "name": "Jake LaRavia",
-    "team": "LAL",
-    "teamFull": "Los Angeles Lakers",
-    "position": "F",
-    "jersey": "12",
+    "position": "G",
+    "jersey": "9",
     "cost": 2,
+    "valueScore": 8.22,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
-  },
-  {
-    "id": "espn-4278077",
-    "name": "Jarred Vanderbilt",
-    "team": "LAL",
-    "teamFull": "Los Angeles Lakers",
-    "position": "F",
-    "jersey": "2",
-    "cost": 2,
-    "injuryStatus": "active",
-    "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 5
   },
   {
     "id": "espn-1966",
@@ -199,9 +217,25 @@
     "position": "F",
     "jersey": "23",
     "cost": 2,
+    "valueScore": 8.67,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 6
+  },
+  {
+    "id": "espn-3913174",
+    "name": "Luke Kennard",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "G",
+    "jersey": "10",
+    "cost": 2,
+    "valueScore": 7.11,
+    "injuryStatus": "active",
+    "injuryNote": null,
+    "isPlayable": true,
+    "_rosterIdx": 7
   },
   {
     "id": "espn-2960236",
@@ -211,8 +245,10 @@
     "position": "F",
     "jersey": "14",
     "cost": 2,
+    "valueScore": 7.56,
     "injuryStatus": "active",
     "injuryNote": null,
-    "isPlayable": true
+    "isPlayable": true,
+    "_rosterIdx": 8
   }
 ]

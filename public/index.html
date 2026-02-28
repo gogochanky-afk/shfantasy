@@ -7,113 +7,196 @@
   <style>
     :root{color-scheme:dark;}
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0b0c0f;color:#eaeaea;min-height:100vh;}
-    .wrap{max-width:640px;margin:0 auto;padding:24px 16px;}
-    h1{font-size:28px;font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;}
-    .sub{color:#888;font-size:14px;margin-bottom:24px;}
-    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;background:#1e3a1e;color:#4ade80;margin-bottom:20px;}
-    .section-title{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;margin-bottom:10px;}
-    .card{background:#16181d;border:1px solid #2a2d35;border-radius:10px;padding:16px;margin-bottom:12px;}
-    .card-title{font-weight:700;font-size:16px;margin-bottom:6px;}
-    .card-meta{font-size:13px;color:#888;margin-bottom:12px;}
-    .lock{font-size:12px;color:#f59e0b;}
-    .btn{display:inline-block;padding:8px 18px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;border:none;background:#3b82f6;color:#fff;transition:background .15s;}
-    .btn:hover{background:#2563eb;}
-    .btn:disabled{background:#333;color:#666;cursor:not-allowed;}
-    .input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid #2a2d35;background:#1e2028;color:#eaeaea;font-size:14px;margin-bottom:12px;}
-    .input:focus{outline:none;border-color:#3b82f6;}
-    .error{color:#f87171;font-size:13px;margin-top:8px;}
-    .spinner{display:inline-block;width:16px;height:16px;border:2px solid #444;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;}
-    @keyframes spin{to{transform:rotate(360deg);}}
-    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0b0c0f;color:#eaeaea;}
+    .wrap{max-width:760px;margin:0 auto;padding:20px 16px;}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+    .nav-brand{font-weight:900;font-size:20px;letter-spacing:-0.5px;}
+    .nav-brand span{color:#3b82f6;}
     .nav a{color:#888;font-size:13px;text-decoration:none;}
     .nav a:hover{color:#eaeaea;}
-    .team-badge{background:#1e2028;padding:3px 8px;border-radius:4px;font-size:12px;}
+    .hero{margin-bottom:20px;}
+    .hero h1{font-size:26px;font-weight:800;margin-bottom:6px;}
+    .hero p{color:#888;font-size:14px;}
+    .mode-row{display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap;}
+    .badge{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;border:1px solid;}
+    .badge-snapshot{background:#0f2a1a;border-color:#166534;color:#4ade80;}
+    .badge-live{background:#0f1a2a;border-color:#1d4ed8;color:#60a5fa;}
+    .badge-source{background:#1e2028;border-color:#2a2d35;color:#888;}
+    .badge-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+    .section-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:10px;}
+    .day-label{font-size:12px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;padding-left:2px;}
+    .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;margin-bottom:24px;}
+    .pool-card{background:#13151a;border:1px solid #1e2028;border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color .15s,background .15s;position:relative;}
+    .pool-card:hover{border-color:#3b82f6;background:#0d1520;}
+    .pool-card.selected{border-color:#3b82f6;background:#0d1520;}
+    .card-matchup{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+    .team-chip{background:#1e2028;border:1px solid #2a2d35;border-radius:5px;padding:3px 9px;font-size:13px;font-weight:700;}
+    .vs-text{color:#555;font-size:12px;}
+    .card-title{font-size:12px;color:#666;margin-bottom:8px;}
+    .card-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+    .meta-pill{background:#1a1c22;border:1px solid #252830;border-radius:4px;padding:2px 7px;font-size:11px;color:#888;}
+    .meta-pill.green{color:#4ade80;border-color:#166534;}
+    .meta-pill.amber{color:#fbbf24;border-color:#78350f;}
+    .meta-pill.blue{color:#60a5fa;border-color:#1d4ed8;}
+    .lock-row{display:flex;align-items:center;gap:5px;font-size:12px;color:#666;margin-bottom:10px;}
+    .card-btn{background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;width:100%;}
+    .card-btn:hover{background:#2563eb;}
+    .join-card{background:#13151a;border:1px solid #1e2028;border-radius:10px;padding:16px;margin-bottom:20px;}
+    .join-title{font-size:14px;font-weight:700;margin-bottom:4px;}
+    .join-pool-label{font-size:13px;color:#888;margin-bottom:12px;}
+    .input{width:100%;background:#0b0c0f;border:1px solid #2a2d35;border-radius:6px;padding:9px 12px;font-size:14px;color:#eaeaea;outline:none;transition:border-color .15s;}
+    .input:focus{border-color:#3b82f6;}
+    .btn{padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;border:none;background:#3b82f6;color:#fff;transition:background .15s;margin-top:10px;width:100%;}
+    .btn:hover{background:#2563eb;}
+    .btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+    .error{color:#f87171;font-size:13px;margin-top:8px;}
     .empty{text-align:center;color:#555;padding:32px 0;font-size:14px;}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid #444;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .footer{text-align:center;color:#333;font-size:11px;margin-top:32px;padding-bottom:20px;}
   </style>
 </head>
 <body>
 <div class="wrap">
   <nav class="nav">
-    <span style="font-weight:800;font-size:18px;">SH Fantasy</span>
+    <div class="nav-brand">SH <span>Fantasy</span></div>
     <a href="/my-entries.html">My Entries</a>
   </nav>
-  <h1>Pick Your Pool</h1>
-  <p class="sub">Join a pool, draft your lineup, win.</p>
-  <div id="mode-badge" class="badge">...</div>
+  <div class="hero">
+    <h1>Pick Your Pool</h1>
+    <p>Join a game, draft your lineup, compete.</p>
+  </div>
+  <div class="mode-row" id="mode-row">
+    <div class="badge badge-snapshot"><span class="badge-dot"></span><span id="mode-text">SNAPSHOT</span></div>
+    <div class="badge badge-source" id="source-badge">source: —</div>
+    <div class="badge badge-source" id="updated-badge" style="color:#555;"></div>
+  </div>
   <div id="pools-section">
     <div class="empty"><span class="spinner"></span> Loading pools...</div>
   </div>
-  <div id="join-form" style="display:none;" class="card">
-    <div class="section-title">Join Pool</div>
-    <div id="join-pool-label" style="font-weight:600;margin-bottom:12px;"></div>
+  <div id="join-form" style="display:none;" class="join-card">
+    <div class="join-title">Join Pool</div>
+    <div class="join-pool-label" id="join-pool-label"></div>
     <input id="username-input" class="input" type="text" placeholder="Your username" maxlength="30"/>
     <button id="join-btn" class="btn" onclick="doJoin()">Join &amp; Draft</button>
     <div id="join-error" class="error"></div>
   </div>
+  <div class="footer">SH Fantasy Alpha &middot; DATA_MODE: <span id="footer-mode">SNAPSHOT</span></div>
 </div>
 <script>
 (function(){
   var selectedPool = null;
-  var saved = localStorage.getItem("shf_username");
-  if (saved) document.getElementById("username-input").value = saved;
-  fetch("/healthz").then(function(r){return r.json();}).then(function(d){
-    var el = document.getElementById("mode-badge");
-    el.textContent = "DATA MODE: "+(d.dataMode||d.mode||"SNAPSHOT");
+  var savedUser = localStorage.getItem("shf_username");
+  if (savedUser) document.getElementById("username-input").value = savedUser;
+
+  fetch("/api/healthz",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var mode = d.dataMode || "SNAPSHOT";
+    document.getElementById("mode-text").textContent = mode;
+    document.getElementById("footer-mode").textContent = mode;
+    var modeEl = document.getElementById("mode-row").querySelector(".badge");
+    modeEl.className = "badge " + (mode === "LIVE" ? "badge-live" : "badge-snapshot");
+    if (d.updatedAt) {
+      document.getElementById("updated-badge").textContent = "updated: " + new Date(d.updatedAt).toLocaleTimeString();
+    }
   }).catch(function(){});
+
   fetch("/api/pools",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
-    if(!d.ok||!d.pools||d.pools.length===0){
-      document.getElementById("pools-section").innerHTML='<div class="empty">No pools available right now.</div>';
+    if (!d.ok || !d.pools || d.pools.length === 0) {
+      document.getElementById("pools-section").innerHTML = '<div class="empty">No pools available right now.</div>';
       return;
+    }
+    if (d.pools[0] && d.pools[0].source) {
+      document.getElementById("source-badge").textContent = "source: " + d.pools[0].source;
     }
     renderPools(d.pools);
   }).catch(function(e){
-    document.getElementById("pools-section").innerHTML='<div class="empty">Failed to load pools: '+e.message+'</div>';
+    document.getElementById("pools-section").innerHTML = '<div class="empty">Failed to load pools: ' + e.message + '</div>';
   });
-  function renderPools(pools){
-    var html='<div class="section-title">Available Pools</div>';
-    pools.forEach(function(p){
-      var lock=p.lockAt?new Date(p.lockAt).toLocaleString():"TBD";
-      var pj=JSON.stringify(JSON.stringify(p));
-      html+='<div class="card" style="cursor:pointer;" onclick="selectPool('+pj+')" id="pool-'+p.id+'">';
-      html+='<div class="card-title">'+esc(p.label||p.title||p.id)+'</div>';
-      html+='<div class="card-meta"><span class="team-badge">'+esc(p.homeTeam||"")+'</span> vs <span class="team-badge">'+esc(p.awayTeam||"")+'</span></div>';
-      html+='<div class="lock">&#x1F512; Locks: '+esc(lock)+'</div>';
-      html+='<div style="margin-top:10px;"><button class="btn" onclick="event.stopPropagation();selectPool('+pj+')" style="font-size:13px;padding:6px 14px;">Select</button></div>';
-      html+='</div>';
-    });
-    document.getElementById("pools-section").innerHTML=html;
+
+  function renderPools(pools) {
+    var today = pools.filter(function(p){ return p.day === "today"; });
+    var tmrw  = pools.filter(function(p){ return p.day === "tmrw" || p.day === "tomorrow"; });
+    var other = pools.filter(function(p){ return p.day !== "today" && p.day !== "tmrw" && p.day !== "tomorrow"; });
+    var html = '<div class="section-title">Available Pools</div>';
+    function renderGroup(label, group) {
+      if (!group.length) return "";
+      var h = '<div class="day-label">' + esc(label) + '</div><div class="pool-grid">';
+      group.forEach(function(p){ h += renderCard(p); });
+      h += '</div>';
+      return h;
+    }
+    html += renderGroup("Today", today);
+    html += renderGroup("Tomorrow", tmrw);
+    html += renderGroup("Other", other);
+    document.getElementById("pools-section").innerHTML = html;
   }
-  window.selectPool=function(pj){
-    selectedPool=JSON.parse(pj);
-    document.querySelectorAll(".card").forEach(function(el){el.style.borderColor="#2a2d35";});
-    var el=document.getElementById("pool-"+selectedPool.id);
-    if(el)el.style.borderColor="#3b82f6";
-    document.getElementById("join-pool-label").textContent=selectedPool.label||selectedPool.title||selectedPool.id;
-    document.getElementById("join-form").style.display="block";
-    document.getElementById("join-error").textContent="";
+
+  function renderCard(p) {
+    var lockStr = p.lockAt ? new Date(p.lockAt).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "TBD";
+    var pj = JSON.stringify(JSON.stringify(p));
+    var homeAbbr = (p.homeTeam && p.homeTeam.abbr) || (typeof p.homeTeam === "string" ? p.homeTeam : "");
+    var awayAbbr = (p.awayTeam && p.awayTeam.abbr) || (typeof p.awayTeam === "string" ? p.awayTeam : "");
+    var homeName = (p.homeTeam && p.homeTeam.name) || homeAbbr;
+    var awayName = (p.awayTeam && p.awayTeam.name) || awayAbbr;
+    var pills = "";
+    if (p.playerCount) pills += '<span class="meta-pill green">' + p.playerCount + ' players</span>';
+    if (p.outCount && p.outCount > 0) pills += '<span class="meta-pill amber">' + p.outCount + ' OUT excluded</span>';
+    if (p.source) pills += '<span class="meta-pill blue">' + esc(p.source) + '</span>';
+    pills += '<span class="meta-pill">Cap $' + (p.salaryCap||10) + ' &middot; ' + (p.rosterSize||5) + ' picks</span>';
+    var h = '<div class="pool-card" id="pool-' + esc(p.id) + '" onclick="selectPool(' + pj + ')">';
+    h += '<div class="card-matchup"><span class="team-chip">' + esc(homeAbbr) + '</span><span class="vs-text">vs</span><span class="team-chip">' + esc(awayAbbr) + '</span></div>';
+    h += '<div class="card-title">' + esc(homeName) + ' vs ' + esc(awayName) + '</div>';
+    h += '<div class="card-meta">' + pills + '</div>';
+    h += '<div class="lock-row">&#x1F512; Locks: ' + esc(lockStr) + '</div>';
+    h += '<button class="card-btn" onclick="event.stopPropagation();selectPool(' + pj + ')">Select &amp; Join</button>';
+    h += '</div>';
+    return h;
+  }
+
+  window.selectPool = function(pj) {
+    selectedPool = JSON.parse(pj);
+    document.querySelectorAll(".pool-card").forEach(function(el){ el.classList.remove("selected"); });
+    var el = document.getElementById("pool-" + selectedPool.id);
+    if (el) el.classList.add("selected");
+    document.getElementById("join-pool-label").textContent = selectedPool.label || selectedPool.title || selectedPool.id;
+    document.getElementById("join-form").style.display = "block";
+    document.getElementById("join-error").textContent = "";
     document.getElementById("username-input").focus();
+    document.getElementById("join-form").scrollIntoView({behavior:"smooth",block:"nearest"});
   };
-  window.doJoin=function(){
-    var username=document.getElementById("username-input").value.trim();
-    var btn=document.getElementById("join-btn");
-    if(!username){document.getElementById("join-error").textContent="Please enter a username.";return;}
-    if(!selectedPool){document.getElementById("join-error").textContent="Please select a pool.";return;}
-    localStorage.setItem("shf_username",username);
-    btn.disabled=true;btn.textContent="Joining...";
+
+  window.doJoin = function() {
+    var username = document.getElementById("username-input").value.trim();
+    var btn = document.getElementById("join-btn");
+    if (!username) { document.getElementById("join-error").textContent = "Please enter a username."; return; }
+    if (!selectedPool) { document.getElementById("join-error").textContent = "Please select a pool."; return; }
+    localStorage.setItem("shf_username", username);
+    btn.disabled = true; btn.textContent = "Joining...";
     fetch("/api/join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username,poolId:selectedPool.id})})
-      .then(function(r){return r.json();}).then(function(d){
-        if(!d.ok){document.getElementById("join-error").textContent=d.error||"Join failed.";btn.disabled=false;btn.textContent="Join & Draft";return;}
-        var entries=JSON.parse(localStorage.getItem("shf_entries")||"[]");
-        entries.push({entryId:d.entryId,poolId:d.poolId,username:username,poolLabel:selectedPool.label||selectedPool.title||selectedPool.id,joinedAt:new Date().toISOString()});
-        localStorage.setItem("shf_entries",JSON.stringify(entries));
-        window.location.href="/draft.html?poolId="+encodeURIComponent(d.poolId)+"&entryId="+encodeURIComponent(d.entryId);
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok) {
+          document.getElementById("join-error").textContent = d.error || "Join failed.";
+          btn.disabled = false; btn.textContent = "Join & Draft"; return;
+        }
+        var entries = JSON.parse(localStorage.getItem("shf_entries") || "[]");
+        entries.push({
+          entryId:   d.entryId,
+          poolId:    d.poolId,
+          username:  username,
+          poolLabel: selectedPool.label || selectedPool.title || selectedPool.id,
+          poolTitle: selectedPool.title || selectedPool.label || selectedPool.id,
+          lockAt:    selectedPool.lockAt || null,
+          joinedAt:  new Date().toISOString(),
+        });
+        localStorage.setItem("shf_entries", JSON.stringify(entries));
+        window.location.href = "/draft.html?poolId=" + encodeURIComponent(d.poolId) + "&entryId=" + encodeURIComponent(d.entryId);
       }).catch(function(e){
-        document.getElementById("join-error").textContent="Network error: "+e.message;
-        btn.disabled=false;btn.textContent="Join & Draft";
+        document.getElementById("join-error").textContent = "Network error: " + e.message;
+        btn.disabled = false; btn.textContent = "Join & Draft";
       });
   };
-  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 })();
 </script>
 </body>

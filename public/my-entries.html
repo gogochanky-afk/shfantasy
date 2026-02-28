@@ -3,100 +3,173 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>My Entries · SH Fantasy</title>
+  <title>My Entries – SH Fantasy</title>
   <style>
     :root{color-scheme:dark;}
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0b0c0f;color:#eaeaea;}
-    .wrap{max-width:640px;margin:0 auto;padding:24px 16px;}
-    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;}
+    .wrap{max-width:760px;margin:0 auto;padding:20px 16px;}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+    .nav-brand{font-weight:900;font-size:18px;}
+    .nav-brand span{color:#3b82f6;}
     .nav a{color:#888;font-size:13px;text-decoration:none;}
     .nav a:hover{color:#eaeaea;}
-    h1{font-size:24px;font-weight:800;margin-bottom:4px;}
-    .sub{color:#888;font-size:13px;margin-bottom:24px;}
-    .card{background:#16181d;border:1px solid #2a2d35;border-radius:10px;padding:16px;margin-bottom:12px;}
-    .card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
-    .card-title{font-weight:700;font-size:15px;}
-    .card-meta{font-size:12px;color:#888;margin-top:2px;}
-    .badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;}
-    .badge-saved{background:#1e3a1e;color:#4ade80;}
-    .badge-nosave{background:#2a1e1e;color:#f87171;}
-    .player-list{margin-top:10px;}
-    .player-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e2028;font-size:13px;}
+    .page-title{font-size:24px;font-weight:800;margin-bottom:4px;}
+    .page-sub{color:#888;font-size:13px;margin-bottom:24px;}
+    /* Entry card */
+    .entry-card{background:#13151a;border:1px solid #1e2028;border-radius:10px;padding:16px;margin-bottom:12px;}
+    .entry-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+    .entry-title{font-weight:800;font-size:15px;margin-bottom:3px;}
+    .entry-meta{font-size:12px;color:#666;}
+    .badge{display:inline-flex;align-items:center;gap:4px;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;border:1px solid;}
+    .badge-saved{background:#0f2a1a;border-color:#166534;color:#4ade80;}
+    .badge-nosave{background:#2a1e1e;border-color:#7f1d1d;color:#f87171;}
+    /* Cost summary */
+    .cost-summary{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+    .cost-chip{background:#1e2028;border:1px solid #2a2d35;border-radius:5px;padding:3px 9px;font-size:12px;color:#888;}
+    .cost-chip.green{color:#4ade80;border-color:#166534;}
+    /* Player list */
+    .player-list{border:1px solid #1e2028;border-radius:8px;overflow:hidden;margin-bottom:10px;}
+    .player-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #1e2028;font-size:13px;}
     .player-row:last-child{border-bottom:none;}
+    .player-row-left{display:flex;flex-direction:column;gap:2px;}
     .player-row-name{font-weight:600;}
-    .player-row-meta{color:#888;}
-    .btn{padding:7px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:#3b82f6;color:#fff;}
+    .player-row-meta{font-size:11px;color:#666;}
+    .player-cost-badge{border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;border:1px solid;}
+    .cost-4{background:#1a0f00;border-color:#78350f;color:#fbbf24;}
+    .cost-3{background:#0f1a2a;border-color:#1d4ed8;color:#60a5fa;}
+    .cost-2{background:#0f2a1a;border-color:#166534;color:#4ade80;}
+    .cost-1{background:#1e2028;border-color:#2a2d35;color:#888;}
+    /* Lock info */
+    .lock-info{font-size:12px;color:#666;margin-bottom:10px;}
+    /* Actions */
+    .actions{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn{padding:7px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:#3b82f6;color:#fff;transition:background .15s;text-decoration:none;display:inline-block;}
     .btn:hover{background:#2563eb;}
     .btn-sm{padding:5px 10px;font-size:12px;}
     .btn-danger{background:#7f1d1d;color:#fca5a5;}
     .btn-danger:hover{background:#991b1b;}
+    .btn-outline{background:transparent;border:1px solid #2a2d35;color:#888;}
+    .btn-outline:hover{border-color:#3b82f6;color:#eaeaea;}
+    /* Empty */
     .empty{text-align:center;color:#555;padding:48px 0;font-size:14px;}
-    .actions{display:flex;gap:8px;margin-top:10px;}
-    .cap-info{font-size:12px;color:#888;margin-top:6px;}
+    .footer{text-align:center;color:#333;font-size:11px;margin-top:32px;padding-bottom:20px;}
   </style>
 </head>
 <body>
 <div class="wrap">
   <nav class="nav">
-    <a href="/">&larr; Home</a>
-    <span style="font-weight:800;font-size:16px;">SH Fantasy</span>
+    <div class="nav-brand">SH <span>Fantasy</span></div>
+    <a href="/">&#x2190; Pools</a>
   </nav>
-  <h1>My Entries</h1>
-  <p class="sub" id="username-display"></p>
+  <div class="page-title">My Entries</div>
+  <div class="page-sub" id="username-display"></div>
   <div id="entries-container"><div class="empty">Loading...</div></div>
   <div style="margin-top:24px;text-align:center;">
-    <button class="btn btn-danger btn-sm" onclick="clearAll()">Clear All Entries</button>
+    <button class="btn btn-sm btn-danger btn-outline" onclick="clearAll()">Clear All Entries</button>
   </div>
+  <div class="footer">SH Fantasy Alpha</div>
 </div>
 <script>
 (function(){
-  var username=localStorage.getItem("shf_username")||"Guest";
-  document.getElementById("username-display").textContent="Logged in as: "+username;
-  function render(){
-    var entries=JSON.parse(localStorage.getItem("shf_entries")||"[]");
-    var lineups=JSON.parse(localStorage.getItem("shf_lineups")||"{}");
-    var container=document.getElementById("entries-container");
-    if(entries.length===0){container.innerHTML='<div class="empty">No entries yet.<br><br><a href="/" style="color:#3b82f6;">Join a pool</a></div>';return;}
-    var html="";
-    entries.slice().reverse().forEach(function(e){
-      var lineup=lineups[e.entryId];
-      var hasSave=!!(lineup&&lineup.players&&lineup.players.length>0);
-      var savedAt=lineup?new Date(lineup.savedAt).toLocaleString():"";
-      var totalCost=0;
-      if(lineup&&lineup.playerDetails)lineup.playerDetails.forEach(function(p){totalCost+=(p.cost||0);});
-      var ej=JSON.stringify(JSON.stringify(e.entryId));
-      html+='<div class="card">';
-      html+='<div class="card-header"><div><div class="card-title">'+esc(e.poolLabel||e.poolId)+'</div><div class="card-meta">Entry: '+esc(e.entryId)+' &middot; Joined: '+new Date(e.joinedAt).toLocaleString()+'</div></div>';
-      html+='<span class="badge '+(hasSave?"badge-saved":"badge-nosave")+'">'+(hasSave?"Saved":"No Lineup")+'</span></div>';
-      if(hasSave){
-        html+='<div class="cap-info">Salary: $'+totalCost+' &middot; '+lineup.players.length+' players</div>';
-        html+='<div class="player-list">';
-        (lineup.playerDetails||[]).forEach(function(p){html+='<div class="player-row"><span class="player-row-name">'+esc(p.name)+'</span><span class="player-row-meta">'+esc(p.team)+' &middot; '+esc(p.position)+' &middot; $'+p.cost+'</span></div>';});
-        html+='</div>';
-        if(savedAt)html+='<div style="font-size:11px;color:#555;margin-top:6px;">Saved: '+savedAt+'</div>';
+  var username = localStorage.getItem("shf_username") || "Guest";
+  document.getElementById("username-display").textContent = "Logged in as: " + username;
+
+  function render() {
+    var entries = JSON.parse(localStorage.getItem("shf_entries") || "[]");
+    var container = document.getElementById("entries-container");
+    if (entries.length === 0) {
+      container.innerHTML = '<div class="empty">No entries yet.<br><br><a href="/" style="color:#3b82f6;">Join a pool</a></div>';
+      return;
+    }
+    var html = "";
+    entries.slice().reverse().forEach(function(e) {
+      // Lineup may be stored in entry itself (new format) or in shf_lineups (old format)
+      var lineup = e.lineup || null;
+      if (!lineup) {
+        var lineups = JSON.parse(localStorage.getItem("shf_lineups") || "{}");
+        var old = lineups[e.entryId];
+        if (old && old.players) {
+          lineup = old.playerDetails || old.players || null;
+        }
       }
-      html+='<div class="actions"><a href="/draft.html?poolId='+encodeURIComponent(e.poolId)+'&entryId='+encodeURIComponent(e.entryId)+'" class="btn btn-sm">Edit Lineup</a>';
-      html+='<button class="btn btn-sm btn-danger" onclick="removeEntry('+ej+')">Remove</button></div></div>';
+      var hasSave = !!(lineup && lineup.length > 0);
+      var totalCost = e.totalCost || 0;
+      if (!totalCost && hasSave) {
+        totalCost = lineup.reduce(function(s, p){ return s + (p.cost || 0); }, 0);
+      }
+      var poolTitle = e.poolTitle || e.poolLabel || e.poolId;
+      var lockAt    = e.lockAt || null;
+      var lockStr   = lockAt ? new Date(lockAt).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : null;
+      var joinedStr = e.joinedAt ? new Date(e.joinedAt).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+      var savedStr  = e.savedAt  ? new Date(e.savedAt).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+      var ej = JSON.stringify(JSON.stringify(e.entryId));
+
+      html += '<div class="entry-card">';
+      // Header
+      html += '<div class="entry-header">';
+      html += '<div>';
+      html += '<div class="entry-title">' + esc(poolTitle) + '</div>';
+      html += '<div class="entry-meta">Entry: ' + esc(e.entryId) + ' &middot; Joined: ' + esc(joinedStr) + '</div>';
+      html += '</div>';
+      html += '<span class="badge ' + (hasSave ? "badge-saved" : "badge-nosave") + '">' + (hasSave ? "&#x2713; Saved" : "No Lineup") + '</span>';
+      html += '</div>';
+
+      // Lock time
+      if (lockStr) {
+        html += '<div class="lock-info">&#x1F512; Locks: ' + esc(lockStr) + '</div>';
+      }
+
+      // Cost summary
+      if (hasSave) {
+        html += '<div class="cost-summary">';
+        html += '<span class="cost-chip green">Total: $' + totalCost + '</span>';
+        html += '<span class="cost-chip">' + lineup.length + ' players</span>';
+        if (savedStr) html += '<span class="cost-chip">Saved: ' + esc(savedStr) + '</span>';
+        html += '</div>';
+
+        // Player list
+        html += '<div class="player-list">';
+        lineup.forEach(function(p) {
+          html += '<div class="player-row">';
+          html += '<div class="player-row-left">';
+          html += '<span class="player-row-name">' + esc(p.name) + '</span>';
+          html += '<span class="player-row-meta">' + esc(p.team) + ' &middot; ' + esc(p.position) + '</span>';
+          html += '</div>';
+          html += '<span class="player-cost-badge cost-' + p.cost + '">$' + p.cost + '</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      // Actions
+      html += '<div class="actions">';
+      html += '<a href="/draft.html?poolId=' + encodeURIComponent(e.poolId) + '&entryId=' + encodeURIComponent(e.entryId) + '" class="btn btn-sm">' + (hasSave ? "Edit Lineup" : "Draft Now") + '</a>';
+      html += '<button class="btn btn-sm btn-danger" onclick="removeEntry(' + ej + ')">Remove</button>';
+      html += '</div>';
+      html += '</div>';
     });
-    container.innerHTML=html;
+    container.innerHTML = html;
   }
-  window.removeEntry=function(entryId){
-    var entries=JSON.parse(localStorage.getItem("shf_entries")||"[]");
-    entries=entries.filter(function(e){return e.entryId!==entryId;});
-    localStorage.setItem("shf_entries",JSON.stringify(entries));
-    var lineups=JSON.parse(localStorage.getItem("shf_lineups")||"{}");
+
+  window.removeEntry = function(entryId) {
+    var entries = JSON.parse(localStorage.getItem("shf_entries") || "[]");
+    entries = entries.filter(function(e){ return e.entryId !== entryId; });
+    localStorage.setItem("shf_entries", JSON.stringify(entries));
+    var lineups = JSON.parse(localStorage.getItem("shf_lineups") || "{}");
     delete lineups[entryId];
-    localStorage.setItem("shf_lineups",JSON.stringify(lineups));
+    localStorage.setItem("shf_lineups", JSON.stringify(lineups));
     render();
   };
-  window.clearAll=function(){
-    if(!confirm("Clear all entries and lineups?"))return;
+
+  window.clearAll = function() {
+    if (!confirm("Clear all entries and lineups?")) return;
     localStorage.removeItem("shf_entries");
     localStorage.removeItem("shf_lineups");
     render();
   };
-  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   render();
 })();
 </script>

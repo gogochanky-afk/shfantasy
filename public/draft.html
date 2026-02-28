@@ -3,169 +3,335 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Draft · SH Fantasy</title>
+  <title>Draft – SH Fantasy</title>
   <style>
     :root{color-scheme:dark;}
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0b0c0f;color:#eaeaea;}
-    .wrap{max-width:720px;margin:0 auto;padding:20px 16px;}
+    .wrap{max-width:760px;margin:0 auto;padding:20px 16px;}
     .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+    .nav-brand{font-weight:900;font-size:18px;}
+    .nav-brand span{color:#3b82f6;}
     .nav a{color:#888;font-size:13px;text-decoration:none;}
     .nav a:hover{color:#eaeaea;}
-    h1{font-size:22px;font-weight:800;margin-bottom:4px;}
-    .sub{color:#888;font-size:13px;margin-bottom:16px;}
-    .status-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;}
-    .pill{background:#1e2028;border:1px solid #2a2d35;border-radius:6px;padding:4px 10px;}
-    .pill span{font-weight:700;}
-    .pill.ok span{color:#4ade80;}
-    .section-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;margin-bottom:8px;}
-    .player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:20px;}
-    .player-card{background:#16181d;border:1px solid #2a2d35;border-radius:8px;padding:12px;cursor:pointer;transition:border-color .15s,background .15s;}
-    .player-card:hover{border-color:#3b82f6;}
-    .player-card.selected{border-color:#3b82f6;background:#0d1a2e;}
+    .pool-header{background:#13151a;border:1px solid #1e2028;border-radius:10px;padding:14px 16px;margin-bottom:16px;}
+    .pool-title{font-size:16px;font-weight:800;margin-bottom:4px;}
+    .pool-sub{font-size:12px;color:#666;}
+    .cap-bar{background:#13151a;border:1px solid #1e2028;border-radius:10px;padding:12px 16px;margin-bottom:16px;}
+    .cap-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+    .cap-label{font-size:12px;color:#888;}
+    .cap-value{font-size:18px;font-weight:800;}
+    .cap-value.ok{color:#4ade80;}
+    .cap-value.warn{color:#fbbf24;}
+    .cap-value.over{color:#f87171;}
+    .cap-track{height:6px;background:#1e2028;border-radius:3px;overflow:hidden;}
+    .cap-fill{height:100%;border-radius:3px;transition:width .2s,background .2s;}
+    .cap-fill.ok{background:#4ade80;}
+    .cap-fill.warn{background:#fbbf24;}
+    .cap-fill.over{background:#f87171;}
+    .cap-detail{font-size:11px;color:#555;margin-top:4px;}
+    .lineup-strip{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
+    .lineup-slot{background:#1e2028;border:1px dashed #2a2d35;border-radius:6px;padding:5px 10px;font-size:12px;color:#555;min-width:60px;text-align:center;transition:all .15s;}
+    .lineup-slot.filled{background:#0d1520;border:1px solid #3b82f6;color:#eaeaea;cursor:pointer;}
+    .lineup-slot.filled:hover{border-color:#f87171;color:#f87171;}
+    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+    .sort-select,.filter-select{background:#13151a;border:1px solid #2a2d35;border-radius:6px;padding:6px 10px;font-size:12px;color:#eaeaea;cursor:pointer;outline:none;}
+    .sort-select:focus,.filter-select:focus{border-color:#3b82f6;}
+    .controls-label{font-size:11px;color:#555;margin-right:2px;}
+    .player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:20px;}
+    .player-card{background:#13151a;border:1px solid #1e2028;border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s;position:relative;}
+    .player-card:hover:not(.disabled){border-color:#3b82f6;background:#0d1520;}
+    .player-card.selected{border-color:#3b82f6;background:#0d1520;}
+    .player-card.selected:hover{border-color:#f87171;background:#1a0d0d;}
     .player-card.disabled{opacity:.4;cursor:not-allowed;}
-    .player-name{font-weight:700;font-size:14px;margin-bottom:4px;}
-    .player-meta{font-size:12px;color:#888;}
-    .player-cost{font-size:13px;font-weight:700;color:#3b82f6;margin-top:4px;}
-    .status-badge{display:inline-block;font-size:10px;font-weight:700;border-radius:3px;padding:1px 5px;margin-left:5px;vertical-align:middle;line-height:1.4;}
-    .status-badge.q{background:#78350f;color:#fbbf24;border:1px solid #92400e;}
-    .status-badge.unk{background:#1e293b;color:#94a3b8;border:1px solid #334155;}
-    .roster-list{margin-bottom:20px;}
-    .roster-item{display:flex;justify-content:space-between;align-items:center;background:#16181d;border:1px solid #2a2d35;border-radius:6px;padding:10px 14px;margin-bottom:6px;}
-    .roster-name{font-weight:600;font-size:14px;}
-    .roster-meta{font-size:12px;color:#888;}
-    .roster-remove{background:none;border:none;color:#f87171;cursor:pointer;font-size:18px;padding:0 4px;}
-    .btn{padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;border:none;background:#3b82f6;color:#fff;transition:background .15s;}
-    .btn:hover{background:#2563eb;}
-    .btn:disabled{background:#333;color:#666;cursor:not-allowed;}
-    .btn-ghost{background:transparent;border:1px solid #2a2d35;color:#888;}
-    .btn-ghost:hover{border-color:#555;color:#eaeaea;background:transparent;}
-    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e2028;border:1px solid #2a2d35;border-radius:8px;padding:10px 20px;font-size:14px;z-index:999;opacity:0;transition:opacity .2s;}
-    .toast.show{opacity:1;}
-    .empty{text-align:center;color:#555;padding:32px 0;font-size:14px;}
+    .player-name{font-size:13px;font-weight:700;margin-bottom:3px;padding-right:28px;}
+    .player-meta{font-size:11px;color:#666;}
+    .player-cost{position:absolute;top:10px;right:10px;border-radius:5px;padding:2px 7px;font-size:12px;font-weight:800;border:1px solid;}
+    .cost-4{background:#1a0f00;border-color:#78350f;color:#fbbf24;}
+    .cost-3{background:#0f1a2a;border-color:#1d4ed8;color:#60a5fa;}
+    .cost-2{background:#0f2a1a;border-color:#166534;color:#4ade80;}
+    .cost-1{background:#1e2028;border-color:#2a2d35;color:#888;}
+    .status-q{position:absolute;top:10px;right:44px;background:#78350f;color:#fbbf24;border-radius:3px;padding:1px 4px;font-size:10px;font-weight:700;}
+    .status-unk{position:absolute;top:10px;right:44px;background:#1e2028;color:#888;border-radius:3px;padding:1px 4px;font-size:10px;font-weight:700;}
+    .save-row{margin-bottom:20px;}
+    .save-btn{background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;transition:background .15s;width:100%;}
+    .save-btn:hover:not(:disabled){background:#2563eb;}
+    .save-btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+    .save-hint{font-size:12px;color:#888;margin-top:6px;text-align:center;}
+    .save-hint.error{color:#f87171;}
+    .msg{text-align:center;color:#555;padding:32px 0;font-size:14px;}
     .spinner{display:inline-block;width:16px;height:16px;border:2px solid #444;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
+    .success-box{background:#0f2a1a;border:1px solid #166534;border-radius:10px;padding:20px;text-align:center;margin-bottom:20px;}
+    .success-box h2{color:#4ade80;margin-bottom:8px;}
+    .success-box p{color:#888;font-size:14px;}
+    .footer{text-align:center;color:#333;font-size:11px;margin-top:20px;padding-bottom:20px;}
   </style>
 </head>
 <body>
 <div class="wrap">
   <nav class="nav">
-    <a href="/">&larr; Home</a>
-    <a href="/my-entries.html">My Entries</a>
+    <div class="nav-brand">SH <span>Fantasy</span></div>
+    <a href="/">&#x2190; Pools</a>
   </nav>
-  <h1 id="pool-title">Draft</h1>
-  <p class="sub" id="pool-sub"></p>
-  <div class="status-bar">
-    <div class="pill"><span id="cap-display">Cap: 0/10</span></div>
-    <div class="pill"><span id="roster-display">Roster: 0/5</span></div>
-    <div class="pill" id="mode-pill"><span id="mode-display">...</span></div>
-    <div class="pill"><span id="updated-display" style="color:#666;font-size:11px;"></span></div>
-  </div>
-  <div class="section-title">Your Roster</div>
-  <div id="roster-list" class="roster-list">
-    <div class="empty" style="padding:16px 0;font-size:13px;">No players selected yet.</div>
-  </div>
-  <div style="margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap;">
-    <button id="save-btn" class="btn" onclick="saveLineup()" disabled>Save Lineup</button>
-    <button class="btn btn-ghost" onclick="clearRoster()">Clear</button>
-  </div>
-  <div class="section-title">Available Players</div>
-  <div id="player-grid" class="player-grid">
-    <div class="empty"><span class="spinner"></span> Loading players...</div>
-  </div>
+  <div id="main-content"><div class="msg"><span class="spinner"></span> Loading draft...</div></div>
+  <div class="footer">SH Fantasy Alpha</div>
 </div>
-<div id="toast" class="toast"></div>
 <script>
 (function(){
-  var qs=new URLSearchParams(location.search);
-  var poolId=qs.get("poolId")||"";
-  var entryId=qs.get("entryId")||"";
-  if(!poolId||!entryId){
-    document.getElementById("pool-sub").textContent="Missing poolId or entryId.";
-    document.getElementById("player-grid").innerHTML="";
+  var params  = new URLSearchParams(window.location.search);
+  var poolId  = params.get("poolId");
+  var entryId = params.get("entryId");
+  if (!poolId || !entryId) {
+    document.getElementById("main-content").innerHTML = '<div class="msg">Missing poolId or entryId. <a href="/" style="color:#3b82f6;">Go back</a></div>';
     return;
   }
-  document.getElementById("pool-sub").textContent="Pool: "+poolId+" · Entry: "+entryId;
-  var ROSTER_SIZE=5,SALARY_CAP=10,roster=[],allPlayers=[];
-  fetch("/api/players?poolId="+encodeURIComponent(poolId),{cache:"no-store"})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(!d.ok||!d.players||d.players.length===0){
-        document.getElementById("player-grid").innerHTML='<div class="empty">No players found.</div>';
-        return;
-      }
-      allPlayers=d.players;
-      var mode=d.dataMode||"SNAPSHOT";
-      document.getElementById("mode-display").textContent="DATA: "+mode;
-      document.getElementById("updated-display").textContent=d.updatedAt?"Updated: "+new Date(d.updatedAt).toLocaleTimeString():"";
-      if(mode==="SNAPSHOT"||mode==="LIVE") document.getElementById("mode-pill").className="pill ok";
-      renderGrid();
-    })
-    .catch(function(e){
-      document.getElementById("player-grid").innerHTML='<div class="empty">Error: '+e.message+'</div>';
-    });
-  function renderGrid(){
-    var rIds=roster.map(function(p){return p.id;});
-    var usedCap=roster.reduce(function(s,p){return s+p.cost;},0);
-    var html="";
-    allPlayers.forEach(function(p){
-      var inR=rIds.indexOf(p.id)!==-1;
-      var dis=!inR&&(usedCap+p.cost>SALARY_CAP||roster.length>=ROSTER_SIZE);
-      var cls="player-card"+(inR?" selected":"")+(dis?" disabled":"");
-      var pj=JSON.stringify(JSON.stringify(p));
-      var badge='';
-      if(p.injuryStatus==='questionable'){badge='<span class="status-badge q">Q</span>';}
-      else if(p.injuryStatus==='unknown'){badge='<span class="status-badge unk">?</span>';}
-      html+='<div class="'+cls+'" onclick="togglePlayer('+pj+')">';
-      html+='<div class="player-name">'+esc(p.name)+badge+'</div>';
-      html+='<div class="player-meta">'+esc(p.team)+' · '+esc(p.position)+'</div>';
-      html+='<div class="player-cost">$'+p.cost+'</div>';
-      html+='</div>';
-    });
-    document.getElementById("player-grid").innerHTML=html||'<div class="empty">No players.</div>';
-    renderRoster();updateStatus();
-  }
-  function renderRoster(){
-    if(roster.length===0){document.getElementById("roster-list").innerHTML='<div class="empty" style="padding:16px 0;font-size:13px;">No players selected yet.</div>';return;}
-    var html="";
-    roster.forEach(function(p){
-      var pj=JSON.stringify(JSON.stringify(p));
-      html+='<div class="roster-item"><div><div class="roster-name">'+esc(p.name)+'</div><div class="roster-meta">'+esc(p.team)+' · '+esc(p.position)+' · $'+p.cost+'</div></div><button class="roster-remove" onclick="removePlayer('+pj+')">&times;</button></div>';
-    });
-    document.getElementById("roster-list").innerHTML=html;
-  }
-  function updateStatus(){
-    var usedCap=roster.reduce(function(s,p){return s+p.cost;},0);
-    document.getElementById("cap-display").textContent="Cap: "+usedCap+"/"+SALARY_CAP;
-    document.getElementById("roster-display").textContent="Roster: "+roster.length+"/"+ROSTER_SIZE;
-    document.getElementById("save-btn").disabled=(roster.length===0);
-  }
-  window.togglePlayer=function(pj){
-    var p=JSON.parse(pj);
-    var idx=roster.findIndex(function(r){return r.id===p.id;});
-    if(idx!==-1){roster.splice(idx,1);}
-    else{
-      var usedCap=roster.reduce(function(s,r){return s+r.cost;},0);
-      if(roster.length>=ROSTER_SIZE){showToast("Roster full ("+ROSTER_SIZE+" max)");return;}
-      if(usedCap+p.cost>SALARY_CAP){showToast("Over salary cap ($"+SALARY_CAP+")");return;}
-      roster.push(p);
+
+  var SALARY_CAP  = 10;
+  var ROSTER_SIZE = 5;
+  var allPlayers  = [];
+  var selectedIds = [];
+  var poolInfo    = null;
+
+  // Load players + pool info in parallel
+  Promise.all([
+    fetch("/api/players?poolId=" + encodeURIComponent(poolId), {cache:"no-store"}).then(function(r){ return r.json(); }),
+    fetch("/api/pools", {cache:"no-store"}).then(function(r){ return r.json(); })
+  ]).then(function(results){
+    var pd = results[0], poolsData = results[1];
+    if (!pd.ok || !pd.players || pd.players.length === 0) {
+      document.getElementById("main-content").innerHTML = '<div class="msg">No players found for this pool. <a href="/" style="color:#3b82f6;">Go back</a></div>';
+      return;
     }
-    renderGrid();
+    allPlayers = pd.players;
+    if (poolsData.ok && poolsData.pools) {
+      poolInfo = poolsData.pools.find(function(p){ return p.id === poolId; }) || null;
+      if (poolInfo) {
+        SALARY_CAP  = poolInfo.salaryCap  || 10;
+        ROSTER_SIZE = poolInfo.rosterSize || 5;
+      }
+    }
+    renderDraft();
+  }).catch(function(e){
+    document.getElementById("main-content").innerHTML = '<div class="msg">Error: ' + e.message + '</div>';
+  });
+
+  function renderDraft() {
+    var poolTitle = (poolInfo && (poolInfo.title || poolInfo.label)) || poolId;
+    var lockStr   = poolInfo && poolInfo.lockAt ? new Date(poolInfo.lockAt).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : null;
+    var html = '';
+    // Pool header
+    html += '<div class="pool-header">';
+    html += '<div class="pool-title">' + esc(poolTitle) + '</div>';
+    html += '<div class="pool-sub">';
+    if (lockStr) html += '&#x1F512; Locks: ' + esc(lockStr) + ' &nbsp;&middot;&nbsp; ';
+    html += 'Cap $' + SALARY_CAP + ' &nbsp;&middot;&nbsp; Pick ' + ROSTER_SIZE + ' players</div>';
+    html += '</div>';
+    // Cap bar
+    html += '<div class="cap-bar">';
+    html += '<div class="cap-row"><span class="cap-label">Salary Cap</span><span class="cap-value ok" id="cap-val">$0 / $' + SALARY_CAP + '</span></div>';
+    html += '<div class="cap-track"><div class="cap-fill ok" id="cap-fill" style="width:0%"></div></div>';
+    html += '<div class="cap-detail" id="cap-detail">0 / ' + ROSTER_SIZE + ' picks &nbsp;&middot;&nbsp; $' + SALARY_CAP + ' remaining</div>';
+    html += '</div>';
+    // Lineup strip
+    html += '<div class="lineup-strip" id="lineup-strip">';
+    for (var i = 0; i < ROSTER_SIZE; i++) {
+      html += '<div class="lineup-slot" id="slot-' + i + '">Slot ' + (i+1) + '</div>';
+    }
+    html += '</div>';
+    // Controls
+    html += '<div class="controls">';
+    html += '<span class="controls-label">Sort:</span>';
+    html += '<select class="sort-select" id="sort-select" onchange="applyFilters()">';
+    html += '<option value="cost-desc">Cost: High &rarr; Low</option>';
+    html += '<option value="cost-asc">Cost: Low &rarr; High</option>';
+    html += '<option value="name-asc">Name A&ndash;Z</option>';
+    html += '<option value="team-asc">Team A&ndash;Z</option>';
+    html += '<option value="vs-desc">Value Score &darr;</option>';
+    html += '</select>';
+    html += '<span class="controls-label" style="margin-left:8px;">Filter:</span>';
+    html += '<select class="filter-select" id="filter-select" onchange="applyFilters()">';
+    html += '<option value="all">All Players</option>';
+    html += '<option value="value">Value ($1&ndash;2)</option>';
+    html += '<option value="stars">Stars ($3&ndash;4)</option>';
+    html += '</select>';
+    html += '</div>';
+    // Player grid
+    html += '<div class="player-grid" id="player-grid"></div>';
+    // Save button
+    html += '<div class="save-row">';
+    html += '<button class="save-btn" id="save-btn" onclick="saveLineup()" disabled>Save Lineup</button>';
+    html += '<div class="save-hint" id="save-hint">Select ' + ROSTER_SIZE + ' players to save your lineup.</div>';
+    html += '</div>';
+    document.getElementById("main-content").innerHTML = html;
+    applyFilters();
+  }
+
+  window.applyFilters = function() {
+    var sortEl   = document.getElementById("sort-select");
+    var filterEl = document.getElementById("filter-select");
+    var sort     = sortEl ? sortEl.value : "cost-desc";
+    var filter   = filterEl ? filterEl.value : "all";
+    var list     = allPlayers.slice();
+    if (filter === "value") list = list.filter(function(p){ return p.cost <= 2; });
+    if (filter === "stars") list = list.filter(function(p){ return p.cost >= 3; });
+    list.sort(function(a, b) {
+      if (sort === "cost-desc") { if (b.cost !== a.cost) return b.cost - a.cost; return (a.name||"").localeCompare(b.name||""); }
+      if (sort === "cost-asc")  { if (a.cost !== b.cost) return a.cost - b.cost; return (a.name||"").localeCompare(b.name||""); }
+      if (sort === "name-asc")  return (a.name||"").localeCompare(b.name||"");
+      if (sort === "team-asc")  { if (a.team !== b.team) return (a.team||"").localeCompare(b.team||""); return b.cost - a.cost; }
+      if (sort === "vs-desc")   { var va=a.valueScore||0,vb=b.valueScore||0; if (vb!==va) return vb-va; return (a.name||"").localeCompare(b.name||""); }
+      return 0;
+    });
+    renderGrid(list);
   };
-  window.removePlayer=function(pj){var p=JSON.parse(pj);roster=roster.filter(function(r){return r.id!==p.id;});renderGrid();};
-  window.clearRoster=function(){roster=[];renderGrid();showToast("Roster cleared");};
-  window.saveLineup=function(){
-    if(roster.length===0){showToast("Add players first");return;}
-    var lineups=JSON.parse(localStorage.getItem("shf_lineups")||"{}");
-    lineups[entryId]={poolId:poolId,players:roster.map(function(p){return p.id;}),playerDetails:roster,savedAt:new Date().toISOString()};
-    localStorage.setItem("shf_lineups",JSON.stringify(lineups));
-    showToast("Lineup saved! \u2713");
-    var btn=document.getElementById("save-btn");
-    btn.textContent="Saved \u2713";
-    setTimeout(function(){btn.textContent="Save Lineup";},2000);
+
+  function renderGrid(list) {
+    var used = calcUsed();
+    var html = "";
+    list.forEach(function(p) {
+      var isSelected  = selectedIds.indexOf(p.id) !== -1;
+      var wouldExceed = !isSelected && (used + p.cost > SALARY_CAP);
+      var full        = !isSelected && selectedIds.length >= ROSTER_SIZE;
+      var disabled    = (wouldExceed || full) && !isSelected;
+      var cls = "player-card";
+      if (isSelected) cls += " selected";
+      if (disabled)   cls += " disabled";
+      html += '<div class="' + cls + '" onclick="togglePlayer(\'' + escAttr(p.id) + '\')">';
+      if (p.injuryStatus === "questionable") html += '<span class="status-q">Q</span>';
+      else if (p.injuryStatus === "unknown") html += '<span class="status-unk">?</span>';
+      html += '<span class="player-cost cost-' + p.cost + '">$' + p.cost + '</span>';
+      html += '<div class="player-name">' + esc(p.name) + '</div>';
+      html += '<div class="player-meta">' + esc(p.team) + ' &middot; ' + esc(p.position) + '</div>';
+      if (p.valueScore) html += '<div class="player-meta" style="color:#444;font-size:10px;">VS: ' + p.valueScore + '</div>';
+      html += '</div>';
+    });
+    if (!html) html = '<div class="msg" style="grid-column:1/-1;padding:20px 0;">No players match this filter.</div>';
+    document.getElementById("player-grid").innerHTML = html;
+  }
+
+  window.togglePlayer = function(id) {
+    var idx = selectedIds.indexOf(id);
+    if (idx !== -1) {
+      selectedIds.splice(idx, 1);
+    } else {
+      var p = allPlayers.find(function(pl){ return pl.id === id; });
+      if (!p) return;
+      if (selectedIds.length >= ROSTER_SIZE) return;
+      if (calcUsed() + p.cost > SALARY_CAP) return;
+      selectedIds.push(id);
+    }
+    updateCapBar();
+    updateLineupStrip();
+    updateSaveBtn();
+    applyFilters();
   };
-  function showToast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(function(){t.classList.remove("show");},2500);}
-  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+  function calcUsed() {
+    return selectedIds.reduce(function(sum, id) {
+      var p = allPlayers.find(function(pl){ return pl.id === id; });
+      return sum + (p ? p.cost : 0);
+    }, 0);
+  }
+
+  function updateCapBar() {
+    var used = calcUsed();
+    var pct  = Math.min(100, Math.round(used / SALARY_CAP * 100));
+    var cls  = used > SALARY_CAP ? "over" : (pct >= 80 ? "warn" : "ok");
+    var valEl  = document.getElementById("cap-val");
+    var fillEl = document.getElementById("cap-fill");
+    var detEl  = document.getElementById("cap-detail");
+    if (!valEl) return;
+    valEl.textContent = "$" + used + " / $" + SALARY_CAP;
+    valEl.className = "cap-value " + cls;
+    fillEl.style.width = pct + "%";
+    fillEl.className = "cap-fill " + cls;
+    detEl.textContent = selectedIds.length + " / " + ROSTER_SIZE + " picks \u00b7 $" + (SALARY_CAP - used) + " remaining";
+  }
+
+  function updateLineupStrip() {
+    for (var i = 0; i < ROSTER_SIZE; i++) {
+      var slotEl = document.getElementById("slot-" + i);
+      if (!slotEl) continue;
+      if (i < selectedIds.length) {
+        var pid = selectedIds[i];
+        var p = allPlayers.find(function(pl){ return pl.id === pid; });
+        if (p) {
+          slotEl.className = "lineup-slot filled";
+          slotEl.textContent = p.name.split(" ").pop() + " $" + p.cost;
+          slotEl.title = "Click to remove " + p.name;
+          (function(xid){ slotEl.onclick = function(){ window.togglePlayer(xid); }; })(pid);
+        }
+      } else {
+        slotEl.className = "lineup-slot";
+        slotEl.textContent = "Slot " + (i+1);
+        slotEl.onclick = null;
+      }
+    }
+  }
+
+  function updateSaveBtn() {
+    var btn  = document.getElementById("save-btn");
+    var hint = document.getElementById("save-hint");
+    if (!btn) return;
+    var used = calcUsed();
+    var full = selectedIds.length === ROSTER_SIZE;
+    var over = used > SALARY_CAP;
+    if (over) {
+      btn.disabled = true;
+      hint.textContent = "Over salary cap by $" + (used - SALARY_CAP) + ". Remove a player.";
+      hint.className = "save-hint error";
+    } else if (!full) {
+      btn.disabled = true;
+      hint.textContent = "Select " + (ROSTER_SIZE - selectedIds.length) + " more player(s) to save.";
+      hint.className = "save-hint";
+    } else {
+      btn.disabled = false;
+      hint.textContent = "Lineup complete! Total cost: $" + used + " / $" + SALARY_CAP;
+      hint.className = "save-hint";
+    }
+  }
+
+  window.saveLineup = function() {
+    var btn  = document.getElementById("save-btn");
+    var used = calcUsed();
+    if (selectedIds.length !== ROSTER_SIZE || used > SALARY_CAP) return;
+    btn.disabled = true; btn.textContent = "Saving...";
+    var lineup = selectedIds.map(function(id){
+      var p = allPlayers.find(function(pl){ return pl.id === id; });
+      return p ? {id:p.id,name:p.name,team:p.team,position:p.position,cost:p.cost} : null;
+    }).filter(Boolean);
+    fetch("/api/lineup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entryId:entryId,poolId:poolId,lineup:lineup})})
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok) {
+          btn.disabled = false; btn.textContent = "Save Lineup";
+          var hint = document.getElementById("save-hint");
+          hint.textContent = d.error || "Save failed.";
+          hint.className = "save-hint error"; return;
+        }
+        var entries = JSON.parse(localStorage.getItem("shf_entries")||"[]");
+        var idx = entries.findIndex(function(e){ return e.entryId === entryId; });
+        if (idx !== -1) {
+          entries[idx].lineup    = lineup;
+          entries[idx].totalCost = used;
+          entries[idx].savedAt   = new Date().toISOString();
+          localStorage.setItem("shf_entries", JSON.stringify(entries));
+        }
+        document.getElementById("main-content").innerHTML =
+          '<div class="success-box"><h2>&#x2713; Lineup Saved!</h2>' +
+          '<p>Total cost: $' + used + ' / $' + SALARY_CAP + '</p>' +
+          '<p style="margin-top:12px;"><a href="/my-entries.html" style="color:#3b82f6;">View My Entries</a> &nbsp;&middot;&nbsp; <a href="/" style="color:#3b82f6;">Back to Pools</a></p>' +
+          '</div>';
+      }).catch(function(e){
+        btn.disabled = false; btn.textContent = "Save Lineup";
+        var hint = document.getElementById("save-hint");
+        hint.textContent = "Network error: " + e.message;
+        hint.className = "save-hint error";
+      });
+  };
+
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function escAttr(s){ return String(s).replace(/'/g,"\\'"); }
 })();
 </script>
 </body>
