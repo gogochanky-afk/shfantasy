@@ -1,0 +1,128 @@
+[
+  {
+    "id": "lal-1",
+    "name": "LeBron James",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "SF",
+    "cost": 4,
+    "injuryStatus": null
+  },
+  {
+    "id": "lal-2",
+    "name": "Anthony Davis",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "C",
+    "cost": 3,
+    "injuryStatus": null
+  },
+  {
+    "id": "lal-3",
+    "name": "Austin Reaves",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "SG",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "lal-4",
+    "name": "D'Angelo Russell",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "PG",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "lal-5",
+    "name": "Rui Hachimura",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "PF",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "lal-6",
+    "name": "Jarred Vanderbilt",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "PF",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "lal-7",
+    "name": "Cam Ham",
+    "team": "LAL",
+    "teamFull": "Los Angeles Lakers",
+    "position": "SG",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "gsw-1",
+    "name": "Stephen Curry",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "PG",
+    "cost": 4,
+    "injuryStatus": null
+  },
+  {
+    "id": "gsw-2",
+    "name": "Draymond Green",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "PF",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "gsw-3",
+    "name": "Klay Thompson",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "SG",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "gsw-4",
+    "name": "Andrew Wiggins",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "SF",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "gsw-5",
+    "name": "Jonathan Kuminga",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "SF",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "gsw-6",
+    "name": "Moses Moody",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "SG",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "gsw-7",
+    "name": "Kevon Looney",
+    "team": "GSW",
+    "teamFull": "Golden State Warriors",
+    "position": "C",
+    "cost": 1,
+    "injuryStatus": null
+  }
+]

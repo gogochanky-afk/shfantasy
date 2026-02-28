@@ -1,0 +1,33 @@
+{
+  "dataMode": "SNAPSHOT",
+  "pools": [
+    {
+      "id": "pool-lal-gsw-today",
+      "label": "Lakers vs Warriors",
+      "title": "Lakers vs Warriors",
+      "homeTeam": "LAL",
+      "homeTeamFull": "Los Angeles Lakers",
+      "awayTeam": "GSW",
+      "awayTeamFull": "Golden State Warriors",
+      "status": "open",
+      "rosterSize": 5,
+      "salaryCap": 10,
+      "day": "today",
+      "lockAt": null
+    },
+    {
+      "id": "pool-bos-mia-tmrw",
+      "label": "Celtics vs Heat",
+      "title": "Celtics vs Heat",
+      "homeTeam": "BOS",
+      "homeTeamFull": "Boston Celtics",
+      "awayTeam": "MIA",
+      "awayTeamFull": "Miami Heat",
+      "status": "open",
+      "rosterSize": 5,
+      "salaryCap": 10,
+      "day": "tomorrow",
+      "lockAt": null
+    }
+  ]
+}

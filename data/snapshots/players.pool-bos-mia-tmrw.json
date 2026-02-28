@@ -1,0 +1,128 @@
+[
+  {
+    "id": "bos-1",
+    "name": "Jayson Tatum",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "SF",
+    "cost": 4,
+    "injuryStatus": null
+  },
+  {
+    "id": "bos-2",
+    "name": "Jaylen Brown",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "SG",
+    "cost": 3,
+    "injuryStatus": null
+  },
+  {
+    "id": "bos-3",
+    "name": "Kristaps Porzingis",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "C",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "bos-4",
+    "name": "Jrue Holiday",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "PG",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "bos-5",
+    "name": "Al Horford",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "C",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "bos-6",
+    "name": "Derrick White",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "SG",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "bos-7",
+    "name": "Payton Pritchard",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "PG",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "mia-1",
+    "name": "Jimmy Butler",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "SF",
+    "cost": 4,
+    "injuryStatus": null
+  },
+  {
+    "id": "mia-2",
+    "name": "Bam Adebayo",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "C",
+    "cost": 3,
+    "injuryStatus": null
+  },
+  {
+    "id": "mia-3",
+    "name": "Tyler Herro",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "SG",
+    "cost": 2,
+    "injuryStatus": null
+  },
+  {
+    "id": "mia-4",
+    "name": "Kyle Lowry",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "PG",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "mia-5",
+    "name": "Caleb Martin",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "SF",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "mia-6",
+    "name": "Duncan Robinson",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "SG",
+    "cost": 1,
+    "injuryStatus": null
+  },
+  {
+    "id": "mia-7",
+    "name": "Haywood Highsmith",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "PF",
+    "cost": 1,
+    "injuryStatus": null
+  }
+]
