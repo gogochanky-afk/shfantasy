@@ -1,33 +1,42 @@
 {
   "dataMode": "SNAPSHOT",
+  "generatedAt": "2026-02-28T15:58:06Z",
   "pools": [
     {
       "id": "pool-lal-gsw-today",
       "label": "Lakers vs Warriors",
-      "title": "Lakers vs Warriors",
-      "homeTeam": "LAL",
-      "homeTeamFull": "Los Angeles Lakers",
-      "awayTeam": "GSW",
-      "awayTeamFull": "Golden State Warriors",
-      "status": "open",
+      "title": "Los Angeles Lakers vs Golden State Warriors",
+      "homeTeam": {
+        "abbr": "LAL",
+        "name": "Los Angeles Lakers"
+      },
+      "awayTeam": {
+        "abbr": "GSW",
+        "name": "Golden State Warriors"
+      },
+      "lockAt": "2026-02-28T19:58:06Z",
       "rosterSize": 5,
       "salaryCap": 10,
-      "day": "today",
-      "lockAt": null
+      "status": "open",
+      "day": "today"
     },
     {
       "id": "pool-bos-mia-tmrw",
       "label": "Celtics vs Heat",
-      "title": "Celtics vs Heat",
-      "homeTeam": "BOS",
-      "homeTeamFull": "Boston Celtics",
-      "awayTeam": "MIA",
-      "awayTeamFull": "Miami Heat",
-      "status": "open",
+      "title": "Boston Celtics vs Miami Heat",
+      "homeTeam": {
+        "abbr": "BOS",
+        "name": "Boston Celtics"
+      },
+      "awayTeam": {
+        "abbr": "MIA",
+        "name": "Miami Heat"
+      },
+      "lockAt": "2026-03-01T19:58:06Z",
       "rosterSize": 5,
       "salaryCap": 10,
-      "day": "tomorrow",
-      "lockAt": null
+      "status": "open",
+      "day": "tomorrow"
     }
   ]
 }
