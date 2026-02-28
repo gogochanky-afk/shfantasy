@@ -59,7 +59,7 @@
   if (saved) document.getElementById("username-input").value = saved;
   fetch("/healthz").then(function(r){return r.json();}).then(function(d){
     var el = document.getElementById("mode-badge");
-    el.textContent = "Mode: "+(d.mode||"SNAPSHOT");
+    el.textContent = "DATA MODE: "+(d.dataMode||d.mode||"SNAPSHOT");
   }).catch(function(){});
   fetch("/api/pools",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
     if(!d.ok||!d.pools||d.pools.length===0){
