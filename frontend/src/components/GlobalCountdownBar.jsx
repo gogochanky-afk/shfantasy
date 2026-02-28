@@ -6,38 +6,32 @@ export default function GlobalCountdownBar() {
   const [countdown, setCountdown] = useState(null);
   const [isUrgent, setIsUrgent] = useState(false);
 
-  // Fetch next OPEN pool
+  // Fetch pools ONCE on mount — no polling, no setInterval
   useEffect(() => {
-    const fetchPool = async () => {
+    let cancelled = false;
+    (async () => {
       try {
         const response = await fetch('/api/pools');
         const data = await response.json();
-        if (data.ok && data.pools.length > 0) {
-          const openPool = data.pools.find((p) => p.status === 'OPEN');
+        if (!cancelled && data.ok && data.pools.length > 0) {
+          const openPool = data.pools.find((p) => p.status === 'OPEN' || p.status === 'open');
           setPool(openPool || null);
         }
       } catch (error) {
-        console.error('Error fetching pools:', error);
+        console.error('GlobalCountdownBar: error fetching pools:', error);
       }
-    };
+    })();
+    return () => { cancelled = true; };
+  }, []); // empty deps → runs once only
 
-    fetchPool();
-    const interval = setInterval(fetchPool, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, []);
-
-  // Countdown timer
+  // Countdown timer (1-second tick — this is fine, it's just a local timer)
   useEffect(() => {
     if (!pool) return;
-
     const updateCountdown = () => {
       const remainingSeconds = getRemainingSeconds(pool);
-      const formatted = formatRemainingTime(remainingSeconds);
-      
-      setCountdown(formatted);
+      setCountdown(formatRemainingTime(remainingSeconds));
       setIsUrgent(remainingSeconds > 0 && remainingSeconds <= 30);
     };
-
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
@@ -77,7 +71,6 @@ export default function GlobalCountdownBar() {
         🔥 BLITZ ARENA — LOCK IN{' '}
         <span style={{ fontFamily: 'monospace', fontSize: '1.1rem' }}>{countdown}</span>
       </div>
-
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
