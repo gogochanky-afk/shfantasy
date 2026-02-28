@@ -1,33 +1,27 @@
 "use strict";
+/**
+ * routes/pools.js — Snapshot Playtest Mode
+ * Reads from lib/snapshotStore.js (which reads data/snapshot_pools.json).
+ * Zero Sportradar. Zero DB. Zero better-sqlite3.
+ */
 
-// routes/pools.js — Snapshot Playtest Mode
-const express = require("express");
-const router  = express.Router();
-
-function buildPools() {
-  const now       = Date.now();
-  const todayLock = new Date(now + 2 * 60 * 60 * 1000).toISOString();
-  const tmrwLock  = new Date(now + 26 * 60 * 60 * 1000).toISOString();
-  return [
-    {
-      id: "pool-lal-gsw-today",
-      label: "Lakers vs Warriors — Today",
-      homeTeam: "LAL", awayTeam: "GSW",
-      rosterSize: 5, salaryCap: 10,
-      lockAt: todayLock, status: "open", dataMode: "SNAPSHOT",
-    },
-    {
-      id: "pool-bos-mia-tmrw",
-      label: "Celtics vs Heat — Tomorrow",
-      homeTeam: "BOS", awayTeam: "MIA",
-      rosterSize: 5, salaryCap: 10,
-      lockAt: tmrwLock, status: "open", dataMode: "SNAPSHOT",
-    },
-  ];
-}
+const express       = require("express");
+const router        = express.Router();
+const snapshotStore = require("../lib/snapshotStore");
 
 router.get("/", function (req, res) {
-  res.json({ ok: true, dataMode: "SNAPSHOT", updatedAt: new Date().toISOString(), pools: buildPools() });
+  try {
+    var result = snapshotStore.getPools();
+    res.json({
+      ok: true,
+      dataMode: result.dataMode || "SNAPSHOT",
+      updatedAt: new Date().toISOString(),
+      pools: result.pools
+    });
+  } catch (e) {
+    console.error("[pools] Error:", e.message);
+    res.status(500).json({ ok: false, error: "POOLS_ERROR", detail: e.message });
+  }
 });
 
 module.exports = router;
