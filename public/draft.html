@@ -1,274 +1,165 @@
-<!-- /public/draft.html -->
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Draft · SH Fantasy</title>
   <style>
-    :root { color-scheme: dark; }
-    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;background:#0b0c0f;color:#eaeaea;}
-    .wrap{max-width:720px;margin:0 auto;padding:18px;}
-    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;}
-    .brand{font-weight:800;font-size:20px;}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .pill{border:1px solid #2b2b2e;border-radius:999px;padding:8px 10px;font-size:12px;color:#cfcfcf;background:#101114;}
-    .btn{background:#f0a500;border:none;border-radius:10px;padding:10px 14px;font-weight:800;color:#111;cursor:pointer;}
-    .btn.secondary{background:transparent;border:1px solid #2b2b2e;color:#eaeaea;}
-    .btn:disabled{opacity:.45;cursor:not-allowed;}
-    .card{background:#141416;border:1px solid #242427;border-radius:16px;padding:14px;margin-top:12px;}
-    .title{font-weight:800;font-size:18px;margin:0 0 6px;}
-    .muted{color:#b7b7bd;font-size:12px;}
-    .list{margin-top:10px;}
-    .item{display:flex;justify-content:space-between;align-items:center;padding:10px 10px;border:1px solid #242427;border-radius:14px;background:#101114;margin-bottom:8px;}
-    .left{display:flex;flex-direction:column;gap:2px;}
-    .name{font-weight:800;}
-    .sub{font-size:12px;color:#b7b7bd;}
-    input[type="checkbox"]{transform:scale(1.2);}
-    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#1b1c20;border:1px solid #303036;color:#fff;padding:10px 12px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;}
+    :root{color-scheme:dark;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0b0c0f;color:#eaeaea;}
+    .wrap{max-width:720px;margin:0 auto;padding:20px 16px;}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+    .nav a{color:#888;font-size:13px;text-decoration:none;}
+    .nav a:hover{color:#eaeaea;}
+    h1{font-size:22px;font-weight:800;margin-bottom:4px;}
+    .sub{color:#888;font-size:13px;margin-bottom:16px;}
+    .status-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;}
+    .pill{background:#1e2028;border:1px solid #2a2d35;border-radius:6px;padding:4px 10px;}
+    .pill span{font-weight:700;}
+    .pill.ok span{color:#4ade80;}
+    .section-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;margin-bottom:8px;}
+    .player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:20px;}
+    .player-card{background:#16181d;border:1px solid #2a2d35;border-radius:8px;padding:12px;cursor:pointer;transition:border-color .15s,background .15s;}
+    .player-card:hover{border-color:#3b82f6;}
+    .player-card.selected{border-color:#3b82f6;background:#0d1a2e;}
+    .player-card.disabled{opacity:.4;cursor:not-allowed;}
+    .player-name{font-weight:700;font-size:14px;margin-bottom:4px;}
+    .player-meta{font-size:12px;color:#888;}
+    .player-cost{font-size:13px;font-weight:700;color:#3b82f6;margin-top:4px;}
+    .roster-list{margin-bottom:20px;}
+    .roster-item{display:flex;justify-content:space-between;align-items:center;background:#16181d;border:1px solid #2a2d35;border-radius:6px;padding:10px 14px;margin-bottom:6px;}
+    .roster-name{font-weight:600;font-size:14px;}
+    .roster-meta{font-size:12px;color:#888;}
+    .roster-remove{background:none;border:none;color:#f87171;cursor:pointer;font-size:18px;padding:0 4px;}
+    .btn{padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;border:none;background:#3b82f6;color:#fff;transition:background .15s;}
+    .btn:hover{background:#2563eb;}
+    .btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+    .btn-ghost{background:transparent;border:1px solid #2a2d35;color:#888;}
+    .btn-ghost:hover{border-color:#555;color:#eaeaea;background:transparent;}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e2028;border:1px solid #2a2d35;border-radius:8px;padding:10px 20px;font-size:14px;z-index:999;opacity:0;transition:opacity .2s;}
     .toast.show{opacity:1;}
-    a{color:#f0a500;text-decoration:none;}
+    .empty{text-align:center;color:#555;padding:32px 0;font-size:14px;}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid #444;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="nav">
-      <div class="brand">🧠 Draft</div>
-      <div class="row">
-        <button class="btn secondary" id="backBtn">← Back</button>
-        <a class="pill" href="/my-entries.html">📒 My Entries</a>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="title">Select Players</div>
-      <div class="muted" id="hint">Loading…</div>
-      <div style="height:10px"></div>
-      <div class="row">
-        <div class="pill" id="userPill">User: —</div>
-        <div class="pill" id="poolPill">Pool: —</div>
-        <div class="pill" id="lockPill">Lock: —</div>
-        <div class="pill" id="selPill">Selected: 0/5</div>
-        <div class="pill" id="costPill">Cost: 0/10</div>
-      </div>
-      <div style="height:10px"></div>
-      <div class="row">
-        <button class="btn" id="saveBtn" disabled>Save Lineup</button>
-        <button class="btn secondary" id="resetBtn">Reset</button>
-      </div>
-      <div class="muted" style="margin-top:10px" id="ruleText">Pick players to enable Save.</div>
-      <div class="list" id="list"></div>
-    </div>
+<div class="wrap">
+  <nav class="nav">
+    <a href="/">&larr; Home</a>
+    <a href="/my-entries.html">My Entries</a>
+  </nav>
+  <h1 id="pool-title">Draft</h1>
+  <p class="sub" id="pool-sub"></p>
+  <div class="status-bar">
+    <div class="pill"><span id="cap-display">Cap: 0/10</span></div>
+    <div class="pill"><span id="roster-display">Roster: 0/5</span></div>
+    <div class="pill" id="mode-pill"><span id="mode-display">...</span></div>
+    <div class="pill"><span id="updated-display" style="color:#666;font-size:11px;"></span></div>
   </div>
-
-  <div class="toast" id="toast"></div>
-
+  <div class="section-title">Your Roster</div>
+  <div id="roster-list" class="roster-list">
+    <div class="empty" style="padding:16px 0;font-size:13px;">No players selected yet.</div>
+  </div>
+  <div style="margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap;">
+    <button id="save-btn" class="btn" onclick="saveLineup()" disabled>Save Lineup</button>
+    <button class="btn btn-ghost" onclick="clearRoster()">Clear</button>
+  </div>
+  <div class="section-title">Available Players</div>
+  <div id="player-grid" class="player-grid">
+    <div class="empty"><span class="spinner"></span> Loading players...</div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
 <script>
 (function(){
-  const $ = (id)=>document.getElementById(id);
-  const toastEl = $('toast');
-  let toastTimer = null;
-
-  function toast(msg){
-    toastEl.textContent = msg;
-    toastEl.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1800);
+  var qs=new URLSearchParams(location.search);
+  var poolId=qs.get("poolId")||"";
+  var entryId=qs.get("entryId")||"";
+  if(!poolId||!entryId){
+    document.getElementById("pool-sub").textContent="Missing poolId or entryId.";
+    document.getElementById("player-grid").innerHTML="";
+    return;
   }
-
-  function getUsername(){
-    return (localStorage.getItem('shf_username') || '').trim();
+  document.getElementById("pool-sub").textContent="Pool: "+poolId+" · Entry: "+entryId;
+  var ROSTER_SIZE=5,SALARY_CAP=10,roster=[],allPlayers=[];
+  fetch("/api/players?poolId="+encodeURIComponent(poolId),{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok||!d.players||d.players.length===0){
+        document.getElementById("player-grid").innerHTML='<div class="empty">No players found.</div>';
+        return;
+      }
+      allPlayers=d.players;
+      var mode=d.dataMode||"SNAPSHOT";
+      document.getElementById("mode-display").textContent="DATA: "+mode;
+      document.getElementById("updated-display").textContent=d.updatedAt?"Updated: "+new Date(d.updatedAt).toLocaleTimeString():"";
+      if(mode==="SNAPSHOT"||mode==="LIVE") document.getElementById("mode-pill").className="pill ok";
+      renderGrid();
+    })
+    .catch(function(e){
+      document.getElementById("player-grid").innerHTML='<div class="empty">Error: '+e.message+'</div>';
+    });
+  function renderGrid(){
+    var rIds=roster.map(function(p){return p.id;});
+    var usedCap=roster.reduce(function(s,p){return s+p.cost;},0);
+    var html="";
+    allPlayers.forEach(function(p){
+      var inR=rIds.indexOf(p.id)!==-1;
+      var dis=!inR&&(usedCap+p.cost>SALARY_CAP||roster.length>=ROSTER_SIZE);
+      var cls="player-card"+(inR?" selected":"")+(dis?" disabled":"");
+      var pj=JSON.stringify(JSON.stringify(p));
+      html+='<div class="'+cls+'" onclick="togglePlayer('+pj+')">';
+      html+='<div class="player-name">'+esc(p.name)+'</div>';
+      html+='<div class="player-meta">'+esc(p.team)+' · '+esc(p.position)+'</div>';
+      html+='<div class="player-cost">$'+p.cost+'</div>';
+      html+='</div>';
+    });
+    document.getElementById("player-grid").innerHTML=html||'<div class="empty">No players.</div>';
+    renderRoster();updateStatus();
   }
-
-  function qs(name){
-    return new URLSearchParams(window.location.search).get(name);
+  function renderRoster(){
+    if(roster.length===0){document.getElementById("roster-list").innerHTML='<div class="empty" style="padding:16px 0;font-size:13px;">No players selected yet.</div>';return;}
+    var html="";
+    roster.forEach(function(p){
+      var pj=JSON.stringify(JSON.stringify(p));
+      html+='<div class="roster-item"><div><div class="roster-name">'+esc(p.name)+'</div><div class="roster-meta">'+esc(p.team)+' · '+esc(p.position)+' · $'+p.cost+'</div></div><button class="roster-remove" onclick="removePlayer('+pj+')">&times;</button></div>';
+    });
+    document.getElementById("roster-list").innerHTML=html;
   }
-
-  const entryId = (qs('entryId') || '').trim();
-  let rosterSize = 5;
-  let salaryCap = 10;
-  let poolId = '';
-  let username = getUsername();
-  let lockAt = null;
-  let locked = false;
-
-  let players = [];
-  let selected = new Set();
-
-  $('backBtn').addEventListener('click', ()=>{ window.location.href = '/'; });
-
-  $('resetBtn').addEventListener('click', ()=>{
-    if(locked){
-      toast('Locked. Cannot reset.');
-      return;
+  function updateStatus(){
+    var usedCap=roster.reduce(function(s,p){return s+p.cost;},0);
+    document.getElementById("cap-display").textContent="Cap: "+usedCap+"/"+SALARY_CAP;
+    document.getElementById("roster-display").textContent="Roster: "+roster.length+"/"+ROSTER_SIZE;
+    document.getElementById("save-btn").disabled=(roster.length===0);
+  }
+  window.togglePlayer=function(pj){
+    var p=JSON.parse(pj);
+    var idx=roster.findIndex(function(r){return r.id===p.id;});
+    if(idx!==-1){roster.splice(idx,1);}
+    else{
+      var usedCap=roster.reduce(function(s,r){return s+r.cost;},0);
+      if(roster.length>=ROSTER_SIZE){showToast("Roster full ("+ROSTER_SIZE+" max)");return;}
+      if(usedCap+p.cost>SALARY_CAP){showToast("Over salary cap ($"+SALARY_CAP+")");return;}
+      roster.push(p);
     }
-    selected = new Set();
-    renderList();
-    updatePills();
-  });
-
-  function fmtTime(iso){
-    if(!iso) return '—';
-    const t = new Date(iso);
-    if(isNaN(t.getTime())) return '—';
-    return t.toLocaleString();
-  }
-
-  function updatePills(){
-    $('userPill').textContent = 'User: ' + (username || '—');
-    $('poolPill').textContent = 'Pool: ' + (poolId || '—');
-    $('lockPill').textContent = 'Lock: ' + fmtTime(lockAt) + (locked ? ' (Locked)' : '');
-
-    $('selPill').textContent = `Selected: ${selected.size}/${rosterSize}`;
-    const cost = calcCost();
-    $('costPill').textContent = `Cost: ${cost}/${salaryCap}`;
-
-    if(locked){
-      $('saveBtn').disabled = true;
-      $('resetBtn').disabled = true;
-      $('ruleText').textContent = 'Locked. Lineup is read-only.';
-      return;
-    }
-
-    const ok = (selected.size === rosterSize) && (cost <= salaryCap);
-    $('saveBtn').disabled = !ok;
-    $('resetBtn').disabled = false;
-
-    $('ruleText').textContent = ok
-      ? 'Ready to save.'
-      : `Pick exactly ${rosterSize} players. Stay within salary cap ${salaryCap}.`;
-  }
-
-  function calcCost(){
-    let c = 0;
-    for(const id of selected){
-      const p = players.find(x=>x.id===id);
-      if(p) c += Number(p.cost)||0;
-    }
-    return c;
-  }
-
-  function renderList(){
-    const list = $('list');
-    list.innerHTML = '';
-    for(const p of players){
-      const div = document.createElement('div');
-      div.className = 'item';
-      const checked = selected.has(p.id) ? 'checked' : '';
-      div.innerHTML = `
-        <div class="left">
-          <div class="name">${escapeHtml(p.name)} <span class="muted">· ${escapeHtml(p.team)}</span></div>
-          <div class="sub">Cost: ${p.cost}</div>
-        </div>
-        <div>
-          <input type="checkbox" data-id="${escapeAttr(p.id)}" ${checked}/>
-        </div>
-      `;
-      const cb = div.querySelector('input[type="checkbox"]');
-
-      // HARD disable when locked
-      cb.disabled = locked;
-
-      cb.addEventListener('change', (e)=>{
-        if(locked){
-          e.target.checked = selected.has(p.id);
-          toast('Locked. Cannot change.');
-          return;
-        }
-
-        const id = e.target.getAttribute('data-id');
-        if(e.target.checked){
-          if(selected.size >= rosterSize){
-            e.target.checked = false;
-            toast(`Max ${rosterSize} players.`);
-            return;
-          }
-          selected.add(id);
-        }else{
-          selected.delete(id);
-        }
-        const cost = calcCost();
-        if(cost > salaryCap) toast(`Over cap: ${cost}/${salaryCap}`);
-        updatePills();
-      });
-
-      list.appendChild(div);
-    }
-  }
-
-  async function loadAll(){
-    if(!entryId){
-      toast('Missing entryId. Going home…');
-      setTimeout(()=>window.location.href='/', 600);
-      return;
-    }
-    if(!username){
-      toast('No username. Go back to Home.');
-      setTimeout(()=>window.location.href='/', 600);
-      return;
-    }
-
-    try{
-      $('hint').textContent = 'Loading entry…';
-      const er = await fetch('/api/lineup?entryId=' + encodeURIComponent(entryId), { cache:'no-store' });
-      const ej = await er.json();
-      if(!ej.ok) throw new Error(ej.message || ej.error || 'Entry not found');
-
-      poolId = (ej.entry && ej.entry.poolId) || '';
-      rosterSize = (ej.pool && ej.pool.rosterSize) || rosterSize;
-      salaryCap = (ej.pool && ej.pool.salaryCap) || salaryCap;
-      lockAt = (ej.pool && ej.pool.lockAt) || null;
-      locked = !!(ej.pool && ej.pool.locked);
-
-      selected = new Set(((ej.entry && ej.entry.players) || []).map(String));
-
-      $('hint').textContent = 'Loading players…';
-      const pr = await fetch('/api/players', { cache:'no-store' });
-      const pj = await pr.json();
-      if(!pj.ok) throw new Error(pj.message || pj.error || 'Players load failed');
-
-      players = pj.players || [];
-      if(!players.length) throw new Error('No players');
-
-      $('hint').textContent = `Exactly ${rosterSize} players · Salary cap ${salaryCap}`;
-      renderList();
-      updatePills();
-
-    }catch(e){
-      $('hint').textContent = 'Load failed.';
-      toast('Load failed: ' + (e.message || 'error'));
-    }
-  }
-
-  async function saveLineup(){
-    if(locked){
-      toast('Locked. Cannot save.');
-      return;
-    }
-    try{
-      const payload = { entryId, players: Array.from(selected) };
-      const r = await fetch('/api/lineup', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload),
-      });
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.message || j.error || 'Save failed');
-      toast('Saved!');
-    }catch(e){
-      toast('Save failed: ' + (e.message || 'error'));
-    }
-  }
-
-  $('saveBtn').addEventListener('click', saveLineup);
-
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  }
-  function escapeAttr(s){ return escapeHtml(s); }
-
-  $('userPill').textContent = 'User: ' + (username || '—');
-  loadAll();
+    renderGrid();
+  };
+  window.removePlayer=function(pj){var p=JSON.parse(pj);roster=roster.filter(function(r){return r.id!==p.id;});renderGrid();};
+  window.clearRoster=function(){roster=[];renderGrid();showToast("Roster cleared");};
+  window.saveLineup=function(){
+    if(roster.length===0){showToast("Add players first");return;}
+    var lineups=JSON.parse(localStorage.getItem("shf_lineups")||"{}");
+    lineups[entryId]={poolId:poolId,players:roster.map(function(p){return p.id;}),playerDetails:roster,savedAt:new Date().toISOString()};
+    localStorage.setItem("shf_lineups",JSON.stringify(lineups));
+    showToast("Lineup saved! \u2713");
+    var btn=document.getElementById("save-btn");
+    btn.textContent="Saved \u2713";
+    setTimeout(function(){btn.textContent="Save Lineup";},2000);
+  };
+  function showToast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(function(){t.classList.remove("show");},2500);}
+  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 })();
 </script>
 </body>

@@ -1,227 +1,119 @@
-<!-- /public/index.html -->
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SH Fantasy · Arena</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SH Fantasy</title>
   <style>
-    :root { color-scheme: dark; }
-    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;background:#0b0c0f;color:#eaeaea;}
-    .wrap{max-width:720px;margin:0 auto;padding:18px;}
-    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;}
-    .brand{font-weight:800;font-size:20px;line-height:1.2;}
-    .pill{border:1px solid #2b2b2e;border-radius:999px;padding:8px 10px;font-size:12px;color:#cfcfcf;background:#101114;}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .btn{background:#f0a500;border:none;border-radius:10px;padding:10px 14px;font-weight:700;color:#111;cursor:pointer;}
-    .btn.secondary{background:transparent;border:1px solid #2b2b2e;color:#eaeaea;}
-    .btn:disabled{opacity:.45;cursor:not-allowed;}
-    .card{background:#141416;border:1px solid #242427;border-radius:16px;padding:14px;margin-top:12px;}
-    .title{font-weight:800;font-size:18px;margin:0 0 6px;}
-    .muted{color:#b7b7bd;font-size:12px;}
-    input{width:100%;box-sizing:border-box;background:#0f1012;border:1px solid #2b2b2e;color:#eaeaea;padding:12px 12px;border-radius:12px;font-size:16px;}
-    .poolRow{display:flex;justify-content:space-between;align-items:center;gap:10px;}
-    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#1b1c20;border:1px solid #303036;color:#fff;padding:10px 12px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;}
-    .toast.show{opacity:1;}
-    a{color:#f0a500;text-decoration:none;}
+    :root{color-scheme:dark;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0b0c0f;color:#eaeaea;min-height:100vh;}
+    .wrap{max-width:640px;margin:0 auto;padding:24px 16px;}
+    h1{font-size:28px;font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;}
+    .sub{color:#888;font-size:14px;margin-bottom:24px;}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;background:#1e3a1e;color:#4ade80;margin-bottom:20px;}
+    .section-title{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#666;margin-bottom:10px;}
+    .card{background:#16181d;border:1px solid #2a2d35;border-radius:10px;padding:16px;margin-bottom:12px;}
+    .card-title{font-weight:700;font-size:16px;margin-bottom:6px;}
+    .card-meta{font-size:13px;color:#888;margin-bottom:12px;}
+    .lock{font-size:12px;color:#f59e0b;}
+    .btn{display:inline-block;padding:8px 18px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;border:none;background:#3b82f6;color:#fff;transition:background .15s;}
+    .btn:hover{background:#2563eb;}
+    .btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+    .input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid #2a2d35;background:#1e2028;color:#eaeaea;font-size:14px;margin-bottom:12px;}
+    .input:focus{outline:none;border-color:#3b82f6;}
+    .error{color:#f87171;font-size:13px;margin-top:8px;}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid #444;border-top-color:#3b82f6;border-radius:50%;animation:spin .6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;}
+    .nav a{color:#888;font-size:13px;text-decoration:none;}
+    .nav a:hover{color:#eaeaea;}
+    .team-badge{background:#1e2028;padding:3px 8px;border-radius:4px;font-size:12px;}
+    .empty{text-align:center;color:#555;padding:32px 0;font-size:14px;}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="nav">
-      <div class="brand">🔥 SH Fantasy<br/>Arena</div>
-      <div class="row">
-        <div class="pill" id="modePill">Mode: ...</div>
-        <div class="pill" id="userPill">User: —</div>
-        <a class="pill" href="/my-entries.html">📒 My Entries</a>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="title">Start</div>
-      <div class="muted">Enter your username once. We save it on this device.</div>
-      <div style="height:10px"></div>
-      <input id="username" placeholder="e.g. Hugo" />
-      <div style="height:10px"></div>
-      <div class="row">
-        <button class="btn" id="saveBtn">Save Username</button>
-        <button class="btn secondary" id="clearBtn">Clear</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="title">Pools</div>
-      <div class="muted" id="poolsHint">Loading…</div>
-      <div id="pools" style="margin-top:12px"></div>
-    </div>
+<div class="wrap">
+  <nav class="nav">
+    <span style="font-weight:800;font-size:18px;">SH Fantasy</span>
+    <a href="/my-entries.html">My Entries</a>
+  </nav>
+  <h1>Pick Your Pool</h1>
+  <p class="sub">Join a pool, draft your lineup, win.</p>
+  <div id="mode-badge" class="badge">...</div>
+  <div id="pools-section">
+    <div class="empty"><span class="spinner"></span> Loading pools...</div>
   </div>
-
-  <div class="toast" id="toast"></div>
-
+  <div id="join-form" style="display:none;" class="card">
+    <div class="section-title">Join Pool</div>
+    <div id="join-pool-label" style="font-weight:600;margin-bottom:12px;"></div>
+    <input id="username-input" class="input" type="text" placeholder="Your username" maxlength="30"/>
+    <button id="join-btn" class="btn" onclick="doJoin()">Join &amp; Draft</button>
+    <div id="join-error" class="error"></div>
+  </div>
+</div>
 <script>
 (function(){
-  const $ = (id)=>document.getElementById(id);
-  const toastEl = $('toast');
-  let toastTimer = null;
-
-  // ---- Storage keys (stable) ----
-  const K_USERNAME = 'shf_username';
-  const K_POOL_ID  = 'shf_poolId';
-  const K_ENTRY_ID = 'shf_entryId';
-
-  function toast(msg){
-    toastEl.textContent = msg;
-    toastEl.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1800);
-  }
-
-  function getUsername(){
-    return (localStorage.getItem(K_USERNAME) || '').trim();
-  }
-  function setUsername(u){
-    localStorage.setItem(K_USERNAME, u);
-  }
-  function clearUsername(){
-    localStorage.removeItem(K_USERNAME);
-  }
-  function setLastJoinState({ poolId, entryId, username }){
-    if (username) localStorage.setItem(K_USERNAME, username);
-    if (poolId)  localStorage.setItem(K_POOL_ID, poolId);
-    if (entryId) localStorage.setItem(K_ENTRY_ID, entryId);
-  }
-
-  function setUserPill(){
-    const u = getUsername();
-    $('userPill').textContent = 'User: ' + (u || '—');
-  }
-
-  async function loadMode(){
-    try{
-      // ✅ 你 server 係 /healthz（唔係 /health）
-      const r = await fetch('/healthz', { cache:'no-store' });
-      const j = await r.json();
-      if (j && j.ok) $('modePill').textContent = 'Mode: LIVE';
-      else $('modePill').textContent = 'Mode: —';
-    }catch(e){
-      $('modePill').textContent = 'Mode: —';
-    }
-  }
-
-  function fmtLock(lockAt){
-    if(!lockAt) return '';
-    const t = new Date(lockAt);
-    if(isNaN(t.getTime())) return '';
-    return 'Lock: ' + t.toLocaleString();
-  }
-
-  function normPool(p){
-    // 兼容唔同 schema：name/title 都接受
-    const id = p.id;
-    const name = p.name || p.title || p.id;
-    const lockAt = p.lockAt;
-    const salaryCap = (p.salaryCap ?? 10);
-    const rosterSize = (p.rosterSize ?? 5);
-    const locked = !!p.locked || p.status === 'locked' || p.status === 'closed';
-    return { id, name, lockAt, salaryCap, rosterSize, locked };
-  }
-
-  async function loadPools(){
-    $('poolsHint').textContent = 'Loading…';
-    $('pools').innerHTML = '';
-    try{
-      const r = await fetch('/api/pools', { cache:'no-store' });
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.error || 'pools failed');
-      const pools = (j.pools || []).map(normPool);
-
-      if(!pools.length){
-        $('poolsHint').textContent = 'No pools right now.';
-        return;
-      }
-
-      $('poolsHint').textContent = 'Pick a pool to join.';
-      for(const p of pools){
-        const div = document.createElement('div');
-        div.className = 'card';
-        div.innerHTML = `
-          <div class="poolRow">
-            <div>
-              <div class="title">${escapeHtml(p.name)} ${p.locked ? '<span class="muted">· Locked</span>' : ''}</div>
-              <div class="muted">Salary Cap: ${escapeHtml(String(p.salaryCap))} · Roster Size: ${escapeHtml(String(p.rosterSize))}</div>
-              <div class="muted">${escapeHtml(fmtLock(p.lockAt))}</div>
-              <div class="muted">Join will take you directly to Draft.</div>
-            </div>
-            <button class="btn" data-pool="${escapeAttr(p.id)}" ${p.locked ? 'disabled' : ''}>Join</button>
-          </div>
-        `;
-        div.querySelector('button').addEventListener('click', ()=>joinPool(p.id));
-        $('pools').appendChild(div);
-      }
-    }catch(e){
-      $('poolsHint').textContent = 'Pools unavailable';
-      toast('Pools unavailable');
-    }
-  }
-
-  async function joinPool(poolId){
-    const u = getUsername();
-    if(!u){
-      toast('Please save username first.');
+  var selectedPool = null;
+  var saved = localStorage.getItem("shf_username");
+  if (saved) document.getElementById("username-input").value = saved;
+  fetch("/healthz").then(function(r){return r.json();}).then(function(d){
+    var el = document.getElementById("mode-badge");
+    el.textContent = "Mode: "+(d.mode||"SNAPSHOT");
+  }).catch(function(){});
+  fetch("/api/pools",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok||!d.pools||d.pools.length===0){
+      document.getElementById("pools-section").innerHTML='<div class="empty">No pools available right now.</div>';
       return;
     }
-    try{
-      const r = await fetch('/api/join', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ username:u, poolId }),
+    renderPools(d.pools);
+  }).catch(function(e){
+    document.getElementById("pools-section").innerHTML='<div class="empty">Failed to load pools: '+e.message+'</div>';
+  });
+  function renderPools(pools){
+    var html='<div class="section-title">Available Pools</div>';
+    pools.forEach(function(p){
+      var lock=p.lockAt?new Date(p.lockAt).toLocaleString():"TBD";
+      var pj=JSON.stringify(JSON.stringify(p));
+      html+='<div class="card" style="cursor:pointer;" onclick="selectPool('+pj+')" id="pool-'+p.id+'">';
+      html+='<div class="card-title">'+esc(p.label||p.title||p.id)+'</div>';
+      html+='<div class="card-meta"><span class="team-badge">'+esc(p.homeTeam||"")+'</span> vs <span class="team-badge">'+esc(p.awayTeam||"")+'</span></div>';
+      html+='<div class="lock">&#x1F512; Locks: '+esc(lock)+'</div>';
+      html+='<div style="margin-top:10px;"><button class="btn" onclick="event.stopPropagation();selectPool('+pj+')" style="font-size:13px;padding:6px 14px;">Select</button></div>';
+      html+='</div>';
+    });
+    document.getElementById("pools-section").innerHTML=html;
+  }
+  window.selectPool=function(pj){
+    selectedPool=JSON.parse(pj);
+    document.querySelectorAll(".card").forEach(function(el){el.style.borderColor="#2a2d35";});
+    var el=document.getElementById("pool-"+selectedPool.id);
+    if(el)el.style.borderColor="#3b82f6";
+    document.getElementById("join-pool-label").textContent=selectedPool.label||selectedPool.title||selectedPool.id;
+    document.getElementById("join-form").style.display="block";
+    document.getElementById("join-error").textContent="";
+    document.getElementById("username-input").focus();
+  };
+  window.doJoin=function(){
+    var username=document.getElementById("username-input").value.trim();
+    var btn=document.getElementById("join-btn");
+    if(!username){document.getElementById("join-error").textContent="Please enter a username.";return;}
+    if(!selectedPool){document.getElementById("join-error").textContent="Please select a pool.";return;}
+    localStorage.setItem("shf_username",username);
+    btn.disabled=true;btn.textContent="Joining...";
+    fetch("/api/join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username,poolId:selectedPool.id})})
+      .then(function(r){return r.json();}).then(function(d){
+        if(!d.ok){document.getElementById("join-error").textContent=d.error||"Join failed.";btn.disabled=false;btn.textContent="Join & Draft";return;}
+        var entries=JSON.parse(localStorage.getItem("shf_entries")||"[]");
+        entries.push({entryId:d.entryId,poolId:d.poolId,username:username,poolLabel:selectedPool.label||selectedPool.title||selectedPool.id,joinedAt:new Date().toISOString()});
+        localStorage.setItem("shf_entries",JSON.stringify(entries));
+        window.location.href="/draft.html?poolId="+encodeURIComponent(d.poolId)+"&entryId="+encodeURIComponent(d.entryId);
+      }).catch(function(e){
+        document.getElementById("join-error").textContent="Network error: "+e.message;
+        btn.disabled=false;btn.textContent="Join & Draft";
       });
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.error || 'join failed');
-
-      const entryId = j.entryId;
-      const returnedPoolId = j.poolId || poolId;
-
-      if(!entryId) throw new Error('Missing entryId from server');
-
-      // ✅ 1) persist state (hard refresh 仍然有)
-      setLastJoinState({ poolId: returnedPoolId, entryId, username: u });
-
-      // ✅ 2) redirect 帶齊 poolId + entryId，Draft 就唔會再 Pool: —
-      const url = '/draft.html'
-        + '?poolId=' + encodeURIComponent(returnedPoolId)
-        + '&entryId=' + encodeURIComponent(entryId);
-
-      window.location.href = url;
-    }catch(e){
-      toast('Join failed: ' + (e.message || 'error'));
-    }
-  }
-
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  }
-  function escapeAttr(s){ return escapeHtml(s); }
-
-  // init
-  $('username').value = getUsername();
-  $('saveBtn').addEventListener('click', ()=>{
-    const u = $('username').value.trim();
-    if(!u){ toast('Username is required'); return; }
-    setUsername(u);
-    setUserPill();
-    toast('Saved');
-  });
-  $('clearBtn').addEventListener('click', ()=>{
-    clearUsername();
-    $('username').value = '';
-    setUserPill();
-    toast('Cleared');
-  });
-
-  setUserPill();
-  loadMode();
-  loadPools();
+  };
+  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 })();
 </script>
 </body>

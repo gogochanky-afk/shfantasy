@@ -1,74 +1,57 @@
 "use strict";
 
+// index.js — SH Fantasy Snapshot Playtest Mode
+// Zero DB / sqlite / sportradar dependencies.
+
 const express = require("express");
+const path    = require("path");
+
+const poolsRoute   = require("./routes/pools");
+const playersRoute = require("./routes/players");
+const joinRoute    = require("./routes/join");
+const lineupRoute  = require("./routes/lineup");
 
 const app = express();
 
-// Basic middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---- Health checks (MUST be 200) ----
+// ── Health ──────────────────────────────────────────────────────────────────
 app.get("/healthz", function (req, res) {
-  res.status(200).json({
-    ok: true,
-    service: "shfantasy",
-    dataMode: (process.env.DATA_MODE || "DEMO").toUpperCase(),
-    ts: new Date().toISOString(),
-  });
+  res.json({ ok: true, mode: "SNAPSHOT", ts: new Date().toISOString() });
 });
-
 app.get("/api/healthz", function (req, res) {
-  res.status(200).json({
-    ok: true,
-    service: "shfantasy",
-    dataMode: (process.env.DATA_MODE || "DEMO").toUpperCase(),
-    ts: new Date().toISOString(),
-  });
+  res.json({ ok: true, mode: "SNAPSHOT", ts: new Date().toISOString() });
 });
 
-// ---- API routes (canonical) ----
-const poolsRoute   = require("./routes/pools");
-const playersRoute = require("./routes/players");
+// ── API ──────────────────────────────────────────────────────────────────────
 app.use("/api/pools",   poolsRoute);
 app.use("/api/players", playersRoute);
+app.use("/api/join",    joinRoute);
+app.use("/api/lineup",  lineupRoute);
 
-// ---- Compatibility routes (no /api prefix) ----
-// Dispatch /pools and /players to the same handlers, preserving querystring.
+// ── Compat (no /api prefix) ──────────────────────────────────────────────────
 app.use("/pools",   poolsRoute);
 app.use("/players", playersRoute);
 
-// Root
-app.get("/", function (req, res) {
-  res.status(200).send("shfantasy api");
+// ── Static UI ────────────────────────────────────────────────────────────────
+app.use(express.static(path.join(__dirname, "public")));
+
+// ── 404 catch-all ────────────────────────────────────────────────────────────
+app.use(function (req, res) {
+  if (req.path.startsWith("/api")) {
+    return res.status(404).json({ ok: false, error: "NOT_FOUND", path: req.path });
+  }
+  res.status(404).send("Not found");
 });
 
-// 404 JSON for any unmatched /api/* routes
-app.use("/api", function (req, res) {
-  res.status(404).json({
-    ok: false,
-    error: "API_ROUTE_NOT_FOUND",
-    method: req.method,
-    path: req.path,
-  });
-});
-
-// Generic error handler
-app.use(function (err, req, res, next) {
+// ── Error handler ─────────────────────────────────────────────────────────────
+app.use(function (err, req, res, _next) {
   console.error("Unhandled error:", err);
-  res.status(500).json({
-    ok: false,
-    error: "INTERNAL_SERVER_ERROR",
-  });
+  res.status(500).json({ ok: false, error: "INTERNAL_SERVER_ERROR" });
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, function () {
-  console.log(
-    "shfantasy listening on " +
-      PORT +
-      " (DATA_MODE=" +
-      (process.env.DATA_MODE || "DEMO") +
-      ")"
-  );
+  console.log("shfantasy SNAPSHOT listening on :" + PORT);
 });
