@@ -1,27 +1,26 @@
+"use strict";
+
 // routes/pools.js
 // GET /api/pools — returns today + tomorrow pools
 //
 // DATA_MODE=DEMO (default): deterministic demo pools, no Sportradar call
 // DATA_MODE=LIVE:
-//   1. Return in-memory cache if < 120 s old (prevents repeated API calls)
-//   2. On cache miss, call Sportradar
-//   3. On 429: enter cooldown, serve SNAPSHOT if exists, else DEMO_FALLBACK
-//   4. On other error: serve SNAPSHOT if exists, else DEMO_FALLBACK
-//   5. On success: save DB snapshot (last-good)
-
-"use strict";
+//   - in-memory cache 120s
+//   - 429 -> cooldown 15m -> serve SNAPSHOT if exists else DEMO_FALLBACK
+//   - success -> save DB snapshot
 
 const express = require("express");
-const router  = express.Router();
+const router = express.Router();
+
 const { getOrFetch } = require("../lib/cache");
 const { saveSnapshot, loadLatestSnapshot } = require("../lib/poolsSnapshot");
 
-const CACHE_TTL_S = 120; // seconds
-const CACHE_KEY   = "pools:live";
+const CACHE_TTL_S = 120;
+const CACHE_KEY = "pools:live";
 
-// ---- Rate-limit cooldown (STOP hammering Sportradar) ----
-let rateLimitUntilMs = 0;                 // epoch ms
-const RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
+// ---- Rate-limit cooldown ----
+let rateLimitUntilMs = 0;
+const RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000;
 
 function inCooldown() {
   return Date.now() < rateLimitUntilMs;
@@ -60,17 +59,19 @@ function getDeterministicLockAt() {
 
 function getDemoPools() {
   const lockAt = getDeterministicLockAt();
-  return DEMO_POOLS_BASE.map(function(p) { return Object.assign({}, p, { lockAt: lockAt }); });
+  return DEMO_POOLS_BASE.map((p) => Object.assign({}, p, { lockAt }));
 }
 
 function getTodayTomorrow() {
   const now = new Date();
   const tokyoOffset = 9 * 60;
   const localOffset = now.getTimezoneOffset();
-  const tokyoTime   = new Date(now.getTime() + (tokyoOffset + localOffset) * 60000);
-  const fmt = function(d) { return d.toISOString().split("T")[0]; };
+  const tokyoTime = new Date(now.getTime() + (tokyoOffset + localOffset) * 60000);
+
+  const fmt = (d) => d.toISOString().split("T")[0];
   const tomorrow = new Date(tokyoTime);
   tomorrow.setDate(tomorrow.getDate() + 1);
+
   return { today: fmt(tokyoTime), tomorrow: fmt(tomorrow) };
 }
 
@@ -78,14 +79,18 @@ function gameToPool(game, day) {
   const lockAt = game.scheduled
     ? new Date(new Date(game.scheduled).getTime() - 5 * 60000).toISOString()
     : getDeterministicLockAt();
+
   return {
-    id:       "sr-" + game.sr_game_id,
-    title:    (game.away_team.alias || game.away_team.name) + " @ " + (game.home_team.alias || game.home_team.name),
+    id: "sr-" + game.sr_game_id,
+    title:
+      (game.away_team.alias || game.away_team.name) +
+      " @ " +
+      (game.home_team.alias || game.home_team.name),
     homeTeam: { abbr: game.home_team.alias, name: game.home_team.name },
     awayTeam: { abbr: game.away_team.alias, name: game.away_team.name },
     srGameId: game.sr_game_id,
     rosterSize: 5,
-    salaryCap:  10,
+    salaryCap: 10,
     lockAt,
     status: game.status === "closed" ? "closed" : "open",
     day,
@@ -103,6 +108,7 @@ function respondSnapshotOrDemo(res, nowIso, note) {
       note: note || "serving DB snapshot",
     });
   }
+
   return res.json({
     ok: true,
     dataMode: "DEMO_FALLBACK",
@@ -113,22 +119,20 @@ function respondSnapshotOrDemo(res, nowIso, note) {
 }
 
 // ---- Route ----
-router.get("/", async function(req, res) {
+router.get("/", async function (req, res) {
   const DATA_MODE = (process.env.DATA_MODE || "DEMO").toUpperCase();
   const nowIso = new Date().toISOString();
 
-  // ---- DEMO mode — no Sportradar call at all ----
   if (DATA_MODE !== "LIVE") {
     return res.json({
-      ok:        true,
-      dataMode:  "DEMO",
+      ok: true,
+      dataMode: "DEMO",
       updatedAt: nowIso,
-      pools:     getDemoPools(),
+      pools: getDemoPools(),
     });
   }
 
-  // ---- LIVE mode ----
-  // If we are in cooldown, DO NOT call Sportradar.
+  // LIVE mode: cooldown -> no Sportradar calls
   if (inCooldown()) {
     return respondSnapshotOrDemo(res, nowIso, "rate-limit cooldown (skipping Sportradar)");
   }
@@ -137,17 +141,18 @@ router.get("/", async function(req, res) {
 
   let cacheResult;
   try {
-    cacheResult = await getOrFetch(CACHE_KEY, CACHE_TTL_S, async function() {
+    cacheResult = await getOrFetch(CACHE_KEY, CACHE_TTL_S, async function () {
       const { today, tomorrow } = getTodayTomorrow();
-      const todayGames    = await fetchGames(today);
+      const todayGames = await fetchGames(today);
       const tomorrowGames = await fetchGames(tomorrow);
 
-      const pools = todayGames.map(function(g) { return gameToPool(g, "today"); })
-        .concat(tomorrowGames.map(function(g) { return gameToPool(g, "tomorrow"); }));
+      const pools = todayGames.map((g) => gameToPool(g, "today")).concat(
+        tomorrowGames.map((g) => gameToPool(g, "tomorrow"))
+      );
 
       if (pools.length === 0) throw new Error("no games returned from Sportradar");
 
-      // Save last-good snapshot to DB
+      // Save last-good snapshot
       try {
         saveSnapshot("sportradar", pools);
       } catch (e) {
@@ -160,26 +165,21 @@ router.get("/", async function(req, res) {
     const isRateLimit = err && err.isRateLimit;
 
     if (isRateLimit) {
-      console.warn("[pools] 429 rate-limit → enter cooldown 15m");
+      console.warn("[pools] 429 rate-limit -> enter cooldown 15m");
       enterCooldown();
       return respondSnapshotOrDemo(res, nowIso, "429 rate-limit; served snapshot if available");
     }
 
-    console.error("[pools] fetch error (non-429):", err && err.message ? err.message : err);
+    console.error("[pools] fetch error:", err && err.message ? err.message : err);
     return respondSnapshotOrDemo(res, nowIso, "fetch error; served snapshot if available");
   }
 
   const dataMode = cacheResult.stale ? "LIVE_STALE" : "LIVE";
-  if (cacheResult.stale) {
-    console.warn("[pools] serving LIVE_STALE cache (age=" +
-      Math.round((Date.now() - new Date(cacheResult.cachedAt).getTime()) / 1000) + "s)");
-  }
-
   return res.json({
-    ok:        true,
-    dataMode:  dataMode,
+    ok: true,
+    dataMode,
     updatedAt: cacheResult.cachedAt,
-    pools:     cacheResult.value,
+    pools: cacheResult.value,
   });
 });
 
