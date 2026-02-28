@@ -82,14 +82,134 @@ function parseRosterSnapshot(row) {
 }
 
 // ---- Route ----
-// DEMO-only: no sqlite / db.js / poolsSnapshot / sportradar dependencies.
-router.get("/", function (req, res) {
-  const poolId = String(req.query.poolId || "").trim();
+router.get("/", async function(req, res) {
+  const DATA_MODE = (process.env.DATA_MODE || "DEMO").toUpperCase();
+  const poolId    = String(req.query.poolId || "").trim();
+  const now       = new Date().toISOString();
+
+  // ---- DEMO mode ----
+  if (DATA_MODE !== "LIVE") {
+    return res.json({
+      ok:        true,
+      dataMode:  "DEMO",
+      poolId:    poolId || null,
+      updatedAt: now,
+      players:   getDemoPlayers(poolId),
+    });
+  }
+
+  // ---- LIVE mode ----
+
+  // 1. Try roster_snapshots DB first (no API call, no rate-limit risk)
+  if (poolId) {
+    try {
+      const { getLatestRoster } = require("../lib/db");
+      const row = getLatestRoster(poolId);
+      if (row) {
+        const players = parseRosterSnapshot(row);
+        if (players && players.length > 0) {
+          return res.json({
+            ok:        true,
+            dataMode:  "SNAPSHOT",
+            poolId:    poolId,
+            updatedAt: row.captured_at || now,
+            players:   players,
+          });
+        }
+      }
+      console.warn("[players] no DB snapshot for poolId=" + poolId);
+    } catch (dbErr) {
+      console.error("[players] DB error:", dbErr.message);
+    }
+  }
+
+  // 2. Try Sportradar roster API with 120 s cache
+  //    (Only if poolId looks like a Sportradar game id, i.e. starts with "sr-")
+  if (poolId && poolId.startsWith("sr-")) {
+    const srGameId  = poolId.replace(/^sr-/, "");
+    const cacheKey  = "players:" + poolId;
+
+    let cacheResult;
+    try {
+      cacheResult = await getOrFetch(cacheKey, CACHE_TTL_S, async function() {
+        // Sportradar roster endpoint (trial/production)
+        const axios = require("axios");
+        const SPORTRADAR_API_KEY  = process.env.SPORTRADAR_API_KEY  || "";
+        const SPORTRADAR_BASE_URL = process.env.SPORTRADAR_BASE_URL || "https://api.sportradar.com";
+        const NBA_ACCESS_LEVEL    = process.env.SPORTRADAR_NBA_ACCESS_LEVEL || "trial";
+
+        if (!SPORTRADAR_API_KEY) throw new Error("SPORTRADAR_API_KEY not set");
+
+        const url = SPORTRADAR_BASE_URL +
+          "/nba/" + NBA_ACCESS_LEVEL +
+          "/v8/en/games/" + srGameId + "/boxscore.json";
+
+        const resp = await axios.get(url, {
+          params: { api_key: SPORTRADAR_API_KEY },
+          timeout: 10000,
+          validateStatus: function() { return true; },
+        });
+
+        if (resp.status === 429) {
+          const { RateLimitError } = require("../lib/sportradar");
+          throw new RateLimitError("429 on players for " + poolId);
+        }
+        if (resp.status !== 200) {
+          throw new Error("HTTP " + resp.status + " for game " + srGameId);
+        }
+
+        // Parse home + away rosters from boxscore
+        const data = resp.data || {};
+        const homePlayers = ((data.home && data.home.players) || []).map(function(p, i) {
+          return {
+            id:           "h-" + (p.id || i),
+            name:         (p.full_name || p.name || "Unknown"),
+            team:         (data.home && data.home.alias) || "HOME",
+            position:     p.primary_position || p.position || "?",
+            cost:         computeCost(p),
+            injuryStatus: p.status !== "A" ? p.status : null,
+          };
+        });
+        const awayPlayers = ((data.away && data.away.players) || []).map(function(p, i) {
+          return {
+            id:           "a-" + (p.id || i),
+            name:         (p.full_name || p.name || "Unknown"),
+            team:         (data.away && data.away.alias) || "AWAY",
+            position:     p.primary_position || p.position || "?",
+            cost:         computeCost(p),
+            injuryStatus: p.status !== "A" ? p.status : null,
+          };
+        });
+
+        const all = homePlayers.concat(awayPlayers);
+        if (all.length === 0) throw new Error("no players in boxscore for " + srGameId);
+        return all;
+      });
+    } catch (err) {
+      // No stale cache available — fall through to DEMO fallback below
+      console.error("[players] Sportradar fetch failed, no cache: " + err.message);
+      cacheResult = null;
+    }
+
+    if (cacheResult) {
+      const dataMode = cacheResult.stale ? "LIVE_STALE" : "LIVE";
+      return res.json({
+        ok:        true,
+        dataMode:  dataMode,
+        poolId:    poolId,
+        updatedAt: cacheResult.cachedAt,
+        players:   cacheResult.value,
+      });
+    }
+  }
+
+  // 3. DEMO fallback
+  console.warn("[players] falling back to DEMO for poolId=" + poolId);
   return res.json({
     ok:        true,
-    dataMode:  "DEMO",
+    dataMode:  "DEMO_FALLBACK",
     poolId:    poolId || null,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
     players:   getDemoPlayers(poolId),
   });
 });

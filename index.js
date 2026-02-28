@@ -27,10 +27,16 @@ app.get("/api/healthz", function (req, res) {
   });
 });
 
-// ---- API routes ----
-// IMPORTANT: 先確保 pools route 存在，其他 route 之後再逐個加返
-const poolsRoute = require("./routes/pools");
-app.use("/api/pools", poolsRoute);
+// ---- API routes (canonical) ----
+const poolsRoute   = require("./routes/pools");
+const playersRoute = require("./routes/players");
+app.use("/api/pools",   poolsRoute);
+app.use("/api/players", playersRoute);
+
+// ---- Compatibility routes (no /api prefix) ----
+// Dispatch /pools and /players to the same handlers, preserving querystring.
+app.use("/pools",   poolsRoute);
+app.use("/players", playersRoute);
 
 // Root
 app.get("/", function (req, res) {
