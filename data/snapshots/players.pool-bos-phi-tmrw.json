@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-4277951",
+    "name": "Luka Garza",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "C",
+    "jersey": "52",
+    "cost": 4
+  },
+  {
+    "id": "espn-4397424",
+    "name": "Neemias Queta",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "C",
+    "jersey": "88",
+    "cost": 4
+  },
+  {
+    "id": "espn-4702745",
+    "name": "Amari Williams",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "F",
+    "jersey": "77",
+    "cost": 3
+  },
+  {
+    "id": "espn-4397885",
+    "name": "Dalano Banton",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "F",
+    "jersey": "45",
+    "cost": 3
+  },
+  {
+    "id": "espn-6478",
+    "name": "Nikola Vucevic",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "C",
+    "jersey": "4",
+    "cost": 3
+  },
+  {
+    "id": "espn-4593841",
+    "name": "Baylor Scheierman",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "G",
+    "jersey": "55",
+    "cost": 2
+  },
+  {
+    "id": "espn-4065648",
+    "name": "Jayson Tatum",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "F",
+    "jersey": "0",
+    "cost": 2
+  },
+  {
+    "id": "espn-4593043",
+    "name": "John Tonje",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "F",
+    "jersey": "8",
+    "cost": 2
+  },
+  {
+    "id": "espn-4065804",
+    "name": "Sam Hauser",
+    "team": "BOS",
+    "teamFull": "Boston Celtics",
+    "position": "F",
+    "jersey": "30",
+    "cost": 2
+  },
+  {
+    "id": "espn-5105637",
+    "name": "Adem Bona",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "C",
+    "jersey": "30",
+    "cost": 4
+  },
+  {
+    "id": "espn-6585",
+    "name": "Andre Drummond",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "C",
+    "jersey": "1",
+    "cost": 4
+  },
+  {
+    "id": "espn-3064230",
+    "name": "Cameron Payne",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "PG",
+    "jersey": "20",
+    "cost": 3
+  },
+  {
+    "id": "espn-4433159",
+    "name": "Dalen Terry",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "F",
+    "jersey": "14",
+    "cost": 3
+  },
+  {
+    "id": "espn-3059318",
+    "name": "Joel Embiid",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "C",
+    "jersey": "21",
+    "cost": 3
+  },
+  {
+    "id": "espn-4870562",
+    "name": "Dominick Barlow",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "F",
+    "jersey": "25",
+    "cost": 2
+  },
+  {
+    "id": "espn-4432446",
+    "name": "Jabari Walker",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "F",
+    "jersey": "33",
+    "cost": 2
+  },
+  {
+    "id": "espn-4433569",
+    "name": "Johni Broome",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "F",
+    "jersey": "22",
+    "cost": 2
+  },
+  {
+    "id": "espn-4711297",
+    "name": "Justin Edwards",
+    "team": "PHI",
+    "teamFull": "Philadelphia 76ers",
+    "position": "F",
+    "jersey": "11",
+    "cost": 2
+  }
+]

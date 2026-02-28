@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-4701225",
+    "name": "PJ Hall",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "C",
+    "jersey": "16",
+    "cost": 4
+  },
+  {
+    "id": "espn-4576060",
+    "name": "Ryan Kalkbrenner",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "C",
+    "jersey": "11",
+    "cost": 4
+  },
+  {
+    "id": "espn-4433287",
+    "name": "Brandon Miller",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "F",
+    "jersey": "24",
+    "cost": 3
+  },
+  {
+    "id": "espn-4066218",
+    "name": "Grant Williams",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "F",
+    "jersey": "2",
+    "cost": 3
+  },
+  {
+    "id": "espn-4066383",
+    "name": "Miles Bridges",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "F",
+    "jersey": "0",
+    "cost": 3
+  },
+  {
+    "id": "espn-4433249",
+    "name": "Moussa Diabate",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "F",
+    "jersey": "14",
+    "cost": 2
+  },
+  {
+    "id": "espn-5211176",
+    "name": "Tidjane Salaun",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "F",
+    "jersey": "31",
+    "cost": 2
+  },
+  {
+    "id": "espn-4597865",
+    "name": "Tosan Evbuomwan",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "F",
+    "jersey": "20",
+    "cost": 2
+  },
+  {
+    "id": "espn-4277964",
+    "name": "Xavier Tillman",
+    "team": "CHA",
+    "teamFull": "Charlotte Hornets",
+    "position": "F",
+    "jersey": "26",
+    "cost": 2
+  },
+  {
+    "id": "espn-5105565",
+    "name": "Donovan Clingan",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "C",
+    "jersey": "23",
+    "cost": 4
+  },
+  {
+    "id": "espn-4066211",
+    "name": "Robert Williams III",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "C",
+    "jersey": "35",
+    "cost": 4
+  },
+  {
+    "id": "espn-4683021",
+    "name": "Deni Avdija",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "F",
+    "jersey": "8",
+    "cost": 3
+  },
+  {
+    "id": "espn-2991070",
+    "name": "Jerami Grant",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "F",
+    "jersey": "9",
+    "cost": 3
+  },
+  {
+    "id": "espn-5217746",
+    "name": "Yang Hansen",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "C",
+    "jersey": "16",
+    "cost": 3
+  },
+  {
+    "id": "espn-4683935",
+    "name": "Blake Wesley",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "G",
+    "jersey": "1",
+    "cost": 2
+  },
+  {
+    "id": "espn-4433144",
+    "name": "Caleb Love",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "G",
+    "jersey": "2",
+    "cost": 2
+  },
+  {
+    "id": "espn-4594326",
+    "name": "Kris Murray",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "F",
+    "jersey": "24",
+    "cost": 2
+  },
+  {
+    "id": "espn-4431736",
+    "name": "Toumani Camara",
+    "team": "POR",
+    "teamFull": "Portland Trail Blazers",
+    "position": "F",
+    "jersey": "33",
+    "cost": 2
+  }
+]

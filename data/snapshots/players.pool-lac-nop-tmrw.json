@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-3448",
+    "name": "Brook Lopez",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "C",
+    "jersey": "11",
+    "cost": 4
+  },
+  {
+    "id": "espn-5108024",
+    "name": "Yanic Konan Niederhauser",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "C",
+    "jersey": "14",
+    "cost": 4
+  },
+  {
+    "id": "espn-3936099",
+    "name": "Derrick Jones Jr.",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "F",
+    "jersey": "5",
+    "cost": 3
+  },
+  {
+    "id": "espn-4432170",
+    "name": "Isaiah Jackson",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "F",
+    "jersey": "23",
+    "cost": 3
+  },
+  {
+    "id": "espn-3908845",
+    "name": "John Collins",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "F",
+    "jersey": "20",
+    "cost": 3
+  },
+  {
+    "id": "espn-4683634",
+    "name": "Bennedict Mathurin",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "G",
+    "jersey": "9",
+    "cost": 2
+  },
+  {
+    "id": "espn-6450",
+    "name": "Kawhi Leonard",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "F",
+    "jersey": "2",
+    "cost": 2
+  },
+  {
+    "id": "espn-3416",
+    "name": "Nicolas Batum",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "F",
+    "jersey": "33",
+    "cost": 2
+  },
+  {
+    "id": "espn-4702134",
+    "name": "Norchad Omier",
+    "team": "LAC",
+    "teamFull": "LA Clippers",
+    "position": "F",
+    "jersey": "",
+    "cost": 2
+  },
+  {
+    "id": "espn-3442",
+    "name": "DeAndre Jordan",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "C",
+    "jersey": "9",
+    "cost": 4
+  },
+  {
+    "id": "espn-4869780",
+    "name": "Derik Queen",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "C",
+    "jersey": "22",
+    "cost": 4
+  },
+  {
+    "id": "espn-4277813",
+    "name": "Herbert Jones",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "F",
+    "jersey": "2",
+    "cost": 3
+  },
+  {
+    "id": "espn-4432180",
+    "name": "Hunter Dickinson",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "C",
+    "jersey": "4",
+    "cost": 3
+  },
+  {
+    "id": "espn-5061589",
+    "name": "Yves Missi",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "C",
+    "jersey": "21",
+    "cost": 3
+  },
+  {
+    "id": "espn-4997538",
+    "name": "Karlo Matkovic",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "F",
+    "jersey": "17",
+    "cost": 2
+  },
+  {
+    "id": "espn-3155535",
+    "name": "Kevon Looney",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "F",
+    "jersey": "55",
+    "cost": 2
+  },
+  {
+    "id": "espn-4397688",
+    "name": "Trey Murphy III",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "F",
+    "jersey": "25",
+    "cost": 2
+  },
+  {
+    "id": "espn-4395628",
+    "name": "Zion Williamson",
+    "team": "NOP",
+    "teamFull": "New Orleans Pelicans",
+    "position": "F",
+    "jersey": "1",
+    "cost": 2
+  }
+]

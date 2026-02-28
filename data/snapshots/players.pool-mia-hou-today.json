@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-4066261",
+    "name": "Bam Adebayo",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "C",
+    "jersey": "13",
+    "cost": 4
+  },
+  {
+    "id": "espn-5105623",
+    "name": "Kel'el Ware",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "C",
+    "jersey": "7",
+    "cost": 4
+  },
+  {
+    "id": "espn-3059319",
+    "name": "Andrew Wiggins",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "F",
+    "jersey": "22",
+    "cost": 3
+  },
+  {
+    "id": "espn-4432848",
+    "name": "Jaime Jaquez Jr.",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "F",
+    "jersey": "11",
+    "cost": 3
+  },
+  {
+    "id": "espn-4700818",
+    "name": "Vladislav Goldin",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "C",
+    "jersey": "50",
+    "cost": 3
+  },
+  {
+    "id": "espn-4431786",
+    "name": "Keshad Johnson",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "F",
+    "jersey": "16",
+    "cost": 2
+  },
+  {
+    "id": "espn-4431772",
+    "name": "Myron Gardner",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "F",
+    "jersey": "15",
+    "cost": 2
+  },
+  {
+    "id": "espn-4997528",
+    "name": "Nikola Jovic",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "F",
+    "jersey": "5",
+    "cost": 2
+  },
+  {
+    "id": "espn-3899664",
+    "name": "Simone Fontecchio",
+    "team": "MIA",
+    "teamFull": "Miami Heat",
+    "position": "F",
+    "jersey": "0",
+    "cost": 2
+  },
+  {
+    "id": "espn-4871144",
+    "name": "Alperen Sengun",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "C",
+    "jersey": "28",
+    "cost": 4
+  },
+  {
+    "id": "espn-3102529",
+    "name": "Clint Capela",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "C",
+    "jersey": "30",
+    "cost": 4
+  },
+  {
+    "id": "espn-2578185",
+    "name": "Dorian Finney-Smith",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "F",
+    "jersey": "2",
+    "cost": 3
+  },
+  {
+    "id": "espn-4592857",
+    "name": "Isaiah Crawford",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "F",
+    "jersey": "27",
+    "cost": 3
+  },
+  {
+    "id": "espn-2991235",
+    "name": "Steven Adams",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "C",
+    "jersey": "12",
+    "cost": 3
+  },
+  {
+    "id": "espn-4432639",
+    "name": "Jabari Smith Jr.",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "F",
+    "jersey": "10",
+    "cost": 2
+  },
+  {
+    "id": "espn-3136777",
+    "name": "Jae'Sean Tate",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "F",
+    "jersey": "8",
+    "cost": 2
+  },
+  {
+    "id": "espn-3209",
+    "name": "Jeff Green",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "F",
+    "jersey": "32",
+    "cost": 2
+  },
+  {
+    "id": "espn-3202",
+    "name": "Kevin Durant",
+    "team": "HOU",
+    "teamFull": "Houston Rockets",
+    "position": "F",
+    "jersey": "7",
+    "cost": 2
+  }
+]

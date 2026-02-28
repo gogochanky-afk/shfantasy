@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-5160992",
+    "name": "Alex Sarr",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "C",
+    "jersey": "20",
+    "cost": 4
+  },
+  {
+    "id": "espn-3936296",
+    "name": "Skal Labissiere",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "C",
+    "jersey": "17",
+    "cost": 4
+  },
+  {
+    "id": "espn-6583",
+    "name": "Anthony Davis",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "F",
+    "jersey": "23",
+    "cost": 3
+  },
+  {
+    "id": "espn-2581184",
+    "name": "Anthony Gill",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "F",
+    "jersey": "16",
+    "cost": 3
+  },
+  {
+    "id": "espn-5105592",
+    "name": "Cam Whitmore",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "F",
+    "jersey": "1",
+    "cost": 3
+  },
+  {
+    "id": "espn-4432907",
+    "name": "Justin Champagnie",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "F",
+    "jersey": "9",
+    "cost": 2
+  },
+  {
+    "id": "espn-5174563",
+    "name": "Kyshawn George",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "F",
+    "jersey": "18",
+    "cost": 2
+  },
+  {
+    "id": "espn-4395650",
+    "name": "Leaky Black",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "F",
+    "jersey": "12",
+    "cost": 2
+  },
+  {
+    "id": "espn-4997537",
+    "name": "Tristan Vukcevic",
+    "team": "WAS",
+    "teamFull": "Washington Wizards",
+    "position": "F",
+    "jersey": "00",
+    "cost": 2
+  },
+  {
+    "id": "espn-3913176",
+    "name": "Brandon Ingram",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "3",
+    "cost": 4
+  },
+  {
+    "id": "espn-3134908",
+    "name": "Jakob Poeltl",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "C",
+    "jersey": "19",
+    "cost": 4
+  },
+  {
+    "id": "espn-5093267",
+    "name": "Collin Murray-Boyles",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "12",
+    "cost": 3
+  },
+  {
+    "id": "espn-4431893",
+    "name": "Jamison Battle",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "77",
+    "cost": 3
+  },
+  {
+    "id": "espn-5107897",
+    "name": "Jonathan Mogbo",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "2",
+    "cost": 3
+  },
+  {
+    "id": "espn-4395625",
+    "name": "RJ Barrett",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "9",
+    "cost": 2
+  },
+  {
+    "id": "espn-4278580",
+    "name": "Sandro Mamukelashvili",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "54",
+    "cost": 2
+  },
+  {
+    "id": "espn-4433134",
+    "name": "Scottie Barnes",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "4",
+    "cost": 2
+  },
+  {
+    "id": "espn-4431684",
+    "name": "Trayce Jackson-Davis",
+    "team": "TOR",
+    "teamFull": "Toronto Raptors",
+    "position": "F",
+    "jersey": "32",
+    "cost": 2
+  }
+]

@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-4683688",
+    "name": "Dereck Lively II",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "C",
+    "jersey": "2",
+    "cost": 4
+  },
+  {
+    "id": "espn-4701208",
+    "name": "Moussa Cisse",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "C",
+    "jersey": "30",
+    "cost": 4
+  },
+  {
+    "id": "espn-3138160",
+    "name": "Caleb Martin",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "F",
+    "jersey": "16",
+    "cost": 3
+  },
+  {
+    "id": "espn-5041939",
+    "name": "Cooper Flagg",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "F",
+    "jersey": "32",
+    "cost": 3
+  },
+  {
+    "id": "espn-4278049",
+    "name": "Daniel Gafford",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "F",
+    "jersey": "21",
+    "cost": 3
+  },
+  {
+    "id": "espn-2531367",
+    "name": "Dwight Powell",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "F",
+    "jersey": "7",
+    "cost": 2
+  },
+  {
+    "id": "espn-6609",
+    "name": "Khris Middleton",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "F",
+    "jersey": "20",
+    "cost": 2
+  },
+  {
+    "id": "espn-4277848",
+    "name": "Marvin Bagley III",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "F",
+    "jersey": "35",
+    "cost": 2
+  },
+  {
+    "id": "espn-4278594",
+    "name": "Naji Marshall",
+    "team": "DAL",
+    "teamFull": "Dallas Mavericks",
+    "position": "F",
+    "jersey": "13",
+    "cost": 2
+  },
+  {
+    "id": "espn-4592435",
+    "name": "Branden Carlson",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "C",
+    "jersey": "15",
+    "cost": 4
+  },
+  {
+    "id": "espn-4433255",
+    "name": "Chet Holmgren",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "C",
+    "jersey": "7",
+    "cost": 4
+  },
+  {
+    "id": "espn-4684208",
+    "name": "Brooks Barnhizer",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "F",
+    "jersey": "23",
+    "cost": 3
+  },
+  {
+    "id": "espn-4222252",
+    "name": "Isaiah Hartenstein",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "C",
+    "jersey": "55",
+    "cost": 3
+  },
+  {
+    "id": "espn-5061603",
+    "name": "Thomas Sorber",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "C",
+    "jersey": "12",
+    "cost": 3
+  },
+  {
+    "id": "espn-4397183",
+    "name": "Aaron Wiggins",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "G",
+    "jersey": "21",
+    "cost": 2
+  },
+  {
+    "id": "espn-4900671",
+    "name": "Ajay Mitchell",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "G",
+    "jersey": "25",
+    "cost": 2
+  },
+  {
+    "id": "espn-4395676",
+    "name": "Buddy Boeheim",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "F",
+    "jersey": "14",
+    "cost": 2
+  },
+  {
+    "id": "espn-4432823",
+    "name": "Jaylin Williams",
+    "team": "OKC",
+    "teamFull": "Oklahoma City Thunder",
+    "position": "F",
+    "jersey": "6",
+    "cost": 2
+  }
+]

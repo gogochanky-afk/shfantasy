@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-4017837",
+    "name": "Ivica Zubac",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "C",
+    "jersey": "40",
+    "cost": 4
+  },
+  {
+    "id": "espn-4065731",
+    "name": "Jay Huff",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "C",
+    "jersey": "32",
+    "cost": 4
+  },
+  {
+    "id": "espn-5106060",
+    "name": "Jarace Walker",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "F",
+    "jersey": "5",
+    "cost": 3
+  },
+  {
+    "id": "espn-4066399",
+    "name": "Micah Potter",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "C",
+    "jersey": "11",
+    "cost": 3
+  },
+  {
+    "id": "espn-4278355",
+    "name": "Obi Toppin",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "F",
+    "jersey": "1",
+    "cost": 3
+  },
+  {
+    "id": "espn-4396909",
+    "name": "Aaron Nesmith",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "G",
+    "jersey": "23",
+    "cost": 2
+  },
+  {
+    "id": "espn-4395712",
+    "name": "Andrew Nembhard",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "G",
+    "jersey": "2",
+    "cost": 2
+  },
+  {
+    "id": "espn-4433076",
+    "name": "Ben Sheppard",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "G",
+    "jersey": "26",
+    "cost": 2
+  },
+  {
+    "id": "espn-3149673",
+    "name": "Pascal Siakam",
+    "team": "IND",
+    "teamFull": "Indiana Pacers",
+    "position": "F",
+    "jersey": "43",
+    "cost": 2
+  },
+  {
+    "id": "espn-3906665",
+    "name": "Brandon Clarke",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "15",
+    "cost": 4
+  },
+  {
+    "id": "espn-4600663",
+    "name": "Zach Edey",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "C",
+    "jersey": "14",
+    "cost": 4
+  },
+  {
+    "id": "espn-4903027",
+    "name": "Cedric Coward",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "23",
+    "cost": 3
+  },
+  {
+    "id": "espn-5105550",
+    "name": "GG Jackson",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "45",
+    "cost": 3
+  },
+  {
+    "id": "espn-5112087",
+    "name": "Jaylen Wells",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "0",
+    "cost": 3
+  },
+  {
+    "id": "espn-4595400",
+    "name": "Olivier-Maxence Prosper",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "18",
+    "cost": 2
+  },
+  {
+    "id": "espn-4593125",
+    "name": "Santi Aldama",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "7",
+    "cost": 2
+  },
+  {
+    "id": "espn-3986",
+    "name": "Taj Gibson",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "",
+    "cost": 2
+  },
+  {
+    "id": "espn-4684806",
+    "name": "Taylor Hendricks",
+    "team": "MEM",
+    "teamFull": "Memphis Grizzlies",
+    "position": "F",
+    "jersey": "22",
+    "cost": 2
+  }
+]

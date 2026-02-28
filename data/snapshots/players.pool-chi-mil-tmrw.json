@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-5091709",
+    "name": "Lachlan Olbrich",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "C",
+    "jersey": "47",
+    "cost": 4
+  },
+  {
+    "id": "espn-4278076",
+    "name": "Nick Richards",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "C",
+    "jersey": "13",
+    "cost": 4
+  },
+  {
+    "id": "espn-4017844",
+    "name": "Guerschon Yabusele",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "F",
+    "jersey": "28",
+    "cost": 3
+  },
+  {
+    "id": "espn-4432822",
+    "name": "Isaac Okoro",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "F",
+    "jersey": "35",
+    "cost": 3
+  },
+  {
+    "id": "espn-4397189",
+    "name": "Jalen Smith",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "F",
+    "jersey": "25",
+    "cost": 3
+  },
+  {
+    "id": "espn-5044385",
+    "name": "Leonard Miller",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "F",
+    "jersey": "33",
+    "cost": 2
+  },
+  {
+    "id": "espn-4711294",
+    "name": "Matas Buzelis",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "F",
+    "jersey": "14",
+    "cost": 2
+  },
+  {
+    "id": "espn-5242496",
+    "name": "Noa Essengue",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "F",
+    "jersey": "24",
+    "cost": 2
+  },
+  {
+    "id": "espn-4431687",
+    "name": "Patrick Williams",
+    "team": "CHI",
+    "teamFull": "Chicago Bulls",
+    "position": "F",
+    "jersey": "44",
+    "cost": 2
+  },
+  {
+    "id": "espn-4277922",
+    "name": "Jericho Sims",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "C",
+    "jersey": "00",
+    "cost": 4
+  },
+  {
+    "id": "espn-3133628",
+    "name": "Myles Turner",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "C",
+    "jersey": "3",
+    "cost": 4
+  },
+  {
+    "id": "espn-4432452",
+    "name": "Alex Antetokounmpo",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "F",
+    "jersey": "29",
+    "cost": 3
+  },
+  {
+    "id": "espn-3064482",
+    "name": "Bobby Portis",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "F",
+    "jersey": "9",
+    "cost": 3
+  },
+  {
+    "id": "espn-3032977",
+    "name": "Giannis Antetokounmpo",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "F",
+    "jersey": "34",
+    "cost": 3
+  },
+  {
+    "id": "espn-3134907",
+    "name": "Kyle Kuzma",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "F",
+    "jersey": "18",
+    "cost": 2
+  },
+  {
+    "id": "espn-4997526",
+    "name": "Ousmane Dieng",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "F",
+    "jersey": "21",
+    "cost": 2
+  },
+  {
+    "id": "espn-4397233",
+    "name": "Pete Nance",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "F",
+    "jersey": "35",
+    "cost": 2
+  },
+  {
+    "id": "espn-2990962",
+    "name": "Taurean Prince",
+    "team": "MIL",
+    "teamFull": "Milwaukee Bucks",
+    "position": "F",
+    "jersey": "12",
+    "cost": 2
+  }
+]

@@ -1,0 +1,164 @@
+[
+  {
+    "id": "espn-6477",
+    "name": "Jonas Valanciunas",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "C",
+    "jersey": "17",
+    "cost": 4
+  },
+  {
+    "id": "espn-3112335",
+    "name": "Nikola Jokic",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "C",
+    "jersey": "15",
+    "cost": 4
+  },
+  {
+    "id": "espn-3064290",
+    "name": "Aaron Gordon",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "F",
+    "jersey": "32",
+    "cost": 3
+  },
+  {
+    "id": "espn-3138196",
+    "name": "Cameron Johnson",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "F",
+    "jersey": "23",
+    "cost": 3
+  },
+  {
+    "id": "espn-4433607",
+    "name": "DaRon Holmes II",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "F",
+    "jersey": "14",
+    "cost": 3
+  },
+  {
+    "id": "espn-4065670",
+    "name": "Bruce Brown",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "G",
+    "jersey": "11",
+    "cost": 2
+  },
+  {
+    "id": "espn-4431767",
+    "name": "Christian Braun",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "G",
+    "jersey": "0",
+    "cost": 2
+  },
+  {
+    "id": "espn-4592427",
+    "name": "Spencer Jones",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "F",
+    "jersey": "21",
+    "cost": 2
+  },
+  {
+    "id": "espn-4431690",
+    "name": "Zeke Nnaji",
+    "team": "DEN",
+    "teamFull": "Denver Nuggets",
+    "position": "F",
+    "jersey": "22",
+    "cost": 2
+  },
+  {
+    "id": "espn-4396971",
+    "name": "Naz Reid",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "C",
+    "jersey": "11",
+    "cost": 4
+  },
+  {
+    "id": "espn-5157587",
+    "name": "Rocco Zikarsky",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "C",
+    "jersey": "44",
+    "cost": 4
+  },
+  {
+    "id": "espn-4592699",
+    "name": "Enrique Freeman",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "F",
+    "jersey": "25",
+    "cost": 3
+  },
+  {
+    "id": "espn-4431671",
+    "name": "Jaden McDaniels",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "F",
+    "jersey": "3",
+    "cost": 3
+  },
+  {
+    "id": "espn-3032976",
+    "name": "Rudy Gobert",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "C",
+    "jersey": "27",
+    "cost": 3
+  },
+  {
+    "id": "espn-5279133",
+    "name": "Joan Beringer",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "F",
+    "jersey": "19",
+    "cost": 2
+  },
+  {
+    "id": "espn-2968436",
+    "name": "Joe Ingles",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "F",
+    "jersey": "7",
+    "cost": 2
+  },
+  {
+    "id": "espn-5105553",
+    "name": "Julian Phillips",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "F",
+    "jersey": "4",
+    "cost": 2
+  },
+  {
+    "id": "espn-3064514",
+    "name": "Julius Randle",
+    "team": "MIN",
+    "teamFull": "Minnesota Timberwolves",
+    "position": "F",
+    "jersey": "30",
+    "cost": 2
+  }
+]
