@@ -1,8 +1,8 @@
 {
   "dataMode": "SNAPSHOT",
   "source": "espn",
-  "generatedAt": "2026-02-28T18:53:41.793Z",
-  "updatedAt": "2026-02-28T18:53:41.793Z",
+  "generatedAt": "2026-02-28T19:58:49.408Z",
+  "updatedAt": "2026-02-28T19:58:49.408Z",
   "pools": [
     {
       "id": "pool-cha-por-today",
@@ -94,7 +94,7 @@
       "day": "today",
       "source": "espn",
       "playerCount": 18,
-      "outCount": 5
+      "outCount": 6
     },
     {
       "id": "pool-uta-nop-today",
@@ -370,7 +370,7 @@
       "day": "tmrw",
       "source": "espn",
       "playerCount": 18,
-      "outCount": 5
+      "outCount": 6
     }
   ]
 }
