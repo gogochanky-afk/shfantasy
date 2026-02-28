@@ -5,7 +5,7 @@
 // DATA_MODE=LIVE:
 //   1. Return in-memory cache if < 120 s old (prevents repeated API calls)
 //   2. On cache miss, call Sportradar
-//   3. On 429 (rate-limit): serve stale cache (any age) with dataMode="LIVE_STALE"
+//   3. On 429 (rate-limit): enter cooldown, serve DEMO_FALLBACK (or stale cache if exists)
 //   4. On other error / empty result: fall back to DEMO pools with dataMode="DEMO_FALLBACK"
 
 "use strict";
@@ -16,6 +16,17 @@ const { getOrFetch } = require("../lib/cache");
 
 const CACHE_TTL_S = 120; // seconds
 const CACHE_KEY   = "pools:live";
+
+// ---- Rate-limit cooldown (STOP hammering Sportradar) ----
+let rateLimitUntilMs = 0;          // epoch ms
+const RATE_LIMIT_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
+
+function inCooldown() {
+  return Date.now() < rateLimitUntilMs;
+}
+function enterCooldown() {
+  rateLimitUntilMs = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+}
 
 // ---- Demo data ----
 const DEMO_POOLS_BASE = [
@@ -82,61 +93,68 @@ function gameToPool(game, day) {
 // ---- Route ----
 router.get("/", async function(req, res) {
   const DATA_MODE = (process.env.DATA_MODE || "DEMO").toUpperCase();
-  const now = new Date().toISOString();
+  const nowIso = new Date().toISOString();
 
   // ---- DEMO mode — no Sportradar call at all ----
   if (DATA_MODE !== "LIVE") {
     return res.json({
       ok:        true,
       dataMode:  "DEMO",
-      updatedAt: now,
+      updatedAt: nowIso,
       pools:     getDemoPools(),
     });
   }
 
   // ---- LIVE mode ----
-  const { fetchGames, RateLimitError } = require("../lib/sportradar");
-  const { peek } = require("../lib/cache");
+  // If we are in cooldown, DO NOT call Sportradar. Prevent quota death spiral.
+  if (inCooldown()) {
+    return res.json({
+      ok:        true,
+      dataMode:  "DEMO_FALLBACK",
+      updatedAt: nowIso,
+      pools:     getDemoPools(),
+      note:      "rate-limit cooldown (skipping Sportradar)",
+    });
+  }
+
+  const { fetchGames } = require("../lib/sportradar");
 
   let cacheResult;
   try {
     cacheResult = await getOrFetch(CACHE_KEY, CACHE_TTL_S, async function() {
-      // This fetcher is only called when cache is cold/expired
       const { today, tomorrow } = getTodayTomorrow();
       const todayGames    = await fetchGames(today);
       const tomorrowGames = await fetchGames(tomorrow);
       const pools = todayGames.map(function(g) { return gameToPool(g, "today"); })
         .concat(tomorrowGames.map(function(g) { return gameToPool(g, "tomorrow"); }));
       if (pools.length === 0) {
-        // Treat empty result as a soft failure — caller will use DEMO fallback
         throw new Error("no games returned from Sportradar");
       }
       return pools;
     });
   } catch (err) {
-    // getOrFetch only re-throws when there is NO stale entry at all
     const isRateLimit = err && err.isRateLimit;
-    console.error(
-      "[pools] " + (isRateLimit ? "429 rate-limit" : "fetch error") +
-      " and no cache available — using DEMO fallback: " + err.message
-    );
+
+    if (isRateLimit) {
+      console.warn("[pools] 429 rate-limit → enter cooldown 15m (no more Sportradar calls).");
+      enterCooldown();
+    } else {
+      console.error("[pools] fetch error (non-429):", err && err.message ? err.message : err);
+    }
+
+    // If we have no usable cache (likely), serve DEMO fallback.
     return res.json({
       ok:        true,
       dataMode:  "DEMO_FALLBACK",
-      updatedAt: now,
+      updatedAt: nowIso,
       pools:     getDemoPools(),
     });
   }
 
-  // Determine dataMode label
-  let dataMode;
+  const dataMode = cacheResult.stale ? "LIVE_STALE" : "LIVE";
   if (cacheResult.stale) {
-    // Stale cache was served because the fresh fetch failed (e.g. 429)
-    dataMode = "LIVE_STALE";
     console.warn("[pools] serving LIVE_STALE cache (age=" +
       Math.round((Date.now() - new Date(cacheResult.cachedAt).getTime()) / 1000) + "s)");
-  } else {
-    dataMode = "LIVE";
   }
 
   return res.json({
