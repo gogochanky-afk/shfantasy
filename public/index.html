@@ -180,30 +180,59 @@
     if (username.length < 2 || username.length > 16) { document.getElementById("join-error").textContent = "Username must be 2-16 characters."; return; }
     if (!/^[a-zA-Z0-9_\-]+$/.test(username)) { document.getElementById("join-error").textContent = "Username: letters, numbers, _ and - only."; return; }
     if (!selectedPool) { document.getElementById("join-error").textContent = "Please select a pool."; return; }
+    // Stable userId: generate once, persist in localStorage
+    var uid = localStorage.getItem("shf_uid");
+    if (!uid) {
+      uid = "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem("shf_uid", uid);
+    }
+    localStorage.setItem("shf_name", username);
     localStorage.setItem("shf_username", username);
     btn.disabled = true; btn.textContent = "Joining...";
-    fetch("/api/join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username,poolId:selectedPool.id})})
-      .then(function(r){ return r.json(); }).then(function(d){
-        if (!d.ok) {
-          document.getElementById("join-error").textContent = d.error || "Join failed.";
-          btn.disabled = false; btn.textContent = "Join & Draft"; return;
-        }
-        var entries = JSON.parse(localStorage.getItem("shf_entries") || "[]");
-        entries.push({
-          entryId:   d.entryId,
-          poolId:    d.poolId,
-          username:  username,
-          poolLabel: selectedPool.label || selectedPool.title || selectedPool.id,
-          poolTitle: selectedPool.title || selectedPool.label || selectedPool.id,
-          lockAt:    selectedPool.lockAt || null,
-          joinedAt:  new Date().toISOString(),
-        });
-        localStorage.setItem("shf_entries", JSON.stringify(entries));
-        window.location.href = "/draft.html?poolId=" + encodeURIComponent(d.poolId) + "&entryId=" + encodeURIComponent(d.entryId);
-      }).catch(function(e){
-        document.getElementById("join-error").textContent = "Network error: " + e.message;
+    fetch("/api/join", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        poolId:   selectedPool.id,
+        userId:   uid,
+        username: username
+      })
+    }).then(function(r) {
+      if (r.status === 409) {
+        alert("Pool is locked");
         btn.disabled = false; btn.textContent = "Join & Draft";
+        return null;
+      }
+      return r.json();
+    }).then(function(d) {
+      if (!d) return; // 409 already handled
+      if (!d.ok) {
+        document.getElementById("join-error").textContent = d.error || "Join failed.";
+        btn.disabled = false; btn.textContent = "Join & Draft";
+        return;
+      }
+      // Read entryId from response (support both d.entryId and d.entry.id)
+      var entryId = d.entryId || (d.entry && d.entry.id) || "";
+      var poolId  = d.poolId  || selectedPool.id;
+      // Persist entry locally for My Entries fallback
+      var entries = JSON.parse(localStorage.getItem("shf_entries") || "[]");
+      entries.push({
+        entryId:   entryId,
+        poolId:    poolId,
+        userId:    uid,
+        username:  username,
+        poolLabel: selectedPool.label || selectedPool.title || selectedPool.id,
+        poolTitle: selectedPool.title || selectedPool.label || selectedPool.id,
+        lockAt:    selectedPool.lockAt || null,
+        joinedAt:  new Date().toISOString()
       });
+      localStorage.setItem("shf_entries", JSON.stringify(entries));
+      window.location.href = "/draft.html?poolId=" + encodeURIComponent(poolId)
+                           + "&entryId=" + encodeURIComponent(entryId);
+    }).catch(function(e) {
+      document.getElementById("join-error").textContent = "Network error: " + e.message;
+      btn.disabled = false; btn.textContent = "Join & Draft";
+    });
   };
 
   function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
