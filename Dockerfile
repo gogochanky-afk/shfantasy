@@ -1,20 +1,14 @@
-# Use official Node runtime
 FROM node:20-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
-
-# Install dependencies
-RUN npm install --production
-
-# Copy entire project
+# Copy everything (debug check included)
 COPY . .
 
-# Expose port
-EXPOSE 8080
+# DEBUG: show what is actually inside the container
+RUN echo "=== FILES IN /app ===" && ls -R /app
 
-# Start backend using index.js (your actual entrypoint)
+RUN npm install --production
+
+EXPOSE 8080
 CMD ["node", "index.js"]
