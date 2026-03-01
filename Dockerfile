@@ -16,5 +16,5 @@ COPY . .
 # Expose port
 EXPOSE 8080
 
-# Start backend using server.js (NOT index.js)
-CMD ["node", "server.js"]
+# Start backend using index.js (your actual entrypoint)
+CMD ["node", "index.js"]
