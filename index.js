@@ -7,7 +7,6 @@
 const express = require("express");
 const path    = require("path");
 const { DATA_MODE }   = require("./lib/dataMode");
-const { ENTRY_STORE } = require("./lib/entryStore");
 
 const poolsRoute   = require("./routes/pools");
 const playersRoute = require("./routes/players");
@@ -26,7 +25,6 @@ function healthHandler(req, res) {
     service:    "shfantasy",
     dataMode:   DATA_MODE,
     source:     "snapshot",
-    entryStore: ENTRY_STORE,
     updatedAt:  new Date().toISOString(),
     ts:         new Date().toISOString()
   });
