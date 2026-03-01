@@ -79,9 +79,10 @@
 </div>
 <script>
 (function(){
-  var params  = new URLSearchParams(window.location.search);
-  var poolId  = params.get("poolId");
-  var entryId = params.get("entryId");
+  var params   = new URLSearchParams(window.location.search);
+  var poolId   = params.get("poolId");
+  var entryId  = params.get("entryId");
+  var username = params.get("username") || localStorage.getItem("shf_username") || "";
   if (!poolId || !entryId) {
     document.getElementById("main-content").innerHTML = '<div class="msg">Missing poolId or entryId. <a href="/" style="color:#3b82f6;">Go back</a></div>';
     return;
@@ -296,12 +297,18 @@
     var btn  = document.getElementById("save-btn");
     var used = calcUsed();
     if (selectedIds.length !== ROSTER_SIZE || used > SALARY_CAP) return;
+    if (!username) {
+      var hint = document.getElementById("save-hint");
+      hint.textContent = "Username missing. Please join from the pools page.";
+      hint.className = "save-hint error"; return;
+    }
     btn.disabled = true; btn.textContent = "Saving...";
     var lineup = selectedIds.map(function(id){
       var p = allPlayers.find(function(pl){ return pl.id === id; });
       return p ? {id:p.id,name:p.name,team:p.team,position:p.position,cost:p.cost} : null;
     }).filter(Boolean);
-    fetch("/api/lineup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entryId:entryId,poolId:poolId,lineup:lineup})})
+    // Primary: POST /api/entry/save (persistent server-side store)
+    fetch("/api/entry/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entryId:entryId,username:username,lineup:lineup,salaryUsed:used})})
       .then(function(r){ return r.json(); }).then(function(d){
         if (!d.ok) {
           btn.disabled = false; btn.textContent = "Save Lineup";
@@ -309,14 +316,18 @@
           hint.textContent = d.error || "Save failed.";
           hint.className = "save-hint error"; return;
         }
+        // Also cache in localStorage
         var entries = JSON.parse(localStorage.getItem("shf_entries")||"[]");
         var idx = entries.findIndex(function(e){ return e.entryId === entryId; });
+        var now = new Date().toISOString();
         if (idx !== -1) {
           entries[idx].lineup    = lineup;
           entries[idx].totalCost = used;
-          entries[idx].savedAt   = new Date().toISOString();
-          localStorage.setItem("shf_entries", JSON.stringify(entries));
+          entries[idx].savedAt   = now;
+        } else {
+          entries.push({entryId:entryId,poolId:poolId,username:username,lineup:lineup,totalCost:used,savedAt:now});
         }
+        localStorage.setItem("shf_entries", JSON.stringify(entries));
         document.getElementById("main-content").innerHTML =
           '<div class="success-box"><h2>&#x2713; Lineup Saved!</h2>' +
           '<p>Total cost: $' + used + ' / $' + SALARY_CAP + '</p>' +

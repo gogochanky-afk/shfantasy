@@ -41,6 +41,8 @@
     .lock-row{display:flex;align-items:center;gap:5px;font-size:12px;color:#666;margin-bottom:10px;}
     .card-btn{background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;width:100%;}
     .card-btn:hover{background:#2563eb;}
+    .pool-card.locked{opacity:0.55;cursor:default;}
+    .pool-card.locked:hover{border-color:#1e2028;background:#13151a;}
     .join-card{background:#13151a;border:1px solid #1e2028;border-radius:10px;padding:16px;margin-bottom:20px;}
     .join-title{font-size:14px;font-weight:700;margin-bottom:4px;}
     .join-pool-label{font-size:13px;color:#888;margin-bottom:12px;}
@@ -132,7 +134,8 @@
   }
 
   function renderCard(p) {
-    var lockStr = p.lockAt ? new Date(p.lockAt).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "TBD";
+    var lockStr  = p.lockAt ? new Date(p.lockAt).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "TBD";
+    var isLocked = p.lockAt ? (Date.now() >= new Date(p.lockAt).getTime()) : false;
     var pj = JSON.stringify(JSON.stringify(p));
     var homeAbbr = (p.homeTeam && p.homeTeam.abbr) || (typeof p.homeTeam === "string" ? p.homeTeam : "");
     var awayAbbr = (p.awayTeam && p.awayTeam.abbr) || (typeof p.awayTeam === "string" ? p.awayTeam : "");
@@ -143,12 +146,17 @@
     if (p.outCount && p.outCount > 0) pills += '<span class="meta-pill amber">' + p.outCount + ' OUT excluded</span>';
     if (p.source) pills += '<span class="meta-pill blue">' + esc(p.source) + '</span>';
     pills += '<span class="meta-pill">Cap $' + (p.salaryCap||10) + ' &middot; ' + (p.rosterSize||5) + ' picks</span>';
-    var h = '<div class="pool-card" id="pool-' + esc(p.id) + '" onclick="selectPool(' + pj + ')">';
+    var clickAttr = isLocked ? "" : 'onclick="selectPool(' + pj + ')"';
+    var h = '<div class="pool-card' + (isLocked ? ' locked' : '') + '" id="pool-' + esc(p.id) + '" ' + clickAttr + '>';
     h += '<div class="card-matchup"><span class="team-chip">' + esc(homeAbbr) + '</span><span class="vs-text">vs</span><span class="team-chip">' + esc(awayAbbr) + '</span></div>';
     h += '<div class="card-title">' + esc(homeName) + ' vs ' + esc(awayName) + '</div>';
     h += '<div class="card-meta">' + pills + '</div>';
-    h += '<div class="lock-row">&#x1F512; Locks: ' + esc(lockStr) + '</div>';
-    h += '<button class="card-btn" onclick="event.stopPropagation();selectPool(' + pj + ')">Select &amp; Join</button>';
+    h += '<div class="lock-row">&#x1F512; ' + (isLocked ? '<span style="color:#ef4444;font-weight:700;">LOCKED</span>' : 'Locks: ' + esc(lockStr)) + '</div>';
+    if (isLocked) {
+      h += '<button class="card-btn" disabled style="opacity:0.4;cursor:not-allowed;">Locked</button>';
+    } else {
+      h += '<button class="card-btn" onclick="event.stopPropagation();selectPool(' + pj + ')">Select &amp; Join</button>';
+    }
     h += '</div>';
     return h;
   }
@@ -169,6 +177,8 @@
     var username = document.getElementById("username-input").value.trim();
     var btn = document.getElementById("join-btn");
     if (!username) { document.getElementById("join-error").textContent = "Please enter a username."; return; }
+    if (username.length < 2 || username.length > 16) { document.getElementById("join-error").textContent = "Username must be 2-16 characters."; return; }
+    if (!/^[a-zA-Z0-9_\-]+$/.test(username)) { document.getElementById("join-error").textContent = "Username: letters, numbers, _ and - only."; return; }
     if (!selectedPool) { document.getElementById("join-error").textContent = "Please select a pool."; return; }
     localStorage.setItem("shf_username", username);
     btn.disabled = true; btn.textContent = "Joining...";
