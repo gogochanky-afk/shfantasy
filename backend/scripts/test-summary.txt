@@ -1,0 +1,6 @@
+Snapshot backend route summary:
+- /api/pools
+- /api/players
+- /api/join
+- /api/lineup
+- /api/entry/my-entries
