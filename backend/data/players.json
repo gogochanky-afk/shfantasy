@@ -1,0 +1,14 @@
+[
+  {
+    "playerId": 1,
+    "name": "Demo Player 1",
+    "team": "ABC",
+    "points": 12
+  },
+  {
+    "playerId": 2,
+    "name": "Demo Player 2",
+    "team": "XYZ",
+    "points": 18
+  }
+]
