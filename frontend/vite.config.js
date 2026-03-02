@@ -1,7 +1,16 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react()],
-  build: { outDir: "dist" }
+  server: {
+    proxy: {
+      "/api": {
+        target: "https://YOUR_BACKEND_URL",  // ← 等你部署完 backend 請我幫你填
+        changeOrigin: true,
+        secure: false
+      }
+    }
+  },
+  build: {
+    outDir: "dist",
+  }
 });
