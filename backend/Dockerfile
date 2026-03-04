@@ -1,22 +1,23 @@
-# ===== Backend Dockerfile (for Cloud Run) =====
+# ===== SHFantasy Backend Dockerfile (Final Version) =====
 
-# Use official Node.js 18
+# Use official Node.js runtime
 FROM node:18-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files first (better caching)
+# Copy dependencies files
 COPY package.json package-lock.json* yarn.lock* ./
 
-# Install dependencies
+# Install production dependencies only
 RUN npm install --production
 
-# Copy the rest of the backend code
+# Copy all backend source code
 COPY . .
 
-# Expose port Cloud Run will listen on
+# Cloud Run requires applications to listen on PORT
 ENV PORT=8080
+EXPOSE 8080
 
-# Start the backend
+# Start backend
 CMD ["npm", "start"]
