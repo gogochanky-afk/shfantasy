@@ -1,15 +1,12 @@
-"use strict";
-const express = require("express");
-const router = express.Router();
-const snapshotStore = require("../lib/snapshotStore");
+import express from "express";
 
-router.get("/", function (req, res) {
-  try {
-    const lineupList = snapshotStore.getAllLineups();
-    return res.json({ ok: true, lineups: lineupList });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
+const router = express.Router();
+
+router.get("/", (req, res) => {
+  res.json({
+    message: "Lineups API working",
+    data: []
+  });
 });
 
-module.exports = router;
+export default router;
