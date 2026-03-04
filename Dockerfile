@@ -1,14 +1,16 @@
-FROM node:20-alpine
-
+# Step 1: Build Vite site
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy everything (debug check included)
+COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm
+RUN pnpm install
+
 COPY . .
+RUN pnpm build
 
-# DEBUG: show what is actually inside the container
-RUN echo "=== FILES IN /app ===" && ls -R /app
+# Step 2: Serve static /dist with Distroless static server
+FROM gcr.io/distroless/static
+WORKDIR /app
 
-RUN npm install --production
-
-EXPOSE 8080
-CMD ["node", "index.js"]
+COPY --from=builder /app/dist /app
