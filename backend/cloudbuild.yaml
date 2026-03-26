@@ -1,0 +1,23 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/shfantasy-backend", "."]
+    dir: "backend"
+
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/shfantasy-backend"]
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - shfantasy-backend
+      - --image=gcr.io/$PROJECT_ID/shfantasy-backend
+      - --region=asia-east1
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --set-env-vars=BALLDONTLIE_KEY=308c2517-e03e-4f9d-b27e-8a41d18d2ef1
+
+images:
+  - "gcr.io/$PROJECT_ID/shfantasy-backend"
