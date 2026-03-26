@@ -12,10 +12,10 @@ app.use(express.json());
 app.use("/api/players",    playersRoute);
 app.use("/api/pools",      poolsRoute);
 app.use("/api/entry",      entryRoute);
-app.use("/api",            lineupsRoute);   // /api/leaderboard + /api/entries
+app.use("/api",            lineupsRoute);
 
-// BallDontLie games
 const BDL_KEY = process.env.BALLDONTLIE_KEY || "";
+
 app.get("/api/games", async (_req, res) => {
   try {
     const today = new Date().toISOString().split("T")[0];
@@ -38,14 +38,14 @@ app.get("/api/games", async (_req, res) => {
       })),
     });
   } catch (err) {
-    res.json({ ok: true, games: [], date: new Date().toISOString().split("T")[0], error: err.message });
+    res.json({ ok: true, games: [], date: new Date().toISOString().split("T")[0] });
   }
 });
 
-// Roster = players (alias for Arena page)
-app.get("/api/roster", (_req, res, next) => {
+// Roster = players alias
+app.get("/api/roster", (req, res) => {
   req.url = "/";
-  playersRoute(_req, res, next);
+  playersRoute(req, res, () => res.status(500).send("error"));
 });
 
 app.get("/health", (_req, res) => res.send("OK"));
