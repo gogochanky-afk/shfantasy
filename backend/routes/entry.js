@@ -1,26 +1,27 @@
-"use strict";
-const express = require("express");
+import express from "express";
+import { currentPool } from "./pools.js";
+
 const router = express.Router();
-const snapshotStore = require("../lib/snapshotStore");
-const { isSnapshot } = require("../lib/dataMode");
+const SALARY_CAP = 10;
 
-router.get("/my-entries", function (req, res) {
-  try {
-    const { userId } = req.query;
+router.post("/", (req, res) => {
+  const { players, totalSalary } = req.body;
+  if (!players || players.length !== 5)
+    return res.status(400).json({ ok: false, error: "Need exactly 5 players" });
+  if ((totalSalary || 0) > SALARY_CAP)
+    return res.status(400).json({ ok: false, error: "Over salary cap ($10)" });
+  if (currentPool.status !== "OPEN")
+    return res.status(400).json({ ok: false, error: `Pool is ${currentPool.status}` });
 
-    if (!userId) {
-      return res.status(400).json({ ok: false, error: "Missing userId" });
-    }
-
-    if (isSnapshot()) {
-      const entries = snapshotStore.getUserEntries(userId);
-      return res.json({ ok: true, entries });
-    }
-
-    res.json({ ok: false, message: "LIVE mode not implemented." });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
+  const entry = {
+    id: Date.now(),
+    players,
+    totalSalary: totalSalary || players.reduce((s, p) => s + (p.salary || 0), 0),
+    score: 0,
+    ts: Date.now(),
+  };
+  currentPool.entries.push(entry);
+  res.json({ ok: true, entryId: entry.id });
 });
 
-module.exports = router;
+export default router;
