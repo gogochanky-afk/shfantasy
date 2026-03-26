@@ -9,23 +9,24 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use("/api/players", playersRoute);
-app.use("/api/pools", poolsRoute);
-app.use("/api/entry", entryRoute);
-app.use("/api", lineupsRoute);   // covers /api/leaderboard + /api/entries
+app.use("/api/players",    playersRoute);
+app.use("/api/pools",      poolsRoute);
+app.use("/api/entry",      entryRoute);
+app.use("/api",            lineupsRoute);   // /api/leaderboard + /api/entries
 
-// Games (BallDontLie)
+// BallDontLie games
 const BDL_KEY = process.env.BALLDONTLIE_KEY || "";
 app.get("/api/games", async (_req, res) => {
   try {
     const today = new Date().toISOString().split("T")[0];
-    const r = await fetch(`https://api.balldontlie.io/v1/games?dates[]=${today}&per_page=20`, {
-      headers: { Authorization: BDL_KEY }
-    });
+    const r = await fetch(
+      `https://api.balldontlie.io/v1/games?dates[]=${today}&per_page=20`,
+      { headers: { Authorization: BDL_KEY } }
+    );
     const { data } = await r.json();
     res.json({
       ok: true,
+      date: today,
       games: (data || []).map(g => ({
         id: g.id,
         homeTeam: g.home_team.abbreviation,
@@ -35,21 +36,20 @@ app.get("/api/games", async (_req, res) => {
         status: g.status,
         time: g.time,
       })),
-      date: today,
     });
-  } catch {
-    res.json({ ok: true, games: [], date: new Date().toISOString().split("T")[0] });
+  } catch (err) {
+    res.json({ ok: true, games: [], date: new Date().toISOString().split("T")[0], error: err.message });
   }
 });
 
-// Roster alias (same as players but for Arena page)
-app.get("/api/roster", async (req, res) => {
+// Roster = players (alias for Arena page)
+app.get("/api/roster", (_req, res, next) => {
   req.url = "/";
-  playersRoute(req, res, () => {});
+  playersRoute(_req, res, next);
 });
 
 app.get("/health", (_req, res) => res.send("OK"));
-app.get("/", (_req, res) => res.send("SHFantasy Backend Running"));
+app.get("/", (_req, res) => res.send("SHFantasy Backend"));
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`🔥 SHFantasy running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🔥 SHFantasy on port ${PORT}`));
