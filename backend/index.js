@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+// SHFantasy Backend v2.1 - BDL Bearer Fix
 import playersRoute from "./routes/players.js";
 import poolsRoute from "./routes/pools.js";
 import entryRoute from "./routes/entry.js";
@@ -21,7 +22,7 @@ app.get("/api/games", async (_req, res) => {
     const today = new Date().toISOString().split("T")[0];
     const r = await fetch(
       `https://api.balldontlie.io/v1/games?dates[]=${today}&per_page=20`,
-      { headers: { Authorization: BDL_KEY } }
+      { headers: { Authorization: `Bearer ${BDL_KEY}` } }
     );
     const { data } = await r.json();
     res.json({
@@ -42,14 +43,13 @@ app.get("/api/games", async (_req, res) => {
   }
 });
 
-// Roster = players alias
-app.get("/api/roster", (req, res) => {
+app.get("/api/roster", (req, res, next) => {
   req.url = "/";
-  playersRoute(req, res, () => res.status(500).send("error"));
+  playersRoute(req, res, next);
 });
 
-app.get("/health", (_req, res) => res.send("OK"));
-app.get("/", (_req, res) => res.send("SHFantasy Backend"));
+app.get("/health", (_req, res) => res.send("OK v2.1"));
+app.get("/", (_req, res) => res.send("SHFantasy Backend v2.1"));
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`🔥 SHFantasy on port ${PORT}`));
+app.listen(PORT, () => console.log(`🔥 SHFantasy v2.1 on port ${PORT}`));
