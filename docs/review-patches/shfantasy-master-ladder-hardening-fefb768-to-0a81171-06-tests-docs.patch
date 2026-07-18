@@ -1,0 +1,512 @@
+diff --git a/docs/claude_5_6_source_baseline_handoff_20260718.md b/docs/claude_5_6_source_baseline_handoff_20260718.md
+index 2b57c03..1d2d04b 100644
+--- a/docs/claude_5_6_source_baseline_handoff_20260718.md
++++ b/docs/claude_5_6_source_baseline_handoff_20260718.md
+@@ -6,7 +6,7 @@ This directory is now an isolated local git repository for the current SHFantasy
+ 
+ - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
+ - Original baseline commit: `f915f08decaeae077183c2ea8d02e9e1442a8224`
+-- Latest local work now includes multi-sport tables, private table chips, and Master Ladder ranked progression.
++- Latest local work now includes multi-sport tables, private table chips, Master Ladder ranked progression, and the post-review rank settlement hardening pass.
+ - Tracked files: 100
+ - Excluded from git: `.env`, API keys, SQLite database, `.venv`, node_modules, Svelte build output, cache folders, and backup archives.
+ 
+@@ -29,7 +29,7 @@ PYTHONPATH=. ./.venv/bin/pytest tests/ -q
+ Result:
+ 
+ ```text
+-46 passed in 1.62s
++50 passed in 2.39s
+ ```
+ 
+ Frontend:
+@@ -59,27 +59,53 @@ Priority review areas:
+ 7. Master Ladder: confirm Rookie-to-Master RP movement feels competitive without becoming pay-to-win or gambling-like.
+ 8. Production migration: decide whether this app replaces the old SHFantasy repo, becomes a sub-app, or donates only specific modules.
+ 
+-## 5.6 Review Request - Master Ladder
++## 5.6 Review Response - Master Ladder Hardening
+ 
+-Codex added a ranked spine so Daily Blitz feels like competitive play rather than one-off form submission.
++5.6 reviewed commit `fefb768` as REVise, not production-ready. Codex kept the useful HUD/API packet direction and hardened the competitive state model instead of rewriting the whole game.
+ 
+ What changed:
+ 
+-- `daily_blitz_entries` now stores `rank_delta`, `rank_points`, and `rank_tier`.
++- `daily_blitz_rank_events` is now the unique settlement ledger; `entry_id` is unique so one entry cannot settle twice.
++- `daily_blitz_rank_state` is now the sport-specific current rank source of truth.
++- `daily_blitz_entries` stores `ranked_status`, `ranked_attempt_key`, `season_id`, and `rules_version` for audit snapshots.
++- A unique attempt key allows one ranked hand per user, sport, slate, season, and rules version; duplicate hands become unranked practice.
++- Protected endpoints now use authenticated user identity from request state or the dev `X-SHF-User-ID` header, and reject mismatched body `user_id`.
++- `/daily-blitz/ranked/me` returns the authenticated player's full sport ladder plus aggregate Master Profile.
++- `/daily-blitz/ranked/{user_id}` is now a safe public profile and does not expose full private rank state.
++- `/daily-blitz/entry/{entry_id}/reveal` and `/recap` replay the saved rank event on repeat calls.
++- A runtime settlement lock serializes SQLite reveal settlement inside this app process, preventing duplicate concurrent rank events.
++- RP movement is based on same-slate percentile, not raw cross-sport score.
++- Full-hand / role-diverse bonuses are tiny and cannot turn a negative result into a positive RP gain.
++- Frontend API calls send the dev user header automatically.
++- Daily Blitz frontend loads `/daily-blitz/ranked/me` for the active sport and avoids flashing Rookie for returning players.
++- Reveal responses include `ranked_result.ladder`, `season_id`, `rules_version`, `percentile`, `settled`, and `idempotent_replay`.
++- Private chip stake remains explicitly excluded from rank points, scoring, cap, roster legality, and captain multiplier.
++
++Retained from the prior Master Ladder pass:
++
++- `daily_blitz_entries` still keeps `rank_delta`, `rank_points`, and `rank_tier` as entry snapshots.
+ - `/daily-blitz/slate` exposes `ranked_mode`.
+-- `/daily-blitz/ranked/{user_id}` exposes current player ladder state.
+ - `/daily-blitz/entry/validate` and `/daily-blitz/entry/submit` expose `rank_preview`.
+ - `/daily-blitz/entry/{entry_id}/reveal` exposes `ranked_result` with previous points, delta, tier movement, promotion/demotion flags, and recap headline.
+ - Frontend Daily Blitz now has a compact Master Ladder HUD between deck route and private chips.
+-- Private chip stake is explicitly excluded from rank points, scoring, cap, roster legality, and captain multiplier.
+ 
+-Please review:
++Tests now cover:
+ 
+-1. Whether the RP thresholds are satisfying enough: Rookie 0, Bronze 60, Silver 140, Gold 240, Platinum 380, Diamond 560, Master 800.
+-2. Whether RP delta should be more aggressive for excellent scores or more punishing for poor scores.
+-3. Whether promotion copy should unlock cosmetic-only table badges or profile frames.
+-4. Whether the ladder should reset by season, sport, or private table.
+-5. Whether the frontend Master Ladder panel is visible enough without making the board feel like a SaaS dashboard.
++1. DB schema for rank state, rank events, attempt key, season, and rules version.
++2. Auth mismatch and private rank access blocking.
++3. Public profile sanitization.
++4. Repeat reveal idempotency.
++5. Parallel reveal creating exactly one rank event.
++6. Duplicate same-slate ranked attempt becoming unranked practice.
++7. Sport-separated rank state plus aggregate Master Profile display.
++8. Low-result bonuses staying non-positive.
++
++Still worth review:
++
++1. Whether the tier thresholds still feel right once real sports data replaces deterministic mock points.
++2. Whether promotion copy should unlock cosmetic-only table badges or profile frames.
++3. Whether season soft reset and Diamond/Master inactivity decay should be implemented before public leaderboard launch.
++4. Whether same-slate percentile should compare against all legal combos, table entrants only, or a blended field once user volume exists.
+ 
+ ## Key Files
+ 
+diff --git a/docs/live-proof/shfantasy-master-ladder-hardening-local-20260718T112115Z.json b/docs/live-proof/shfantasy-master-ladder-hardening-local-20260718T112115Z.json
+new file mode 100644
+index 0000000..99d0c2c
+--- /dev/null
++++ b/docs/live-proof/shfantasy-master-ladder-hardening-local-20260718T112115Z.json
+@@ -0,0 +1,49 @@
++{
++  "title": "SHFantasy Master Ladder Hardening",
++  "timestamp_utc": "2026-07-18T11:21:15Z",
++  "base_commit": "fefb7681033154f724697d5399626d24b34b9f49",
++  "scope": "Post-review hardening for Daily Blitz ranked settlement, identity, attempt policy, and returning-player UI state.",
++  "status": "local_verified_not_deployed",
++  "implemented": [
++    "Added daily_blitz_rank_events as a unique settlement ledger with entry_id uniqueness.",
++    "Added daily_blitz_rank_state as the sport-specific rank source of truth.",
++    "Added ranked_status, ranked_attempt_key, season_id, and rules_version snapshots on daily_blitz_entries.",
++    "Added a unique ranked attempt key for one ranked settlement per user, sport, slate, season, and rules version.",
++    "Converted duplicate same-slate entries into unranked practice hands that can reveal lessons but cannot earn RP.",
++    "Changed rank movement from raw score to same-slate percentile.",
++    "Kept full-hand and role-diverse bonuses tiny and blocked them from turning negative results into positive RP.",
++    "Added authenticated user handling via request state or dev X-SHF-User-ID header.",
++    "Rejected mismatched body user_id values and blocked other users from revealing private entries.",
++    "Added /daily-blitz/ranked/me for authenticated full rank state.",
++    "Changed /daily-blitz/ranked/{user_id} to public-safe display profile only.",
++    "Added reveal idempotency through saved rank events.",
++    "Added a rank settlement lock for SQLite runtime concurrent reveal protection.",
++    "Updated the frontend API wrapper to send X-SHF-User-ID from localStorage.",
++    "Updated Daily Blitz to hydrate the active sport rank on load and avoid a returning-player Rookie flash."
++  ],
++  "review_items_addressed": [
++    "P0 identity/rank impersonation",
++    "P0 missing rank settlement ledger",
++    "P0 ranked attempt farming",
++    "P1 negative result bonus turning positive",
++    "P1 raw score cross-sport comparability",
++    "P1 returning-player rank hydration"
++  ],
++  "verification": {
++    "backend_tests": {
++      "command": "PYTHONPATH=. ./.venv/bin/pytest tests -q",
++      "result": "50 passed in 2.39s"
++    },
++    "frontend_build": {
++      "command": "cd frontend && npm run build",
++      "result": "vite build completed successfully"
++    }
++  },
++  "not_done": [
++    "Not deployed to production in this local run.",
++    "Real sports data provider integration remains behind the existing mock/dry-run source until API and budget are approved.",
++    "Season soft reset and Diamond/Master inactivity decay are still design-ready but not implemented.",
++    "Public leaderboard should remain gated until the deployment owner confirms auth middleware and migration path."
++  ],
++  "safety": "Play-money only. No betting, payment, KYC, deposits, withdrawals, or cash-value prizes."
++}
+diff --git a/docs/skill_fantasy_market_notes_20260718.md b/docs/skill_fantasy_market_notes_20260718.md
+index 7dda444..1cf6ad2 100644
+--- a/docs/skill_fantasy_market_notes_20260718.md
++++ b/docs/skill_fantasy_market_notes_20260718.md
+@@ -34,7 +34,7 @@ SHFantasy should become a skill-first card arena:
+ - Card skins are collectible identity, not scoring power.
+ - Skill Parlay should reward coherent reads with XP/titles, not money.
+ - Private friends tables may use game coins as table chips, but those chips have no cash value, no withdrawal path, and no external transfer value.
+-- Master Ladder should make every revealed entry feel like ranked play: climb from Rookie to Master through score quality, five-card completion, and role-diverse reads.
++- Master Ladder should make every revealed entry feel like ranked play: climb from Rookie to Master through authenticated, same-slate competitive finish. Five-card and role-diverse hands may add tiny positive-result bonuses, but they must not turn bad results into RP gains.
+ 
+ ## Private Chip Mode
+ 
+@@ -55,9 +55,12 @@ Ranked mode is the competitive spine:
+ 
+ - Tiers: Rookie, Bronze, Silver, Gold, Platinum, Diamond, Master.
+ - Rank points are settled only after recap reveal.
+-- Score drives the main RP movement.
+-- Five-card hands and three-role Skill Parlay chains add small skill bonuses.
++- Same-slate percentile drives the main RP movement, not raw cross-sport score.
++- Five-card hands and three-role Skill Parlay chains add small bonuses only when the result is already positive.
+ - Low-quality results can lose RP, but points never go below zero.
++- Each user/sport/slate/season/rules version gets one ranked settlement; later hands are practice and cannot farm RP.
++- Rank state is sport-specific; the Master Profile is aggregate display, not one raw-score ladder across sports.
++- Settlement belongs in a unique ledger event so repeat or concurrent reveals replay the saved result.
+ - Promotion/demotion copy belongs in recap and private/friend tables, not ops logs.
+ - Master Ladder has no cash value and cannot be bought with chips or skins.
+ 
+diff --git a/tests/test_daily_blitz.py b/tests/test_daily_blitz.py
+index 6308eea..6719aa1 100644
+--- a/tests/test_daily_blitz.py
++++ b/tests/test_daily_blitz.py
+@@ -1,3 +1,4 @@
++from concurrent.futures import ThreadPoolExecutor
+ from datetime import date
+ 
+ from backend.daily_blitz import (
+@@ -69,6 +70,10 @@ def error_codes(result):
+     return {error["code"] for error in result.errors}
+ 
+ 
++def auth_headers(user_id="hugo"):
++    return {"X-SHF-User-ID": user_id}
++
++
+ def test_daily_blitz_accepts_valid_five_player_roster_under_cap():
+     slate = build_slate()
+     entry = DailyBlitzEntryRequest(
+@@ -191,12 +196,31 @@ def test_daily_blitz_schema_is_created_without_breaking_existing_tables(tmp_path
+     assert "daily_blitz_slates" in tables
+     assert "daily_blitz_entries" in tables
+     assert "daily_blitz_entry_players" in tables
++    assert "daily_blitz_rank_state" in tables
++    assert "daily_blitz_rank_events" in tables
+     assert "player_game_status" in tables
+     columns = {
+         row["name"]
+         for row in conn.execute("PRAGMA table_info(daily_blitz_entries)").fetchall()
+     }
+-    assert {"chip_stake", "chip_delta", "rank_delta", "rank_points", "rank_tier"}.issubset(columns)
++    assert {
++        "chip_stake",
++        "chip_delta",
++        "rank_delta",
++        "rank_points",
++        "rank_tier",
++        "ranked_status",
++        "ranked_attempt_key",
++        "season_id",
++        "rules_version",
++    }.issubset(columns)
++    rank_event_columns = {
++        row["name"]
++        for row in conn.execute("PRAGMA table_info(daily_blitz_rank_events)").fetchall()
++    }
++    assert {"entry_id", "user_id", "sport", "slate_id", "season_id", "rules_version", "percentile"}.issubset(rank_event_columns)
++    indexes = {row["name"] for row in conn.execute("PRAGMA index_list(daily_blitz_entries)").fetchall()}
++    assert "idx_daily_blitz_ranked_attempt" in indexes
+ 
+ 
+ def test_daily_blitz_slate_endpoint_returns_multi_game_player_pool(tmp_path):
+@@ -250,7 +274,7 @@ def test_daily_blitz_slate_endpoint_returns_multi_game_player_pool(tmp_path):
+ def test_daily_blitz_football_slate_has_legal_five_card_combo(tmp_path):
+     client = TestClient(create_app(tmp_path / "play.sqlite"))
+ 
+-    data = client.post("/daily-blitz/entry/validate", json={
++    data = client.post("/daily-blitz/entry/validate", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "sport": "football",
+@@ -292,7 +316,7 @@ def test_daily_blitz_baseball_table_supports_skill_roster(tmp_path):
+     assert len([player for player in slate["players"] if player["playable"]]) >= 8
+     assert any(player["player_id"] == "baseball-scratched" and not player["playable"] for player in slate["players"])
+ 
+-    data = client.post("/daily-blitz/entry/validate", json={
++    data = client.post("/daily-blitz/entry/validate", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "sport": "baseball",
+@@ -320,7 +344,7 @@ def test_daily_blitz_wwe_table_supports_skill_roster(tmp_path):
+     assert len([player for player in slate["players"] if player["playable"]]) >= 8
+     assert any(player["player_id"] == "wwe-pulled" and not player["playable"] for player in slate["players"])
+ 
+-    data = client.post("/daily-blitz/entry/validate", json={
++    data = client.post("/daily-blitz/entry/validate", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "sport": "wwe",
+@@ -342,7 +366,7 @@ def test_daily_blitz_wwe_table_supports_skill_roster(tmp_path):
+ def test_daily_blitz_validate_endpoint_reports_rule_errors(tmp_path):
+     client = TestClient(create_app(tmp_path / "play.sqlite"))
+ 
+-    data = client.post("/daily-blitz/entry/validate", json={
++    data = client.post("/daily-blitz/entry/validate", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "player_ids": ["football-superstar", "football-out"],
+@@ -359,7 +383,7 @@ def test_daily_blitz_submit_endpoint_locks_valid_entry(tmp_path):
+     app = create_app(tmp_path / "play.sqlite")
+     client = TestClient(app)
+ 
+-    data = client.post("/daily-blitz/entry/submit", json={
++    data = client.post("/daily-blitz/entry/submit", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "player_ids": ["football-superstar", "football-creator", "football-value", "football-sleeper"],
+@@ -375,6 +399,7 @@ def test_daily_blitz_submit_endpoint_locks_valid_entry(tmp_path):
+     assert data["rank_preview"]["current"]["mode"] == "Master Ladder"
+     assert data["rank_preview"]["current"]["tier"]["name"] == "Rookie"
+     assert "legal five-card" in data["rank_preview"]["locked_hand_bonus"]
++    assert data["ranked_status"] == "ranked_pending"
+ 
+     saved_entry = app.state.db.execute(
+         "SELECT * FROM daily_blitz_entries WHERE entry_id = ?",
+@@ -394,7 +419,7 @@ def test_daily_blitz_private_chip_stake_is_game_coin_only(tmp_path):
+     app = create_app(tmp_path / "play.sqlite")
+     client = TestClient(app)
+ 
+-    data = client.post("/daily-blitz/entry/submit", json={
++    data = client.post("/daily-blitz/entry/submit", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "sport": "baseball",
+@@ -420,7 +445,7 @@ def test_daily_blitz_private_chip_stake_is_game_coin_only(tmp_path):
+     ).fetchone()
+     assert saved_entry["chip_stake"] == 20
+ 
+-    recap = client.post(f"/daily-blitz/entry/{data['entry_id']}/reveal").json()
++    recap = client.post(f"/daily-blitz/entry/{data['entry_id']}/reveal", headers=auth_headers()).json()
+     assert recap["chip_result"]["stake"] == 20
+     assert recap["chip_result"]["cash_value"] == "none"
+     assert recap["chip_result"]["withdrawable"] is False
+@@ -432,7 +457,7 @@ def test_daily_blitz_private_chip_stake_is_game_coin_only(tmp_path):
+ def test_daily_blitz_rejects_unsupported_chip_stake(tmp_path):
+     client = TestClient(create_app(tmp_path / "play.sqlite"))
+ 
+-    data = client.post("/daily-blitz/entry/validate", json={
++    data = client.post("/daily-blitz/entry/validate", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "sport": "wwe",
+@@ -444,7 +469,7 @@ def test_daily_blitz_rejects_unsupported_chip_stake(tmp_path):
+     assert data["ok"] is False
+     assert any(error["code"] == "invalid_chip_stake" for error in data["errors"])
+ 
+-    response = client.post("/daily-blitz/entry/submit", json={
++    response = client.post("/daily-blitz/entry/submit", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "sport": "wwe",
+@@ -458,14 +483,14 @@ def test_daily_blitz_rejects_unsupported_chip_stake(tmp_path):
+ def test_daily_blitz_reveal_scores_entry_and_returns_recap(tmp_path):
+     app = create_app(tmp_path / "play.sqlite")
+     client = TestClient(app)
+-    entry = client.post("/daily-blitz/entry/submit", json={
++    entry = client.post("/daily-blitz/entry/submit", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "player_ids": ["football-superstar", "football-creator", "football-value", "football-sleeper"],
+         "captain_player_id": "football-superstar",
+     }).json()
+ 
+-    recap = client.post(f"/daily-blitz/entry/{entry['entry_id']}/reveal").json()
++    recap = client.post(f"/daily-blitz/entry/{entry['entry_id']}/reveal", headers=auth_headers()).json()
+ 
+     assert recap["ok"] is True
+     assert recap["status"] == "revealed"
+@@ -511,7 +536,7 @@ def test_daily_blitz_reveal_scores_entry_and_returns_recap(tmp_path):
+ 
+ def test_daily_blitz_master_ladder_progress_persists_across_entries(tmp_path):
+     client = TestClient(create_app(tmp_path / "play.sqlite"))
+-    first = client.post("/daily-blitz/entry/submit", json={
++    first = client.post("/daily-blitz/entry/submit", headers=auth_headers("ranker"), json={
+         "user_id": "ranker",
+         "slate_date": "2026-07-17",
+         "sport": "football",
+@@ -525,14 +550,19 @@ def test_daily_blitz_master_ladder_progress_persists_across_entries(tmp_path):
+         "captain_player_id": "football-superstar",
+         "chip_stake": 50,
+     }).json()
+-    first_recap = client.post(f"/daily-blitz/entry/{first['entry_id']}/reveal").json()
+-    ranked = client.get("/daily-blitz/ranked/ranker").json()
++    first_recap = client.post(f"/daily-blitz/entry/{first['entry_id']}/reveal", headers=auth_headers("ranker")).json()
++    ranked = client.get("/daily-blitz/ranked/me?sport=football", headers=auth_headers("ranker")).json()
++    public = client.get("/daily-blitz/ranked/ranker?sport=football").json()
+ 
+     assert ranked["ok"] is True
+     assert ranked["ranked_mode"]["rank_points"] == first_recap["ranked_result"]["rank_points"]
+     assert ranked["safety"].endswith("No cash value.")
++    assert public["ok"] is True
++    assert "ranked_mode" not in public
++    assert public["public_profile"]["display_id"] == "ran***"
++    assert public["public_profile"]["rank_points_band"] <= first_recap["ranked_result"]["rank_points"]
+ 
+-    second = client.post("/daily-blitz/entry/submit", json={
++    second = client.post("/daily-blitz/entry/submit", headers=auth_headers("ranker"), json={
+         "user_id": "ranker",
+         "slate_date": "2026-07-17",
+         "sport": "baseball",
+@@ -546,34 +576,139 @@ def test_daily_blitz_master_ladder_progress_persists_across_entries(tmp_path):
+         "captain_player_id": "baseball-ace",
+         "chip_stake": 0,
+     }).json()
+-    second_recap = client.post(f"/daily-blitz/entry/{second['entry_id']}/reveal").json()
+-
+-    assert second["rank_preview"]["current"]["rank_points"] == first_recap["ranked_result"]["rank_points"]
+-    assert second_recap["ranked_result"]["previous_points"] == first_recap["ranked_result"]["rank_points"]
+-    assert second_recap["ranked_result"]["rank_points"] == (
+-        first_recap["ranked_result"]["rank_points"] + second_recap["ranked_result"]["delta"]
++    second_recap = client.post(f"/daily-blitz/entry/{second['entry_id']}/reveal", headers=auth_headers("ranker")).json()
++    football_rank = client.get("/daily-blitz/ranked/me?sport=football", headers=auth_headers("ranker")).json()
++    baseball_rank = client.get("/daily-blitz/ranked/me?sport=baseball", headers=auth_headers("ranker")).json()
++
++    assert second["rank_preview"]["current"]["rank_points"] == 0
++    assert second_recap["ranked_result"]["previous_points"] == 0
++    assert football_rank["ranked_mode"]["rank_points"] == first_recap["ranked_result"]["rank_points"]
++    assert baseball_rank["ranked_mode"]["rank_points"] == second_recap["ranked_result"]["rank_points"]
++    assert football_rank["master_profile"]["combined_points"] == (
++        football_rank["ranked_mode"]["rank_points"] + baseball_rank["ranked_mode"]["rank_points"]
+     )
+ 
+ 
+ def test_daily_blitz_reveal_is_idempotent_for_same_entry(tmp_path):
+-    client = TestClient(create_app(tmp_path / "play.sqlite"))
+-    entry = client.post("/daily-blitz/entry/submit", json={
++    app = create_app(tmp_path / "play.sqlite")
++    client = TestClient(app)
++    entry = client.post("/daily-blitz/entry/submit", headers=auth_headers(), json={
+         "user_id": "hugo",
+         "slate_date": "2026-07-17",
+         "player_ids": ["football-superstar", "football-creator", "football-value", "football-sleeper"],
+         "captain_player_id": "football-superstar",
+     }).json()
+ 
+-    first = client.post(f"/daily-blitz/entry/{entry['entry_id']}/reveal").json()
+-    second = client.get(f"/daily-blitz/entry/{entry['entry_id']}/recap").json()
++    first = client.post(f"/daily-blitz/entry/{entry['entry_id']}/reveal", headers=auth_headers()).json()
++    second = client.get(f"/daily-blitz/entry/{entry['entry_id']}/recap", headers=auth_headers()).json()
++    event_count = app.state.db.execute(
++        "SELECT COUNT(*) AS count FROM daily_blitz_rank_events WHERE entry_id = ?",
++        (entry["entry_id"],),
++    ).fetchone()["count"]
+ 
+     assert second["score"] == first["score"]
+     assert second["player_results"] == first["player_results"]
++    assert second["ranked_result"]["rank_event_id"] == first["ranked_result"]["rank_event_id"]
++    assert second["ranked_result"]["rank_points"] == first["ranked_result"]["rank_points"]
++    assert second["ranked_result"]["idempotent_replay"] is True
++    assert event_count == 1
++
++
++def test_daily_blitz_parallel_reveal_creates_one_rank_event(tmp_path):
++    app = create_app(tmp_path / "play.sqlite")
++    client = TestClient(app)
++    entry = client.post("/daily-blitz/entry/submit", headers=auth_headers("parallel"), json={
++        "user_id": "parallel",
++        "slate_date": "2026-07-17",
++        "player_ids": ["football-superstar", "football-creator", "football-value", "football-sleeper"],
++        "captain_player_id": "football-superstar",
++    }).json()
++
++    def reveal_once():
++        return client.post(f"/daily-blitz/entry/{entry['entry_id']}/reveal", headers=auth_headers("parallel")).json()
++
++    with ThreadPoolExecutor(max_workers=2) as pool:
++        first, second = list(pool.map(lambda _: reveal_once(), range(2)))
++
++    event_count = app.state.db.execute(
++        "SELECT COUNT(*) AS count FROM daily_blitz_rank_events WHERE entry_id = ?",
++        (entry["entry_id"],),
++    ).fetchone()["count"]
++
++    assert first["ranked_result"]["rank_event_id"] == second["ranked_result"]["rank_event_id"]
++    assert first["ranked_result"]["rank_points"] == second["ranked_result"]["rank_points"]
++    assert event_count == 1
++
++
++def test_daily_blitz_duplicate_ranked_attempt_becomes_unranked_practice(tmp_path):
++    app = create_app(tmp_path / "play.sqlite")
++    client = TestClient(app)
++    payload = {
++        "user_id": "farmer",
++        "slate_date": "2026-07-17",
++        "sport": "football",
++        "player_ids": [
++            "football-superstar",
++            "football-value",
++            "football-sleeper",
++            "football-punt",
++            "football-runner",
++        ],
++        "captain_player_id": "football-superstar",
++    }
++
++    first = client.post("/daily-blitz/entry/submit", headers=auth_headers("farmer"), json=payload).json()
++    second = client.post("/daily-blitz/entry/submit", headers=auth_headers("farmer"), json=payload).json()
++    first_recap = client.post(f"/daily-blitz/entry/{first['entry_id']}/reveal", headers=auth_headers("farmer")).json()
++    second_recap = client.post(f"/daily-blitz/entry/{second['entry_id']}/reveal", headers=auth_headers("farmer")).json()
++    event_count = app.state.db.execute(
++        "SELECT COUNT(*) AS count FROM daily_blitz_rank_events WHERE user_id = ?",
++        ("farmer",),
++    ).fetchone()["count"]
++
++    assert first["ranked_status"] == "ranked_pending"
++    assert second["ranked_status"] == "unranked_duplicate"
++    assert first_recap["ranked_result"]["settled"] is True
++    assert second_recap["ranked_result"]["settled"] is False
++    assert second_recap["ranked_result"]["delta"] == 0
++    assert second_recap["ranked_result"]["rank_points"] == first_recap["ranked_result"]["rank_points"]
++    assert event_count == 1
++
++
++def test_daily_blitz_auth_blocks_impersonation_and_private_rank_access(tmp_path):
++    client = TestClient(create_app(tmp_path / "play.sqlite"))
++
++    unauthenticated = client.get("/daily-blitz/ranked/me?sport=football")
++    mismatch = client.post("/daily-blitz/entry/submit", headers=auth_headers("hugo"), json={
++        "user_id": "attacker",
++        "slate_date": "2026-07-17",
++        "sport": "football",
++        "player_ids": ["football-superstar", "football-value", "football-sleeper"],
++        "captain_player_id": "football-superstar",
++    })
++    entry = client.post("/daily-blitz/entry/submit", headers=auth_headers("owner"), json={
++        "user_id": "owner",
++        "slate_date": "2026-07-17",
++        "sport": "football",
++        "player_ids": ["football-superstar", "football-value", "football-sleeper"],
++        "captain_player_id": "football-superstar",
++    }).json()
++    stolen = client.post(f"/daily-blitz/entry/{entry['entry_id']}/reveal", headers=auth_headers("attacker"))
++
++    assert unauthenticated.status_code == 401
++    assert mismatch.status_code == 403
++    assert stolen.status_code == 403
++
++
++def test_rank_delta_bonus_cannot_turn_bad_result_positive():
++    from backend.routes.daily_blitz import _rank_delta_for_score
++
++    assert _rank_delta_for_score(0.10, {"chain_size": 5, "distinct_roles": 3}) <= -2
+ 
+ 
+ def test_daily_blitz_reveal_unknown_entry_returns_not_found(tmp_path):
+     client = TestClient(create_app(tmp_path / "play.sqlite"))
+ 
+-    response = client.post("/daily-blitz/entry/missing/reveal")
++    response = client.post("/daily-blitz/entry/missing/reveal", headers=auth_headers())
+ 
+     assert response.status_code == 404
