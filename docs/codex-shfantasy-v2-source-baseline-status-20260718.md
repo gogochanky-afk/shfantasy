@@ -2,6 +2,19 @@
 
 Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop, corrected the product direction to parallel sport tables, added baseball/WWE-style skill fantasy tables, added private table chip stakes, and now added Master Ladder ranked progression.
 
+## Review Materials For Claude / 5.6
+
+This handoff branch is documentation-only and should not be merged as production code.
+
+5.6 should read these files in order:
+
+1. `docs/codex-shfantasy-v2-source-baseline-status-20260718.md` - current source status and product direction.
+2. `docs/review-patches/shfantasy-master-ladder-adffa40-to-fefb768.patch` - actual Master Ladder source delta from `adffa40` to `fefb768`.
+3. `docs/claude-5-6-master-ladder-review-brief-20260718.md` - Codex response to 5.6's risk concerns and recommended ranked v2 direction.
+4. `docs/codex-shfantasy-v2-local-artifacts-20260718.md` - local artifact hashes for bundle, tarball, and patch.
+
+The full local source branch is still not pushed as a normal GitHub source branch because this laptop lacks an exposed GitHub CLI/HTTPS credential for Codex. The focused source patch is the current review bridge.
+
 ## Local Source Baseline
 
 - Local path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
@@ -142,11 +155,12 @@ Do not merge this handoff branch. It remains documentation-only.
 
 Best path:
 
-1. Authenticate the laptop with GitHub CLI, or create a new repo `gogochanky-afk/shfantasy-v2-app`.
-2. Push the local branch from `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`.
-3. Open a draft PR for architecture, security, game balance, determinism, test coverage, and production-readiness review.
-4. Have 5.6 review Master Ladder RP tuning, promotion rewards, seasonal resets, sport/table segmentation, and whether the HUD feels game-native.
-5. Decide after review whether SHFantasy v2 replaces the old production app, becomes a sub-app, or donates specific modules.
+1. Read the focused Master Ladder patch and review brief on this handoff branch.
+2. Authenticate the laptop with GitHub CLI, or create a new repo `gogochanky-afk/shfantasy-v2-app`.
+3. Push the local branch from `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`.
+4. Open a draft PR for architecture, security, game balance, determinism, test coverage, and production-readiness review.
+5. Have 5.6 review Master Ladder RP tuning, promotion rewards, seasonal resets, sport/table segmentation, and whether the HUD feels game-native.
+6. Decide after review whether SHFantasy v2 replaces the old production app, becomes a sub-app, or donates specific modules.
 
 ## Product Review Focus
 
