@@ -1,12 +1,13 @@
 # SHFantasy v2 Source Baseline Status - 2026-07-18
 
-Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop, corrected the product direction to parallel sport tables, and added baseball/WWE-style skill fantasy tables.
+Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop, corrected the product direction to parallel sport tables, added baseball/WWE-style skill fantasy tables, and added private table chip stakes.
 
 ## Local Source Baseline
 
 - Local path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
 - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
-- Local HEAD commit: `5b54787 add skill fantasy baseball and wwe tables`
+- Local HEAD commit: `adffa40 add private table chip stakes`
+- Prior commit: `5b54787 add skill fantasy baseball and wwe tables`
 - Prior commit: `0e8383c align arena around parallel sport tables`
 - Baseline commit: `f915f08 baseline shfantasy v2 app`
 - Tracked files: 102
@@ -21,11 +22,34 @@ Correct model:
 - Football, basketball, golf, baseball, WWE-style sports entertainment, tennis, and future sports are parallel SHFantasy tables.
 - The active table for a given day is selected by verified slate quality, event heat, player availability, and roster depth.
 - Telegram is a chat/distribution surface, not the main game UI.
-- The game should feel like a collectible sports-card arena with strategy, identity, recap, return reasons, and cosmetic progression.
+- The game should feel like a collectible sports-card arena with strategy, identity, recap, return reasons, cosmetic progression, and private table chip tension.
 
 Codex changed source copy/API packet/tests to remove the old `football default / basketball reserve` framing.
 
-## New Skill Fantasy Expansion
+## Private Table Chip Mode
+
+Implemented locally:
+
+- Daily Blitz entry payload now accepts `chip_stake`.
+- Allowed stakes: `0`, `5`, `10`, `20`, `50` table chips.
+- Invalid stakes return `invalid_chip_stake` and block submit.
+- Entries store `chip_stake` and recap stores `chip_delta`.
+- Recap returns `chip_result`:
+  - A/S score: win the stake as table chips.
+  - B score: stake returned.
+  - C score: stake lost as table chips.
+- UI shows a private chip selector on the Daily Blitz roster board.
+
+Safety boundary:
+
+- Table chips are private game coins only.
+- No cash value.
+- No withdrawals.
+- No deposits.
+- No payment/KYC/broker path.
+- No public gambling positioning.
+
+## Skill Fantasy Expansion
 
 Implemented locally:
 
@@ -52,7 +76,7 @@ A secret scan was run before committing. The only match was a CSS `mask-image` p
 
 ## Verification
 
-Backend tests after the skill fantasy expansion:
+Backend tests after private chip stakes:
 
 ```bash
 PYTHONPATH=. ./.venv/bin/pytest tests/ -q
@@ -61,7 +85,7 @@ PYTHONPATH=. ./.venv/bin/pytest tests/ -q
 Result:
 
 ```text
-43 passed in 1.82s
+45 passed in 1.92s
 ```
 
 Frontend build:
@@ -71,15 +95,6 @@ cd frontend && npm run build
 ```
 
 Result: production build completed successfully.
-
-AI scout sanity check:
-
-```text
-football captain=football-superstar cost=10 valid=True
-basketball captain=mock-star cost=10 valid=True
-baseball captain=baseball-ace cost=10 valid=True
-wwe captain=wwe-main-event cost=10 valid=True
-```
 
 ## Why The Full Source Is Not On GitHub Yet
 
@@ -111,6 +126,7 @@ Best path:
 ## Product Review Focus
 
 - Multi-sport table architecture.
+- Private table chip mode and no-cash-value safety boundary.
 - Daily Blitz gameplay: up to 5 players, salary cap 10, price tiers 4 / 3 / 2 / 1, captain 1.5x.
 - Sport-specific skill reads for football, basketball, golf, baseball, WWE-style sports entertainment, and future sports.
 - Player pool quality: daily slate breadth, current team mapping, unavailable player exclusion, and empty data fallback behavior.
