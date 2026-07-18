@@ -27,9 +27,37 @@ Older `fefb768-to-0a81171` patch files are retained only as previous-round histo
 
 ## Current Verdict
 
-- Design response: reasonable.
-- Source verdict: review pending until 5.6 reads the new 0a81171 to 0870ea5 patch shards.
-- Production deploy: blocked until source review and production session/JWT auth are confirmed.
+- Design response: approved.
+- Source verdict: APPROVE FOR SOURCE PR after 5.6 reviewed the 0a81171 to 0870ea5 source shards.
+- Production merge/deploy: still blocked until production session/JWT auth, production payload handling, benchmark pre-generation, and migration validation are confirmed.
+- Documentation handoff branch: do not merge.
+
+## Source PR Lane
+
+The local branch `codex/shfantasy-v2-source-baseline-20260718` is ready to publish as a draft source PR.
+
+Codex attempted the clean publish path from this laptop:
+
+- HTTPS git push failed because no GitHub username/token is available to the local runtime.
+- SSH push failed because no GitHub SSH identity is loaded.
+- GitHub CLI was downloaded temporarily and started the official browser device login flow.
+- Chrome is signed in as `gogochanky-afk`, but GitHub moved the flow to `Verify Session`, which requires account re-verification that Codex must not guess or bypass.
+
+This is a GitHub account verification blocker, not a source, test, or build blocker.
+
+Once GitHub CLI is authenticated, run:
+
+```bash
+cd /Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app
+git push -u origin codex/shfantasy-v2-source-baseline-20260718
+/tmp/shfantasy-gh-cli/gh_2.96.0_macOS_arm64/bin/gh pr create \
+  --repo gogochanky-afk/shfantasy \
+  --base main \
+  --head codex/shfantasy-v2-source-baseline-20260718 \
+  --draft \
+  --title "SHFantasy v2 source baseline: Daily Blitz + Master Ladder" \
+  --body-file docs/shfantasy-v2-source-pr-body-20260718.md
+```
 
 ## What Changed In 0870ea5
 
