@@ -23,7 +23,11 @@ fatal: could not read Username for 'https://github.com': Device not configured
 
 Codex then installed a temporary GitHub CLI at `/tmp/shfantasy-gh-cli/gh_2.96.0_macOS_arm64/bin/gh` and started the official browser device-login flow. Chrome was signed in as `gogochanky-afk`, but GitHub moved the flow to `Verify Session`, which requires account re-verification that Codex must not guess or bypass.
 
-This is a GitHub account verification blocker, not an app build or source-state blocker.
+After the browser session was usable again, Codex created the empty private repository `gogochanky-afk/shfantasy-v2-app` through GitHub web UI, with no README, .gitignore, or license selected. The repository exists and the GitHub connector reports admin/push permission.
+
+Codex retried GitHub CLI device authorization. The device code was accepted and GitHub displayed the `Authorize GitHub CLI` page for `gogochanky-afk`, but the `Authorize github` button remained disabled. Codex did not alter the page, submit a disabled form, inspect cookies, create a PAT, or bypass this account/OAuth safety state.
+
+This is a GitHub account/OAuth authorization blocker, not an app build or source-state blocker.
 
 ## Verification
 
@@ -187,12 +191,13 @@ Production blockers still outstanding:
 
 Best publish path:
 
-1. Create a new GitHub repository named `gogochanky-afk/shfantasy-v2-app`, or approve pushing this isolated branch to the existing `gogochanky-afk/shfantasy` repo.
+1. Use the new private source repository: `gogochanky-afk/shfantasy-v2-app`.
 2. Authenticate this laptop with GitHub CLI or provide a GitHub app lane that can import local git history.
 3. Push the local branch:
 
 ```bash
 cd /Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app
+git remote set-url origin https://github.com/gogochanky-afk/shfantasy-v2-app.git
 git push -u origin codex/shfantasy-v2-source-baseline-20260718
 ```
 
@@ -200,7 +205,7 @@ git push -u origin codex/shfantasy-v2-source-baseline-20260718
 
 ```bash
 /tmp/shfantasy-gh-cli/gh_2.96.0_macOS_arm64/bin/gh pr create \
-  --repo gogochanky-afk/shfantasy \
+  --repo gogochanky-afk/shfantasy-v2-app \
   --base main \
   --head codex/shfantasy-v2-source-baseline-20260718 \
   --draft \
