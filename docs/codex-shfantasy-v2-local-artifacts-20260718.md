@@ -1,18 +1,18 @@
 # SHFantasy v2 Local Artifact Hashes - 2026-07-18
 
-These artifacts were refreshed on the laptop from local git commit `5b54787 add skill fantasy baseball and wwe tables`.
+These artifacts were refreshed on the laptop from local git commit `adffa40 add private table chip stakes`.
 
 ## Files
 
 - `/tmp/shfantasy-v2-source-baseline-20260718.bundle`
-  - Size: 212 KB
-  - SHA256: `693b01a6f3f455ab390c9403439be91c821f3224a0d4020986acb9f0e690c77a`
+  - Size: 216 KB
+  - SHA256: `eb237859839a2352e23e39514bd25d07b49793855775d75df41e4e6f9d698054`
 - `/tmp/shfantasy-v2-source-baseline-20260718.tar.gz`
-  - Size: 179 KB
-  - SHA256: `53843818d4536158e171c15982f92ce5a624397ab0076ba7ddfe06412f33c587`
+  - Size: 181 KB
+  - SHA256: `4106e612088035dc7b12ba0af8a35fb689a8c5188807c5cb17b0ab62a88d2bbb`
 - `/tmp/shfantasy-v2-source-baseline-20260718.patch`
-  - Size: 862 KB
-  - SHA256: `963f4da721dfb0d8959f4f86a86114540bdd76ab00d1f4c0fd99d4ca5bfd1daf`
+  - Size: 881 KB
+  - SHA256: `372cc6b95b37b883700e410a047e0356e9f8a7d7fe30656baf791240217402a2`
 
 ## Notes
 
@@ -21,4 +21,5 @@ These artifacts were refreshed on the laptop from local git commit `5b54787 add 
 - These files are local laptop artifacts, not public GitHub downloads.
 - The GitHub handoff branch remains documentation-only until a proper GitHub credential/publish lane pushes the actual source branch.
 - Product direction now treats sports as parallel SHFantasy tables. Active table means today's best slate, not permanent sport priority.
-- Baseball and WWE-style sports entertainment are now implemented in the local source baseline as dry-run skill fantasy tables with tests.
+- Baseball and WWE-style sports entertainment are implemented in the local source baseline as dry-run skill fantasy tables with tests.
+- Private table chip stakes are implemented as game coins only with no cash value, no withdrawals, and no deposit/payment/KYC path.
