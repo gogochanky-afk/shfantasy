@@ -42,16 +42,19 @@ Codex attempted the clean publish path from this laptop:
 - SSH push failed because no GitHub SSH identity is loaded.
 - GitHub CLI was downloaded temporarily and started the official browser device login flow.
 - Chrome is signed in as `gogochanky-afk`, but GitHub moved the flow to `Verify Session`, which requires account re-verification that Codex must not guess or bypass.
+- A new empty private repository was created successfully: `gogochanky-afk/shfantasy-v2-app`.
+- GitHub CLI device authorization reached the `Authorize GitHub CLI` page for `gogochanky-afk`, but GitHub kept the `Authorize github` button disabled. Codex did not alter the page or bypass this account security state.
 
-This is a GitHub account verification blocker, not a source, test, or build blocker.
+This is a GitHub account/OAuth authorization blocker, not a source, test, or build blocker.
 
 Once GitHub CLI is authenticated, run:
 
 ```bash
 cd /Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app
+git remote set-url origin https://github.com/gogochanky-afk/shfantasy-v2-app.git
 git push -u origin codex/shfantasy-v2-source-baseline-20260718
 /tmp/shfantasy-gh-cli/gh_2.96.0_macOS_arm64/bin/gh pr create \
-  --repo gogochanky-afk/shfantasy \
+  --repo gogochanky-afk/shfantasy-v2-app \
   --base main \
   --head codex/shfantasy-v2-source-baseline-20260718 \
   --draft \
