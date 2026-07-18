@@ -1,14 +1,28 @@
 # SHFantasy v2 Source Baseline Status - 2026-07-18
 
-Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop.
+Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop and then corrected the product direction to parallel sport tables.
 
 ## Local Source Baseline
 
 - Local path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
 - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
-- Local commit: `f915f08decaeae077183c2ea8d02e9e1442a8224`
-- Commit message: `baseline shfantasy v2 app`
+- Local HEAD commit: `0e8383c align arena around parallel sport tables`
+- Baseline commit: `f915f08 baseline shfantasy v2 app`
 - Tracked files: 101
+
+## Product Direction Correction
+
+SHFantasy should not frame one sport as permanently primary and another as reserve.
+
+Correct model:
+
+- Daily Blitz is the primary ruleset.
+- Football, basketball, golf, tennis, and future sports are parallel SHFantasy tables.
+- The active table for a given day is selected by verified slate quality, event heat, player availability, and roster depth.
+- Telegram is a chat/distribution surface, not the main game UI.
+- The game should feel like a collectible sports-card arena with strategy, identity, recap, return reasons, and cosmetic progression.
+
+Codex changed source copy/API packet/tests to remove the old `football default / basketball reserve` framing.
 
 ## Safety
 
@@ -33,10 +47,10 @@ Backend tests:
 PYTHONPATH=. ./.venv/bin/pytest tests/ -q
 ```
 
-Result:
+Result after the parallel-sport correction:
 
 ```text
-40 passed in 1.65s
+40 passed in 1.33s
 ```
 
 Frontend build:
@@ -46,6 +60,18 @@ cd frontend && npm run build
 ```
 
 Result: production build completed successfully.
+
+Focused product tests:
+
+```bash
+PYTHONPATH=. ./.venv/bin/pytest tests/test_ai_arena.py tests/test_daily_blitz.py tests/test_endpoints.py -q
+```
+
+Result:
+
+```text
+33 passed in 1.96s
+```
 
 ## Why The Full Source Is Not On GitHub Yet
 
@@ -76,9 +102,9 @@ Best path:
 
 ## Product Review Focus
 
-- Daily Blitz is primary.
-- Telegram is a chat/distribution surface, not the game UI.
-- The game should feel like a collectible sports-card arena, not a generic dashboard.
-- Cosmetic collection must remain non-pay-to-win.
-- Skill Parlay needs review to confirm it creates real strategy rather than extra terminology.
-- No betting, payment, KYC, wagering execution, broker execution, or cash-value prize language.
+- Multi-sport table architecture.
+- Daily Blitz gameplay: up to 5 players, salary cap 10, price tiers 4 / 3 / 2 / 1, captain 1.5x.
+- Player pool quality: daily slate breadth, current team mapping, unavailable player exclusion, and empty data fallback behavior.
+- Game feel: mobile-first pick flow, guided first hand, card role clarity, cosmetic collection, return hook, and recap learning loop.
+- Skill Parlay: confirm it creates real strategy rather than extra terminology.
+- Fairness and compliance: play-money only, no wagering/payment/KYC/cash-value language, no pay-to-win card effects.
