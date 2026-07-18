@@ -1,0 +1,52 @@
+{
+  "title": "SHFantasy Master Ladder 5.6 Revise Response",
+  "timestamp_utc": "2026-07-18T12:00:11Z",
+  "scope": "Second hardening pass after 5.6 source review: auth fail-closed, database-level atomic settlement, frozen bounded benchmark percentile, and data-integrity regression tests.",
+  "status": "local_verified_not_deployed",
+  "local_commit": "0870ea5c0df4c840bf7e6a03a9e9a545e143b539",
+  "implemented": [
+    "Changed SHFANTASY_AUTH_MODE default from dev to disabled so X-SHF-User-ID is rejected unless dev mode is explicit.",
+    "Added production startup guard requiring SHFANTASY_AUTH_MODE=session when SHFANTASY_RUNTIME_ENV is production.",
+    "Removed production frontend fallback to the shared hugo identity; dev header identity is generated only for dev/header-auth runs.",
+    "Added daily_blitz_rank_state.version for settlement versioning.",
+    "Added daily_blitz_rank_benchmarks to freeze benchmark distributions by sport, slate, season, rules, benchmark version, and roster size.",
+    "Added benchmark_percentile, benchmark_version, and field_snapshot_id to daily_blitz_rank_events.",
+    "Changed rank settlement to run inside BEGIN IMMEDIATE and update ledger, state, and entry rank fields in one transaction.",
+    "Changed rank_state updates from absolute overwrite to atomic rank_points increment plus version increment.",
+    "Restricted ranked settlement to entries with a non-null ranked_attempt_key; legacy pending entries reveal as unranked.",
+    "Changed same-slate scoring comparison to same roster size only, with deterministic sample fallback when combinations exceed the cap.",
+    "Renamed player-facing rank language to frozen same-slate benchmark percentile instead of implying actual live entrant percentile.",
+    "Narrowed duplicate-attempt IntegrityError handling so unrelated database failures are not converted into practice hands or replay results.",
+    "Added rollback coverage proving failed state settlement does not leave a rank event or revealed entry behind."
+  ],
+  "verification": {
+    "backend_tests": {
+      "command": "PYTHONPATH=. ./.venv/bin/pytest tests -q",
+      "result": "58 passed in 2.85s"
+    },
+    "frontend_build": {
+      "command": "cd frontend && npm run build",
+      "result": "vite build completed successfully"
+    },
+    "diff_check": {
+      "command": "git diff --check HEAD",
+      "result": "passed"
+    }
+  },
+  "review_items_addressed": [
+    "P0 auth fail-open default",
+    "P0 multi-instance rank_state lost update",
+    "P1 mixed roster-size benchmark percentile",
+    "P1 benchmark combination explosion risk",
+    "P1 inaccurate actual field percentile wording",
+    "legacy pending entry settlement risk",
+    "over-broad IntegrityError handling",
+    "entry ranked_status not updated after settlement"
+  ],
+  "deployment": {
+    "deployed": false,
+    "reason": "Source hardening is locally verified but should be reviewed before production deployment.",
+    "recommended_next_gate": "5.6/Claude source review of this local delta, then production auth/session middleware confirmation before deploy."
+  },
+  "safety": "Play-money only. No betting, payment, KYC, deposits, withdrawals, cash-value prizes, or pay-to-win rank effects."
+}
