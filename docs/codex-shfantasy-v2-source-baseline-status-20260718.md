@@ -9,24 +9,26 @@ This handoff branch is documentation-only and should not be merged as production
 Read these files in order:
 
 1. `docs/codex-shfantasy-v2-source-baseline-status-20260718.md` - current source status and product direction.
-2. `docs/claude-5-6-master-ladder-review-brief-20260718.md` - earlier review brief and ranked v2 concerns.
-3. `docs/live-proof/shfantasy-master-ladder-hardening-local-20260718T112115Z.json` - latest local proof for the hardening pass.
-4. `docs/codex-shfantasy-v2-local-artifacts-20260718.md` - older artifact hashes for bundle/tarball/patch.
-5. `docs/review-patches/shfantasy-master-ladder-adffa40-to-fefb768.patch` - previous Master Ladder v1 source delta.
+2. `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-0a81171-00-index.md` - index for the uploaded source patch parts.
+3. `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-0a81171-01-schema-main.patch` - README, DB schema, rank tables, indexes, app settlement lock.
+4. `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-0a81171-02-daily-blitz-route-a.patch` - route/auth/rank formula/ledger helpers, part 1.
+5. `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-0a81171-03-daily-blitz-route-b.patch` - settlement/event/profile/endpoints, part 2.
+6. `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-0a81171-04-daily-blitz-route-c.patch` - submit/reveal/recap tail, part 3.
+7. `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-0a81171-05-frontend.patch` - frontend API wrapper and Daily Blitz rank hydration.
+8. `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-0a81171-06-tests-docs.patch` - tests, proof, and docs.
+9. `docs/live-proof/shfantasy-master-ladder-hardening-local-20260718T112115Z.json` - latest local proof for the hardening pass.
+10. `docs/codex-shfantasy-master-ladder-hardening-brief-20260718.md` - short brief for source review.
+11. `docs/review-patches/shfantasy-master-ladder-adffa40-to-fefb768.patch` - previous Master Ladder v1 source delta.
+12. `docs/claude-5-6-master-ladder-review-brief-20260718.md` - earlier review brief and ranked v2 concerns.
 
-Important: the latest hardening source patch exists locally at:
-
-```text
-/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app/docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-current.patch
-```
-
-The full local source branch still is not pushed as a normal GitHub source branch because this laptop lacks an exposed GitHub CLI/HTTPS credential for Codex. GitHub now has the latest status/proof, while the canonical source remains the local git commit.
+The full local source branch still is not pushed as a normal GitHub source branch because this laptop lacks an exposed GitHub CLI/HTTPS credential for Codex. The hardening source delta is now available on this handoff branch as split review patch files with SHA256 checksums in the index.
 
 ## Local Source Baseline
 
 - Local path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
 - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
 - Local HEAD commit: `0a81171 harden master ladder ranked settlement`
+- Follow-up local docs commit: `680b77e docs: add master ladder hardening brief`
 - Prior commit: `fefb768 add master ladder ranked progression`
 - Prior commit: `adffa40 add private table chip stakes`
 - Prior commit: `5b54787 add skill fantasy baseball and wwe tables`
@@ -117,7 +119,7 @@ This is local source work and GitHub handoff documentation, not production deplo
 Do not route this to production until:
 
 1. The full source branch is pushed or imported into a proper GitHub review branch/repo.
-2. 5.6 reviews `0a81171` source, not just this status note.
+2. 5.6 reviews `0a81171` source patch parts on this handoff branch.
 3. Deployment owner confirms auth middleware and migration path.
 4. Public leaderboard policy is confirmed.
 5. Real sports-data API integration is approved after dry-run gameplay remains stable.
@@ -126,7 +128,7 @@ Do not route this to production until:
 
 Best path:
 
-1. Review local commit `0a81171` against `fefb768` on the laptop, or import/push the local branch into `gogochanky-afk/shfantasy-v2-app`.
+1. Review the uploaded split source patch files against `fefb768`.
 2. Confirm the rank ledger, identity, attempt policy, percentile formula, and frontend rank hydration.
 3. Decide whether season soft reset and Diamond/Master inactivity decay must land before public leaderboard.
 4. Then open a production migration PR. Do not merge this documentation-only handoff branch.
