@@ -1,18 +1,18 @@
 # SHFantasy v2 Local Artifact Hashes - 2026-07-18
 
-These artifacts were created on the laptop from local git commit `f915f08decaeae077183c2ea8d02e9e1442a8224`.
+These artifacts were refreshed on the laptop from local git commit `0e8383c align arena around parallel sport tables`.
 
 ## Files
 
 - `/tmp/shfantasy-v2-source-baseline-20260718.bundle`
-  - Size: 203 KB
-  - SHA256: `98abe713fa729dcb321d4967ba492f35e03d3201f3003591b06cb90082645f0b`
+  - Size: 206 KB
+  - SHA256: `bec3fd0c9b597819c6ed3e25390f38ec512fb6358ed7bf92fbf5eca55580d703`
 - `/tmp/shfantasy-v2-source-baseline-20260718.tar.gz`
-  - Size: 175 KB
-  - SHA256: `03bf8d9187ff16700208bf0f9c60b7839b6b9419d40ade0c460c2d7e019798fc`
+  - Size: 176 KB
+  - SHA256: `f4fd710ac6b6686896078a6ab5729569477a5acbf86cee9a9de758836a2b4e2e`
 - `/tmp/shfantasy-v2-source-baseline-20260718.patch`
-  - Size: 812 KB
-  - SHA256: `642a4065a622e4242370975750186703f69e3f505b1248c016cc9e18d64f80a0`
+  - Size: 834 KB
+  - SHA256: `288e97b5c805af3a06d75053c98cf3013a219b883357e89e4206edbaf9435f2b`
 
 ## Notes
 
@@ -20,3 +20,4 @@ These artifacts were created on the laptop from local git commit `f915f08decaeae
 - The bundle can recreate the commit history locally with `git clone /tmp/shfantasy-v2-source-baseline-20260718.bundle shfantasy-v2-app-review`.
 - These files are local laptop artifacts, not public GitHub downloads.
 - The GitHub handoff branch remains documentation-only until a proper GitHub credential/publish lane pushes the actual source branch.
+- Product direction now treats sports as parallel SHFantasy tables. Active table means today's best slate, not permanent sport priority.
