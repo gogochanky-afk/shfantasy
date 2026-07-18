@@ -1,0 +1,521 @@
+diff --git a/docs/claude_5_6_source_baseline_handoff_20260718.md b/docs/claude_5_6_source_baseline_handoff_20260718.md
+index 1d2d04b..d36940a 100644
+--- a/docs/claude_5_6_source_baseline_handoff_20260718.md
++++ b/docs/claude_5_6_source_baseline_handoff_20260718.md
+@@ -6,7 +6,7 @@ This directory is now an isolated local git repository for the current SHFantasy
+
+ - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
+ - Original baseline commit: `f915f08decaeae077183c2ea8d02e9e1442a8224`
+-- Latest local work now includes multi-sport tables, private table chips, Master Ladder ranked progression, and the post-review rank settlement hardening pass.
++- Latest local work now includes multi-sport tables, private table chips, Master Ladder ranked progression, and the second post-review rank settlement hardening pass.
+ - Tracked files: 100
+ - Excluded from git: `.env`, API keys, SQLite database, `.venv`, node_modules, Svelte build output, cache folders, and backup archives.
+
+@@ -26,12 +26,18 @@ Backend:
+ PYTHONPATH=. ./.venv/bin/pytest tests/ -q
+ ```
+
+-Result:
++Previous result:
+
+ ```text
+ 50 passed in 2.39s
+ ```
+
++Current result after the second 5.6 REVise response:
++
++```text
++58 passed in 2.25s
++```
++
+ Frontend:
+
+ ```bash
+@@ -107,6 +113,34 @@ Still worth review:
+ 3. Whether season soft reset and Diamond/Master inactivity decay should be implemented before public leaderboard launch.
+ 4. Whether same-slate percentile should compare against all legal combos, table entrants only, or a blended field once user volume exists.
+
++## Second 5.6 REVise Response - Source Changes Pending Review
++
++5.6's second source review found three remaining blockers: auth fail-open defaults, multi-instance rank state lost updates, and unfair/unbounded benchmark percentile. Codex has now patched the local source to answer those blockers.
++
++What changed in this second pass:
++
++- Default auth is fail-closed. `X-SHF-User-ID` is ignored unless `SHFANTASY_AUTH_MODE=dev` is explicitly set.
++- Production startup now requires `SHFANTASY_AUTH_MODE=session`, so a production deployment cannot silently launch with dev header auth.
++- Frontend no longer defaults production players to the shared `hugo` identity.
++- Settlement now runs under `BEGIN IMMEDIATE`; reveal state, player scores, rank event, rank state, and entry rank snapshot commit or roll back as one unit.
++- `daily_blitz_rank_state` now has a `version` counter and uses atomic RP increment rather than absolute state overwrite.
++- `daily_blitz_rank_benchmarks` freezes benchmark distributions by sport, slate, season, rules, benchmark version, and roster size.
++- Rank events now store `benchmark_percentile`, `benchmark_version`, and `field_snapshot_id`.
++- Ranked benchmark comparison uses the same roster size only.
++- Large player pools use deterministic bounded sampling instead of unbounded combination enumeration.
++- Entries without `ranked_attempt_key` are treated as `legacy_unranked`/unranked and cannot settle RP.
++- Duplicate-attempt handling only catches the ranked attempt-key conflict; unrelated integrity errors fail loudly.
++- Tests now cover default auth rejection, production auth guard, independent app/DB concurrent settlement, transaction rollback, legacy entry rank blocking, same-roster benchmark separation, frozen benchmark replay, large pool cap, and non-attempt integrity errors.
++
++Updated proof:
++
++- `docs/live-proof/shfantasy-master-ladder-revise-local-20260718T120011Z.json`
++
++Current deployment stance:
++
++- Source recommendation for reviewer: review the new local delta.
++- Deployment recommendation: still block until source review and production auth/session middleware are confirmed.
++
+ ## Key Files
+
+ - `backend/daily_blitz.py`
+diff --git a/docs/codex-shfantasy-master-ladder-hardening-brief-20260718.md b/docs/codex-shfantasy-master-ladder-hardening-brief-20260718.md
+new file mode 100644
+index 0000000..14242ed
+--- /dev/null
++++ b/docs/codex-shfantasy-master-ladder-hardening-brief-20260718.md
+@@ -0,0 +1,93 @@
++# Codex Master Ladder Hardening Brief - 2026-07-18
++
++This is the Codex response to 5.6's REVise review of local commit `fefb768 add master ladder ranked progression`.
++
++## Verdict
++
++Codex agrees with 5.6: the Master Ladder direction was right, but `fefb768` should not enter production as-is. The ranked layer is competitive/economic game state even without cash value, so it needs server-authoritative identity, a settlement ledger, attempt limits, idempotency, and sport-separated rating.
++
++## Local Source State
++
++- Local app path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
++- Local branch: `codex/shfantasy-v2-source-baseline-20260718`
++- Base reviewed commit: `fefb7681033154f724697d5399626d24b34b9f49`
++- New local commit: this commit, `harden master ladder production blockers`
++- Local patch: `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-current.patch`
++
++## What Was Fixed
++
++- Identity: protected validate/submit/reveal/recap/ranked-me now use request-state auth or dev `X-SHF-User-ID`; mismatched body `user_id` is rejected.
++- Public rank lookup: `/daily-blitz/ranked/{user_id}` now returns only a safe public profile, not full private ladder state.
++- Ledger: `daily_blitz_rank_events` stores unique one-time rank settlement events, with `entry_id` unique.
++- Rank source of truth: `daily_blitz_rank_state` stores current sport-specific ladder state.
++- Attempt farming: unique `ranked_attempt_key` allows one ranked result per user/sport/slate/season/rules version; later entries are `unranked_duplicate` practice hands.
++- Idempotency: repeat reveal and recap replay the saved rank event.
++- Concurrent reveal: app-level settlement lock prevents duplicate rank events in the SQLite runtime.
++- Cross-sport fairness: RP movement is same-slate percentile based, and rank state is sport-specific.
++- Bonus safety: full-hand/role bonuses are tiny and cannot turn a negative result into a positive RP gain.
++- Frontend: API wrapper sends dev user header; Daily Blitz hydrates `/daily-blitz/ranked/me` for the active sport before showing rank.
++
++## Verification
++
++Backend:
++
++```bash
++PYTHONPATH=. ./.venv/bin/pytest tests -q
++```
++
++Result: `50 passed in 2.39s`
++
++Frontend:
++
++```bash
++cd frontend && npm run build
++```
++
++Result: production build completed successfully.
++
++## Second 5.6 REVise Response
++
++After the second source review, Codex addressed the remaining production blockers locally:
++
++- Auth fail-closed: unset `SHFANTASY_AUTH_MODE` no longer accepts `X-SHF-User-ID`; production startup requires `SHFANTASY_AUTH_MODE=session`.
++- Frontend identity: production build no longer defaults to shared `hugo`; dev header identity is generated only in dev/header-auth mode.
++- Atomic settlement: reveal uses `BEGIN IMMEDIATE`; rank event, rank state, entry rank fields, and entry reveal state commit or roll back together.
++- Rank state update: state now uses atomic RP increment plus a `version` counter instead of absolute overwrite.
++- Benchmarks: percentile is now frozen by `sport/slate/season/rules/benchmark_version/roster_size`, compares same roster size only, and falls back to deterministic bounded sampling for large player pools.
++- Ledger metadata: rank events now save `benchmark_percentile`, `benchmark_version`, and `field_snapshot_id`.
++- Legacy safety: entries without `ranked_attempt_key` cannot settle ranked RP.
++- Integrity handling: duplicate-attempt handling is narrowed so unrelated database errors are not swallowed.
++
++Updated verification:
++
++```bash
++PYTHONPATH=. ./.venv/bin/pytest tests -q
++```
++
++Result: `58 passed in 2.25s`
++
++```bash
++cd frontend && npm run build
++```
++
++Result: production build completed successfully.
++
++```bash
++git diff --check
++```
++
++Result: passed.
++
++Proof: `docs/live-proof/shfantasy-master-ladder-revise-local-20260718T120011Z.json`
++
++## What 5.6 Should Review Next
++
++1. Review the current `harden master ladder production blockers` commit against `fefb768` source, not only this note.
++2. Confirm whether percentile should compare against all legal combos, actual table entrants, or a blended field once real players exist.
++3. Tune Rookie-to-Master thresholds after real sports data replaces deterministic mock points.
++4. Decide whether season soft reset and Diamond/Master inactivity decay are required before public leaderboard launch.
++5. Confirm production auth middleware before deployment.
++
++## Deployment Stance
++
++This hardening pass is locally verified but not deployed. Do not deploy until the full source branch is pushed/imported, 5.6 reviews the real source delta, and production session/JWT auth is confirmed.
+diff --git a/docs/live-proof/shfantasy-master-ladder-revise-local-20260718T120011Z.json b/docs/live-proof/shfantasy-master-ladder-revise-local-20260718T120011Z.json
+new file mode 100644
+index 0000000..35dc595
+--- /dev/null
++++ b/docs/live-proof/shfantasy-master-ladder-revise-local-20260718T120011Z.json
+@@ -0,0 +1,51 @@
++{
++  "title": "SHFantasy Master Ladder 5.6 Revise Response",
++  "timestamp_utc": "2026-07-18T12:00:11Z",
++  "scope": "Second hardening pass after 5.6 source review: auth fail-closed, database-level atomic settlement, frozen bounded benchmark percentile, and data-integrity regression tests.",
++  "status": "local_verified_not_deployed",
++  "implemented": [
++    "Changed SHFANTASY_AUTH_MODE default from dev to disabled so X-SHF-User-ID is rejected unless dev mode is explicit.",
++    "Added production startup guard requiring SHFANTASY_AUTH_MODE=session when SHFANTASY_RUNTIME_ENV is production.",
++    "Removed production frontend fallback to the shared hugo identity; dev header identity is generated only for dev/header-auth runs.",
++    "Added daily_blitz_rank_state.version for settlement versioning.",
++    "Added daily_blitz_rank_benchmarks to freeze benchmark distributions by sport, slate, season, rules, benchmark version, and roster size.",
++    "Added benchmark_percentile, benchmark_version, and field_snapshot_id to daily_blitz_rank_events.",
++    "Changed rank settlement to run inside BEGIN IMMEDIATE and update ledger, state, and entry rank fields in one transaction.",
++    "Changed rank_state updates from absolute overwrite to atomic rank_points increment plus version increment.",
++    "Restricted ranked settlement to entries with a non-null ranked_attempt_key; legacy pending entries reveal as unranked.",
++    "Changed same-slate scoring comparison to same roster size only, with deterministic sample fallback when combinations exceed the cap.",
++    "Renamed player-facing rank language to frozen same-slate benchmark percentile instead of implying actual live entrant percentile.",
++    "Narrowed duplicate-attempt IntegrityError handling so unrelated database failures are not converted into practice hands or replay results.",
++    "Added rollback coverage proving failed state settlement does not leave a rank event or revealed entry behind."
++  ],
++  "verification": {
++    "backend_tests": {
++      "command": "PYTHONPATH=. ./.venv/bin/pytest tests -q",
++      "result": "58 passed in 2.25s"
++    },
++    "frontend_build": {
++      "command": "cd frontend && npm run build",
++      "result": "vite build completed successfully"
++    },
++    "diff_check": {
++      "command": "git diff --check",
++      "result": "passed"
++    }
++  },
++  "review_items_addressed": [
++    "P0 auth fail-open default",
++    "P0 multi-instance rank_state lost update",
++    "P1 mixed roster-size benchmark percentile",
++    "P1 benchmark combination explosion risk",
++    "P1 inaccurate actual field percentile wording",
++    "legacy pending entry settlement risk",
++    "over-broad IntegrityError handling",
++    "entry ranked_status not updated after settlement"
++  ],
++  "deployment": {
++    "deployed": false,
++    "reason": "Source hardening is locally verified but should be reviewed before production deployment.",
++    "recommended_next_gate": "5.6/Claude source review of this local delta, then production auth/session middleware confirmation before deploy."
++  },
++  "safety": "Play-money only. No betting, payment, KYC, deposits, withdrawals, cash-value prizes, or pay-to-win rank effects."
++}
+diff --git a/tests/test_daily_blitz.py b/tests/test_daily_blitz.py
+index 6719aa1..7a1b420 100644
+--- a/tests/test_daily_blitz.py
++++ b/tests/test_daily_blitz.py
+@@ -1,6 +1,8 @@
+ from concurrent.futures import ThreadPoolExecutor
+ from datetime import date
++import sqlite3
+
++import pytest
+ from backend.daily_blitz import (
+     DailyBlitzEntryRequest,
+     DailyBlitzGame,
+@@ -74,6 +76,12 @@ def auth_headers(user_id="hugo"):
+     return {"X-SHF-User-ID": user_id}
+
+
++@pytest.fixture(autouse=True)
++def shfantasy_dev_auth(monkeypatch):
++    monkeypatch.setenv("SHFANTASY_AUTH_MODE", "dev")
++    monkeypatch.delenv("SHFANTASY_RUNTIME_ENV", raising=False)
++
++
+ def test_daily_blitz_accepts_valid_five_player_roster_under_cap():
+     slate = build_slate()
+     entry = DailyBlitzEntryRequest(
+@@ -198,6 +206,7 @@ def test_daily_blitz_schema_is_created_without_breaking_existing_tables(tmp_path
+     assert "daily_blitz_entry_players" in tables
+     assert "daily_blitz_rank_state" in tables
+     assert "daily_blitz_rank_events" in tables
++    assert "daily_blitz_rank_benchmarks" in tables
+     assert "player_game_status" in tables
+     columns = {
+         row["name"]
+@@ -218,7 +227,23 @@ def test_daily_blitz_schema_is_created_without_breaking_existing_tables(tmp_path
+         row["name"]
+         for row in conn.execute("PRAGMA table_info(daily_blitz_rank_events)").fetchall()
+     }
+-    assert {"entry_id", "user_id", "sport", "slate_id", "season_id", "rules_version", "percentile"}.issubset(rank_event_columns)
++    assert {
++        "entry_id",
++        "user_id",
++        "sport",
++        "slate_id",
++        "season_id",
++        "rules_version",
++        "percentile",
++        "benchmark_percentile",
++        "benchmark_version",
++        "field_snapshot_id",
++    }.issubset(rank_event_columns)
++    rank_state_columns = {
++        row["name"]
++        for row in conn.execute("PRAGMA table_info(daily_blitz_rank_state)").fetchall()
++    }
++    assert "version" in rank_state_columns
+     indexes = {row["name"] for row in conn.execute("PRAGMA index_list(daily_blitz_entries)").fetchall()}
+     assert "idx_daily_blitz_ranked_attempt" in indexes
+
+@@ -700,6 +725,237 @@ def test_daily_blitz_auth_blocks_impersonation_and_private_rank_access(tmp_path)
+     assert stolen.status_code == 403
+
+
++def test_daily_blitz_default_auth_rejects_dev_header(monkeypatch, tmp_path):
++    monkeypatch.delenv("SHFANTASY_AUTH_MODE", raising=False)
++    client = TestClient(create_app(tmp_path / "play.sqlite"))
++
++    response = client.get("/daily-blitz/ranked/me?sport=football", headers=auth_headers("victim"))
++
++    assert response.status_code == 401
++
++
++def test_daily_blitz_production_startup_requires_session_auth(monkeypatch, tmp_path):
++    monkeypatch.setenv("SHFANTASY_RUNTIME_ENV", "production")
++    monkeypatch.delenv("SHFANTASY_AUTH_MODE", raising=False)
++
++    with pytest.raises(RuntimeError):
++        create_app(tmp_path / "play.sqlite")
++
++
++def test_daily_blitz_two_instances_do_not_lose_rank_state_update(tmp_path):
++    db_path = tmp_path / "play.sqlite"
++    app_one = create_app(db_path)
++    app_two = create_app(db_path)
++    client_one = TestClient(app_one)
++    client_two = TestClient(app_two)
++    payload = {
++        "user_id": "multi-worker",
++        "sport": "football",
++        "player_ids": [
++            "football-superstar",
++            "football-value",
++            "football-sleeper",
++            "football-punt",
++            "football-runner",
++        ],
++        "captain_player_id": "football-superstar",
++    }
++    first = client_one.post(
++        "/daily-blitz/entry/submit",
++        headers=auth_headers("multi-worker"),
++        json={**payload, "slate_date": "2026-07-17"},
++    ).json()
++    second = client_two.post(
++        "/daily-blitz/entry/submit",
++        headers=auth_headers("multi-worker"),
++        json={**payload, "slate_date": "2026-07-18"},
++    ).json()
++
++    def reveal(client, entry_id):
++        return client.post(f"/daily-blitz/entry/{entry_id}/reveal", headers=auth_headers("multi-worker")).json()
++
++    with ThreadPoolExecutor(max_workers=2) as pool:
++        first_recap, second_recap = list(pool.map(lambda args: reveal(*args), [(client_one, first["entry_id"]), (client_two, second["entry_id"])]))
++
++    conn = connect(db_path)
++    ledger_delta = conn.execute(
++        """
++        SELECT COALESCE(SUM(delta), 0) AS total
++        FROM daily_blitz_rank_events
++        WHERE user_id = ? AND sport = ?
++        """,
++        ("multi-worker", "football"),
++    ).fetchone()["total"]
++    state = conn.execute(
++        """
++        SELECT rank_points, version
++        FROM daily_blitz_rank_state
++        WHERE user_id = ? AND sport = ?
++        """,
++        ("multi-worker", "football"),
++    ).fetchone()
++
++    assert first_recap["ranked_result"]["settled"] is True
++    assert second_recap["ranked_result"]["settled"] is True
++    assert state["rank_points"] == ledger_delta
++    assert state["version"] == 2
++
++
++def test_daily_blitz_rank_settlement_rolls_back_on_state_failure(tmp_path):
++    app = create_app(tmp_path / "play.sqlite")
++    client = TestClient(app, raise_server_exceptions=False)
++    app.state.db.execute(
++        """
++        INSERT INTO daily_blitz_rank_state(user_id, sport, season_id, rules_version, rank_points, rank_tier)
++        VALUES('rollback', 'football', 'season-2026-summer', 'rank-v2-percentile', 10, 'Rookie')
++        """
++    )
++    app.state.db.execute(
++        """
++        CREATE TRIGGER fail_rollback_rank_state
++        BEFORE UPDATE OF rank_points ON daily_blitz_rank_state
++        WHEN OLD.user_id = 'rollback'
++        BEGIN
++            SELECT RAISE(FAIL, 'rank state update failed');
++        END;
++        """
++    )
++    app.state.db.commit()
++    entry = client.post("/daily-blitz/entry/submit", headers=auth_headers("rollback"), json={
++        "user_id": "rollback",
++        "slate_date": "2026-07-17",
++        "sport": "football",
++        "player_ids": [
++            "football-superstar",
++            "football-value",
++            "football-sleeper",
++            "football-punt",
++            "football-runner",
++        ],
++        "captain_player_id": "football-superstar",
++    }).json()
++
++    response = client.post(f"/daily-blitz/entry/{entry['entry_id']}/reveal", headers=auth_headers("rollback"))
++    event_count = app.state.db.execute(
++        "SELECT COUNT(*) AS count FROM daily_blitz_rank_events WHERE entry_id = ?",
++        (entry["entry_id"],),
++    ).fetchone()["count"]
++    saved_entry = app.state.db.execute(
++        "SELECT status, score FROM daily_blitz_entries WHERE entry_id = ?",
++        (entry["entry_id"],),
++    ).fetchone()
++
++    assert response.status_code == 500
++    assert event_count == 0
++    assert saved_entry["status"] == "locked"
++    assert saved_entry["score"] == 0
++
++
++def test_daily_blitz_legacy_pending_entry_without_attempt_key_is_unranked(tmp_path):
++    app = create_app(tmp_path / "play.sqlite")
++    client = TestClient(app)
++    entry_id = "legacy-entry"
++    app.state.db.execute(
++        """
++        INSERT INTO daily_blitz_entries(
++            entry_id, user_id, slate_id, captain_player_id, total_cost, ranked_status, ranked_attempt_key
++        )
++        VALUES(?, ?, ?, ?, ?, 'ranked_pending', NULL)
++        """,
++        (entry_id, "legacy", "mock-football-2026-07-17", "football-superstar", 9),
++    )
++    for player_id, tier, is_captain in [
++        ("football-superstar", 4, 1),
++        ("football-value", 2, 0),
++        ("football-sleeper", 1, 0),
++        ("football-punt", 1, 0),
++        ("football-runner", 1, 0),
++    ]:
++        app.state.db.execute(
++            "INSERT INTO daily_blitz_entry_players(entry_id, player_id, tier, is_captain) VALUES(?, ?, ?, ?)",
++            (entry_id, player_id, tier, is_captain),
++        )
++    app.state.db.commit()
++
++    recap = client.post(f"/daily-blitz/entry/{entry_id}/reveal", headers=auth_headers("legacy")).json()
++    event_count = app.state.db.execute(
++        "SELECT COUNT(*) AS count FROM daily_blitz_rank_events WHERE entry_id = ?",
++        (entry_id,),
++    ).fetchone()["count"]
++
++    assert recap["ranked_result"]["settled"] is False
++    assert recap["ranked_result"]["delta"] == 0
++    assert event_count == 0
++
++
++def test_daily_blitz_submit_does_not_swallow_non_attempt_integrity_error(monkeypatch, tmp_path):
++    from backend.routes import daily_blitz as daily_blitz_route
++
++    client = TestClient(create_app(tmp_path / "play.sqlite"))
++    monkeypatch.setattr(daily_blitz_route, "new_daily_blitz_entry_id", lambda: "fixed-entry")
++    payload = {
++        "slate_date": "2026-07-17",
++        "sport": "football",
++        "player_ids": ["football-superstar", "football-value", "football-sleeper"],
++        "captain_player_id": "football-superstar",
++    }
++    client.post("/daily-blitz/entry/submit", headers=auth_headers("first"), json={**payload, "user_id": "first"})
++
++    with pytest.raises(sqlite3.IntegrityError):
++        client.post("/daily-blitz/entry/submit", headers=auth_headers("second"), json={**payload, "user_id": "second"})
++
++
++def test_rank_benchmark_uses_same_roster_size_and_freezes_snapshot(tmp_path):
++    from backend.routes.daily_blitz import _slate_score_percentile
++
++    conn = connect(tmp_path / "play.sqlite")
++    slate = build_slate()
++    score = 90.0
++
++    five_card = _slate_score_percentile(conn, slate, score, 5)
++    one_card = _slate_score_percentile(conn, slate, score, 1)
++    replay = _slate_score_percentile(conn, build_slate(players={
++        **slate.players,
++        "late_star": DailyBlitzPlayer("late_star", "lal", "Late Added Star", "F"),
++    }, statuses={
++        **slate.statuses,
++        "late_star": DailyBlitzPlayerStatus("late_star", "game-1", "available"),
++    }, salaries={
++        **slate.salaries,
++        "late_star": DailyBlitzSalary("late_star", 1),
++    }), score, 5)
++
++    assert five_card["roster_size"] == 5
++    assert one_card["roster_size"] == 1
++    assert five_card["field_snapshot_id"] != one_card["field_snapshot_id"]
++    assert replay["field_snapshot_id"] == five_card["field_snapshot_id"]
++    assert replay["benchmark_percentile"] == five_card["benchmark_percentile"]
++
++
++def test_rank_benchmark_caps_large_player_pool(tmp_path):
++    from backend.routes.daily_blitz import RANK_BENCHMARK_SAMPLE_SIZE, _slate_score_percentile
++
++    conn = connect(tmp_path / "play.sqlite")
++    base = build_slate()
++    players = {}
++    statuses = {}
++    salaries = {}
++    teams = {team_id: team for team_id, team in base.teams.items() if team_id != "off"}
++    team_ids = list(teams)
++    for index in range(60):
++        player_id = f"pool-{index}"
++        team_id = team_ids[index % len(team_ids)]
++        players[player_id] = DailyBlitzPlayer(player_id, team_id, f"Pool Player {index}", "F")
++        statuses[player_id] = DailyBlitzPlayerStatus(player_id, "game-1", "available")
++        salaries[player_id] = DailyBlitzSalary(player_id, 1)
++    slate = build_slate(players=players, statuses=statuses, salaries=salaries, teams=teams)
++
++    packet = _slate_score_percentile(conn, slate, 75.0, 5)
++
++    assert packet["calculation_mode"] == "deterministic_sample"
++    assert packet["sample_size"] <= RANK_BENCHMARK_SAMPLE_SIZE
++
++
+ def test_rank_delta_bonus_cannot_turn_bad_result_positive():
+     from backend.routes.daily_blitz import _rank_delta_for_score
+
