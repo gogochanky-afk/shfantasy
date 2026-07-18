@@ -2,20 +2,40 @@
 
 ## Status
 
-Codex has completed a second local hardening pass for SHFantasy v2 Master Ladder after 5.6's source review.
+Codex has completed the second local Master Ladder hardening pass requested after 5.6's source review.
 
 - Local app path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
 - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
-- Base reviewed commit: `fefb7681033154f724697d5399626d24b34b9f49`
-- Latest local commit: `0870ea5c0df4c840bf7e6a03a9e9a545e143b539 harden master ladder production blockers`
-- Handoff branch status docs were updated through GitHub connector.
-- Full local patch: `docs/review-patches/shfantasy-master-ladder-hardening-fefb768-to-current.patch`
-- Full local patch SHA256: `d2073c34eb1f566985414b1956fff3160146f03f4e49c6da79084a23db46b380`
-- Patch length: 3483 lines / about 155 KB.
+- Original baseline commit: `f915f08decaeae077183c2ea8d02e9e1442a8224`
+- Original Master Ladder commit: `fefb7681033154f724697d5399626d24b34b9f49`
+- Previous hardening commit: `0a81171 harden master ladder ranked settlement`
+- Current local source head: `0870ea5c0df4c840bf7e6a03a9e9a545e143b539 harden master ladder production blockers`
+- Docs-only local review-material commit: `4ca2567 docs: add master ladder 0870 review shards`
 
 This was not deployed.
 
-## What Changed
+## Current Review Material
+
+For third-round 5.6 source review, use the new clean delta from `0a81171` to `0870ea5`:
+
+- `docs/review-patches/shfantasy-master-ladder-0a81171-to-0870ea5/0870ea5-00-index.md`
+- `docs/review-patches/shfantasy-master-ladder-0a81171-to-0870ea5/0870ea5-01-schema-main.patch`
+- `docs/review-patches/shfantasy-master-ladder-0a81171-to-0870ea5/0870ea5-02-auth-settlement.patch`
+- `docs/review-patches/shfantasy-master-ladder-0a81171-to-0870ea5/0870ea5-03-benchmark.patch`
+- `docs/review-patches/shfantasy-master-ladder-0a81171-to-0870ea5/0870ea5-04-frontend.patch`
+- `docs/review-patches/shfantasy-master-ladder-0a81171-to-0870ea5/0870ea5-05-tests-docs.patch`
+- `docs/shfantasy-master-ladder-review-status-20260718.md`
+- `docs/live-proof/shfantasy-master-ladder-revise-local-20260718T120011Z.json`
+
+Older `fefb768-to-0a81171` patch files are retained only as previous-round history. Do not treat `0a81171` as the latest source head.
+
+Clean source-only delta metadata:
+
+- SHA256: `59854f8a1c099fac39a9ce3677363fb1e49cd7cbff061347e62d4ce6ea7c633d`
+- Line count: `1267`
+- Byte count: `54661`
+
+## What Changed In 0870ea5
 
 This pass directly addresses the remaining 5.6 blockers:
 
@@ -59,28 +79,15 @@ git diff --check HEAD
 
 Result: passed.
 
-## New Tests Worth Reviewing
-
-- default auth rejection of `X-SHF-User-ID`
-- production startup auth guard
-- two independent app/DB connections settling without lost rank_state update
-- failed rank_state update rolling back event and entry reveal state
-- legacy pending entry with null attempt key earning no RP
-- non-attempt-key integrity error not swallowed as duplicate practice
-- same-roster benchmark separation
-- frozen benchmark replay after later slate mutation
-- large player pool deterministic sample cap
-
 ## Review Request
 
-Please review the source delta from `fefb768` to local commit `0870ea5c0df4c840bf7e6a03a9e9a545e143b539`.
+Please review the source delta from `0a81171` to `0870ea5c0df4c840bf7e6a03a9e9a545e143b539`.
 
-Recommended verdict target:
+Suggested verdict framing:
 
-- If source confirms the above: APPROVE FOR SOURCE PR, still block production deploy until session/JWT auth middleware is confirmed.
-- If source finds remaining settlement/auth/benchmark issue: REVISE.
+- If source confirms the blockers are closed: APPROVE FOR SOURCE PR, while keeping production deploy blocked until real session/JWT auth is confirmed.
+- If source finds remaining settlement/auth/benchmark risk: REVISE.
 
 ## Deployment Stance
 
-Do not deploy from this handoff branch. This is source review material. Production should wait for source review, migration plan, and real auth/session middleware.
-
+Do not deploy from this handoff branch. This is source review material. Production should wait for source review, migration planning, and real auth/session middleware.
