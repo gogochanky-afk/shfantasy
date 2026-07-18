@@ -1,0 +1,260 @@
++            }
++            for captain_id in combo:
++                benchmark_scores.append(score_daily_blitz_entry(base_points, list(combo), captain_id))
++    if not benchmark_scores:
++        return 0.0
++    below_or_equal = sum(1 for benchmark in benchmark_scores if benchmark <= score)
++    return below_or_equal / len(benchmark_scores)
++
++
++def _settle_rank_event(
++    conn,
++    entry,
++    slate: DailyBlitzSlate,
++    total_score: float,
++    parlay_chain: dict[str, object],
++) -> dict[str, object]:
++    entry_id = str(entry["entry_id"])
++    existing = _entry_rank_event(conn, entry_id)
++    if existing:
++        return _rank_event_packet(existing)
++    if str(entry["ranked_status"] or "") != "ranked_pending":
++        ladder = _rank_ladder_packet(_current_rank_points(conn, str(entry["user_id"]), slate.sport))
++        return {
++            "previous_points": ladder["rank_points"],
++            "delta": 0,
++            "rank_points": ladder["rank_points"],
++            "percentile": _slate_score_percentile(slate, total_score),
++            "tier_before": ladder["tier"],
++            "tier_after": ladder["tier"],
++            "promoted": False,
++            "demoted": False,
++            "headline": "Unranked practice hand. First ranked entry for this table already exists.",
++            "ladder": ladder,
++            "season_id": RANK_SEASON_ID,
++            "rules_version": RANK_RULES_VERSION,
++            "settled": False,
++            "idempotent_replay": False,
++            "skill_gate": "Practice hands can teach and earn cosmetic XP, but cannot farm ranked RP.",
++        }
++
++    percentile = _slate_score_percentile(slate, total_score)
++    previous_points = _current_rank_points(conn, str(entry["user_id"]), slate.sport)
++    result = _rank_result_packet(previous_points, percentile, parlay_chain)
++    rank_event_id = f"dre_{uuid4().hex[:16]}"
++    try:
++        conn.execute(
++            """
++            INSERT INTO daily_blitz_rank_events(
++                rank_event_id, entry_id, user_id, sport, slate_id, season_id, rules_version,
++                previous_points, delta, rank_points, rank_tier, score, percentile
++            )
++            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++            """,
++            (
++                rank_event_id,
++                entry_id,
++                entry["user_id"],
++                slate.sport,
++                entry["slate_id"],
++                RANK_SEASON_ID,
++                RANK_RULES_VERSION,
++                result["previous_points"],
++                result["delta"],
++                result["rank_points"],
++                result["tier_after"]["name"],
++                total_score,
++                result["percentile"],
++            ),
++        )
++    except sqlite3.IntegrityError:
++        existing = _entry_rank_event(conn, entry_id)
++        if existing:
++            return _rank_event_packet(existing)
++        raise
++    conn.execute(
++        """
++        INSERT INTO daily_blitz_rank_state(user_id, sport, season_id, rules_version, rank_points, rank_tier)
++        VALUES(?, ?, ?, ?, ?, ?)
++        ON CONFLICT(user_id, sport, season_id, rules_version) DO UPDATE SET
++            rank_points = excluded.rank_points,
++            rank_tier = excluded.rank_tier,
++            updated_at = CURRENT_TIMESTAMP
++        """,
++        (
++            entry["user_id"],
++            slate.sport,
++            RANK_SEASON_ID,
++            RANK_RULES_VERSION,
++            result["rank_points"],
++            result["tier_after"]["name"],
++        ),
++    )
++    result["rank_event_id"] = rank_event_id
++    result["settled"] = True
++    result["idempotent_replay"] = False
++    return result
++
++
++def _master_profile_packet(conn, user_id: str) -> dict[str, object]:
++    rows = conn.execute(
++        """
++        SELECT sport, rank_points, rank_tier
++        FROM daily_blitz_rank_state
++        WHERE user_id = ? AND season_id = ? AND rules_version = ?
++        ORDER BY rank_points DESC, sport
++        """,
++        (user_id, RANK_SEASON_ID, RANK_RULES_VERSION),
++    ).fetchall()
++    total = sum(int(row["rank_points"] or 0) for row in rows)
++    best = rows[0] if rows else None
++    return {
++        "season_id": RANK_SEASON_ID,
++        "rules_version": RANK_RULES_VERSION,
++        "combined_points": total,
++        "best_sport": best["sport"] if best else "",
++        "best_tier": best["rank_tier"] if best else "Rookie",
++        "sport_tables": [
++            {
++                "sport": row["sport"],
++                "rank_points": int(row["rank_points"] or 0),
++                "rank_tier": row["rank_tier"],
++            }
++            for row in rows
++        ],
++        "rule": "Sport tables keep separate rank state; Master Profile is an aggregate display only.",
++    }
++
++
+ def _chip_options() -> list[int]:
+     return [0, 5, 10, 20, 50]
+ 
+@@ -272,13 +495,15 @@ def _chip_result(stake: int, score: float) -> dict[str, object]:
+     }
+ 
+ 
+-def _entry_recap_packet(conn, entry_id: str):
++def _entry_recap_packet(conn, entry_id: str, authenticated_user_id: str):
+     entry = conn.execute(
+         "SELECT * FROM daily_blitz_entries WHERE entry_id = ?",
+         (entry_id,),
+     ).fetchone()
+     if entry is None:
+         raise HTTPException(status_code=404, detail="Daily Blitz entry not found.")
++    if entry["user_id"] != authenticated_user_id:
++        raise HTTPException(status_code=403, detail="Entry does not belong to authenticated user.")
+ 
+     rows = conn.execute(
+         """
+@@ -342,15 +567,13 @@ def _entry_recap_packet(conn, entry_id: str):
+         """,
+         (total_score, entry_id),
+     )
+-    conn.commit()
+ 
+     best = max(player_results, key=lambda item: item["score"])
+     grade = _grade_for_score(total_score)
+     stake = int(entry["chip_stake"] or 0) if "chip_stake" in entry.keys() else 0
+     chip_result = _chip_result(stake, total_score)
+     parlay_chain = _entry_strategy_packet(slate, selected_player_ids, captain_player_id)
+-    previous_rank_points = _current_rank_points(conn, str(entry["user_id"]), exclude_entry_id=entry_id)
+-    ranked_result = _rank_result_packet(previous_rank_points, total_score, parlay_chain)
++    ranked_result = _settle_rank_event(conn, entry, slate, total_score, parlay_chain)
+     conn.execute(
+         """
+         UPDATE daily_blitz_entries
+@@ -817,23 +1040,46 @@ def daily_blitz_slate(slate_date: Optional[date] = None, sport: str = "football"
+     return _slate_packet(_slate_for_request(slate_date, sport))
+ 
+ 
+-@router.get("/ranked/{user_id}")
+-def ranked_status(user_id: str, request: Request):
++@router.get("/ranked/me")
++def ranked_me(request: Request, sport: str = "football"):
++    user_id = _authenticated_user_id(request)
++    normalized_sport = _slate_for_request(date.today(), sport).sport
+     return {
+         "ok": True,
+         "user_id": user_id,
+-        "ranked_mode": _rank_ladder_packet(_current_rank_points(request.app.state.db, user_id)),
++        "sport": normalized_sport,
++        "ranked_mode": _rank_ladder_packet(_current_rank_points(request.app.state.db, user_id, normalized_sport)),
++        "master_profile": _master_profile_packet(request.app.state.db, user_id),
+         "safety": "Rank points are competitive game progress only. No cash value.",
+     }
+ 
+ 
++@router.get("/ranked/{user_id}")
++def ranked_status(user_id: str, request: Request, sport: str = "football"):
++    normalized_sport = _slate_for_request(date.today(), sport).sport
++    points = _current_rank_points(request.app.state.db, user_id, normalized_sport)
++    ladder = _rank_ladder_packet(points)
++    return {
++        "ok": True,
++        "public_profile": {
++            "display_id": user_id[:3] + "***" if len(user_id) > 3 else "***",
++            "sport": normalized_sport,
++            "tier": ladder["tier"],
++            "rank_points_band": (points // 100) * 100,
++        },
++        "privacy": "Public rank lookup never returns full private player state.",
++    }
++
++
+ @router.post("/entry/validate")
+ def validate_entry(payload: DailyBlitzEntryPayload, request: Request):
++    authenticated_user_id = _authenticated_user_id(request)
++    _assert_payload_user(payload, authenticated_user_id)
+     slate = _slate_for_request(payload.slate_date, payload.sport)
+     result = validate_daily_blitz_entry(
+         slate,
+         DailyBlitzEntryRequest(
+-            user_id=payload.user_id,
++            user_id=authenticated_user_id,
+             player_ids=payload.player_ids,
+             captain_player_id=payload.captain_player_id,
+         ),
+@@ -849,17 +1095,19 @@ def validate_entry(payload: DailyBlitzEntryPayload, request: Request):
+         "captain_player_id": result.captain_player_id,
+         "parlay_chain": _entry_strategy_packet(slate, result.selected_player_ids, result.captain_player_id),
+         "private_chip_mode": _private_chip_mode(payload.chip_stake),
+-        "rank_preview": _rank_preview_packet(request.app.state.db, payload.user_id),
++        "rank_preview": _rank_preview_packet(request.app.state.db, authenticated_user_id, slate.sport),
+     }
+ 
+ 
+ @router.post("/entry/submit")
+ def submit_entry(payload: DailyBlitzEntryPayload, request: Request):
++    authenticated_user_id = _authenticated_user_id(request)
++    _assert_payload_user(payload, authenticated_user_id)
+     slate = _slate_for_request(payload.slate_date, payload.sport)
+     result = validate_daily_blitz_entry(
+         slate,
+         DailyBlitzEntryRequest(
+-            user_id=payload.user_id,
++            user_id=authenticated_user_id,
+             player_ids=payload.player_ids,
+             captain_player_id=payload.captain_player_id,
+         ),
+@@ -872,13 +1120,52 @@ def submit_entry(payload: DailyBlitzEntryPayload, request: Request):
+ 
+     entry_id = new_daily_blitz_entry_id()
+     conn = request.app.state.db
+-    conn.execute(
+-        """
+-        INSERT INTO daily_blitz_entries(entry_id, user_id, slate_id, captain_player_id, total_cost, chip_stake)
+-        VALUES(?, ?, ?, ?, ?, ?)
+-        """,
+-        (entry_id, payload.user_id, slate.slate_id, payload.captain_player_id, result.total_cost, payload.chip_stake),
+-    )
++    ranked_attempt_key = f"{authenticated_user_id}:{slate.sport}:{slate.slate_id}:{RANK_SEASON_ID}:{RANK_RULES_VERSION}"
++    ranked_status_value = "ranked_pending"
++    try:
++        conn.execute(
++            """
++            INSERT INTO daily_blitz_entries(
++                entry_id, user_id, slate_id, captain_player_id, total_cost, chip_stake,
++                ranked_attempt_key, ranked_status, season_id, rules_version
++            )
++            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++            """
