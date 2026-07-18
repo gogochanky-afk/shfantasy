@@ -1,0 +1,156 @@
+diff --git a/frontend/src/lib/api.ts b/frontend/src/lib/api.ts
+index 7da60ac..d92b96c 100644
+--- a/frontend/src/lib/api.ts
++++ b/frontend/src/lib/api.ts
+@@ -1,9 +1,18 @@
+ export const API_BASE = import.meta.env.VITE_API_BASE || '/shfantasy-api';
+ 
++function requestHeaders(options: RequestInit) {
++  const headers = new Headers(options.headers || {});
++  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
++  if (typeof localStorage !== 'undefined' && !headers.has('X-SHF-User-ID')) {
++    headers.set('X-SHF-User-ID', localStorage.getItem('shfantasyUserId') || 'hugo');
++  }
++  return headers;
++}
++
+ export async function api(path: string, options: RequestInit = {}) {
+   const res = await fetch(`${API_BASE}${path}`, {
+-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+-    ...options
++    ...options,
++    headers: requestHeaders(options)
+   });
+   if (!res.ok) throw new Error(await res.text());
+   return res.json();
+diff --git a/frontend/src/routes/daily-blitz/+page.svelte b/frontend/src/routes/daily-blitz/+page.svelte
+index 2b15f14..8493058 100644
+--- a/frontend/src/routes/daily-blitz/+page.svelte
++++ b/frontend/src/routes/daily-blitz/+page.svelte
+@@ -77,6 +77,8 @@
+   let captainId = '';
+   let validation = null;
+   let submitResult = null;
++  let rankStatus = null;
++  let rankLoading = true;
+   let selectedChipStake = 0;
+   let loading = true;
+   let syncing = false;
+@@ -104,10 +106,11 @@
+   $: chipMode = submitResult?.private_chip_mode || validation?.private_chip_mode || slate.private_chip_mode || fallbackSlate.private_chip_mode;
+   $: chipOptions = chipMode?.stake_options || [0, 5, 10, 20, 50];
+   $: rankMode =
++    submitResult?.ranked_result?.ladder ||
+     submitResult?.rank_preview?.current ||
+     validation?.rank_preview?.current ||
+-    slate.ranked_mode ||
+-    fallbackSlate.ranked_mode;
++    rankStatus?.ranked_mode ||
++    (!rankLoading ? slate.ranked_mode || fallbackSlate.ranked_mode : null);
+   $: rankProgressPercent = Math.max(0, Math.min(100, Math.round(Number(rankMode?.progress || 0) * 100)));
+   $: nextRankName = rankMode?.next_tier?.name || 'Master shield';
+   $: rarityLine = Object.entries(slate.collection?.rarity_counts || {}).map(([rarity, count]) => `${count} ${rarity}`).join(' · ');
+@@ -117,15 +120,19 @@
+ 
+   async function loadSlate() {
+     loading = true;
++    rankLoading = true;
+     message = '';
+     submitResult = null;
+     validation = null;
++    rankStatus = null;
+     if (typeof localStorage !== 'undefined') {
+       userId = localStorage.getItem('shfantasyUserId') || 'hugo';
++      localStorage.setItem('shfantasyUserId', userId);
+     }
+     try {
+       slate = await api(`/daily-blitz/slate?slate_date=${encodeURIComponent(slateDate)}&sport=${encodeURIComponent(selectedSport)}`);
+       selectedSport = slate.sport || selectedSport;
++      await loadRankStatus();
+       apiOnline = true;
+       selectedIds = selectedIds.filter((id) => slate.players?.some((player) => player.player_id === id && player.playable));
+       if (captainId && !selectedIds.includes(captainId)) captainId = '';
+@@ -134,11 +141,23 @@
+       slate = fallbackSlate;
+       selectedIds = [];
+       captainId = '';
++      rankStatus = null;
++      rankLoading = false;
+       message = 'Daily Blitz is offline. The game board is waiting for the live slate service.';
+     }
+     loading = false;
+   }
+ 
++  async function loadRankStatus() {
++    rankLoading = true;
++    try {
++      rankStatus = await api(`/daily-blitz/ranked/me?sport=${encodeURIComponent(selectedSport)}`);
++    } catch (err) {
++      rankStatus = null;
++    }
++    rankLoading = false;
++  }
++
+   function switchSport(sport) {
+     if (sport === selectedSport) return;
+     selectedSport = sport;
+@@ -146,6 +165,7 @@
+     captainId = '';
+     validation = null;
+     submitResult = null;
++    rankStatus = null;
+     loadSlate();
+   }
+ 
+@@ -232,7 +252,10 @@
+         })
+       });
+       validation = { ok: true, errors: [], total_cost: submitResult.total_cost };
+-      message = 'Daily Blitz locked. Return after results for the recap lesson.';
++      message =
++        submitResult.ranked_status === 'unranked_duplicate'
++          ? 'Practice hand locked. Your first hand on this table keeps the ranked RP lane.'
++          : 'Daily Blitz locked. Return after results for the recap lesson.';
+     } catch (err) {
+       submitResult = null;
+       message = 'Lock blocked. Validate the roster and fix any rule errors.';
+@@ -390,18 +413,22 @@
+       <div class="rank-ladder" aria-label="Master Ladder rank progress">
+         <div class="rank-topline">
+           <div>
+-            <span>Master Ladder</span>
+-            <strong>{rankMode?.tier?.name || 'Rookie'}</strong>
++            <span>{rankStatus?.sport || selectedSport} Master Ladder</span>
++            <strong>{rankLoading && !rankMode ? 'Syncing...' : rankMode?.tier?.name || 'Rookie'}</strong>
+           </div>
+           <div>
+-            <span>{rankMode?.rank_points || 0} RP</span>
+-            <strong>{rankMode?.points_to_next || 0} to {nextRankName}</strong>
++            <span>{rankMode?.rank_points ?? '...'} RP</span>
++            <strong>{rankMode ? `${rankMode.points_to_next || 0} to ${nextRankName}` : 'Loading table'}</strong>
+           </div>
+         </div>
+         <div class="rank-meter">
+           <span style={`width: ${rankProgressPercent}%`}></span>
+         </div>
+-        <small>{slate.copy?.rank_rule || rankMode?.return_reason}</small>
++        <small>
++          {rankLoading && !rankMode
++            ? 'Syncing your sport-specific ladder before this hand.'
++            : rankMode?.rules?.[1] || slate.copy?.rank_rule || rankMode?.return_reason}
++        </small>
+       </div>
+ 
+       <div class="chip-stake" aria-label="Private friends table chips">
+@@ -472,7 +499,10 @@
+       {#if submitResult}
+         <div class="locked">
+           <strong>Entry locked</strong>
+-          <span>{submitResult.entry_id} · {submitResult.private_chip_mode?.selected_stake || 0} private chips</span>
++          <span>
++            {submitResult.entry_id} · {submitResult.ranked_status === 'unranked_duplicate' ? 'practice hand' : 'ranked hand'} ·
++            {submitResult.private_chip_mode?.selected_stake || 0} private chips
++          </span>
+           <small>{submitResult.rank_preview?.next_action || submitResult.next_action} {submitResult.private_chip_mode?.safety}</small>
+         </div>
+       {/if}
