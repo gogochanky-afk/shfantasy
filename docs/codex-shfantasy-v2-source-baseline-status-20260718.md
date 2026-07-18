@@ -1,16 +1,17 @@
 # SHFantasy v2 Source Baseline Status - 2026-07-18
 
-Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop, corrected the product direction to parallel sport tables, added baseball/WWE-style skill fantasy tables, and added private table chip stakes.
+Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop, corrected the product direction to parallel sport tables, added baseball/WWE-style skill fantasy tables, added private table chip stakes, and now added Master Ladder ranked progression.
 
 ## Local Source Baseline
 
 - Local path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
 - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
-- Local HEAD commit: `adffa40 add private table chip stakes`
+- Local HEAD commit: `fefb768 add master ladder ranked progression`
+- Prior commit: `adffa40 add private table chip stakes`
 - Prior commit: `5b54787 add skill fantasy baseball and wwe tables`
 - Prior commit: `0e8383c align arena around parallel sport tables`
 - Baseline commit: `f915f08 baseline shfantasy v2 app`
-- Tracked files: 102
+- Tracked files: 102+
 
 ## Product Direction Correction
 
@@ -22,15 +23,34 @@ Correct model:
 - Football, basketball, golf, baseball, WWE-style sports entertainment, tennis, and future sports are parallel SHFantasy tables.
 - The active table for a given day is selected by verified slate quality, event heat, player availability, and roster depth.
 - Telegram is a chat/distribution surface, not the main game UI.
-- The game should feel like a collectible sports-card arena with strategy, identity, recap, return reasons, cosmetic progression, and private table chip tension.
+- The game should feel like a collectible sports-card arena with strategy, identity, recap, return reasons, cosmetic progression, private table chip tension, and ranked climb pressure.
 
 Codex changed source copy/API packet/tests to remove the old `football default / basketball reserve` framing.
+
+## Master Ladder Ranked Mode
+
+Implemented locally in commit `fefb768`:
+
+- Added Rookie, Bronze, Silver, Gold, Platinum, Diamond, and Master tiers.
+- Daily Blitz entries now persist `rank_delta`, `rank_points`, and `rank_tier`.
+- `/daily-blitz/slate` exposes `ranked_mode`.
+- `/daily-blitz/ranked/{user_id}` exposes current player ladder state.
+- `/daily-blitz/entry/validate` and `/daily-blitz/entry/submit` expose `rank_preview`.
+- `/daily-blitz/entry/{entry_id}/reveal` exposes `ranked_result` with previous points, RP delta, tier movement, promotion/demotion flags, and recap headline.
+- Frontend Daily Blitz now shows a compact Master Ladder HUD between deck route and private chips.
+
+Rank safety boundary:
+
+- Rank points are competitive game progress only.
+- Private chip stake does not affect rank points, fantasy score, salary cap, roster legality, or captain multiplier.
+- Skins do not affect scoring power.
+- Ranks have no cash value and cannot be bought.
 
 ## Private Table Chip Mode
 
 Implemented locally:
 
-- Daily Blitz entry payload now accepts `chip_stake`.
+- Daily Blitz entry payload accepts `chip_stake`.
 - Allowed stakes: `0`, `5`, `10`, `20`, `50` table chips.
 - Invalid stakes return `invalid_chip_stake` and block submit.
 - Entries store `chip_stake` and recap stores `chip_delta`.
@@ -72,11 +92,11 @@ Excluded from git:
 - cache folders
 - local backup archives
 
-A secret scan was run before committing. The only match was a CSS `mask-image` property, not a credential.
+A secret scan was run before committing the baseline. The only match was a CSS `mask-image` property, not a credential.
 
 ## Verification
 
-Backend tests after private chip stakes:
+Backend tests after Master Ladder:
 
 ```bash
 PYTHONPATH=. ./.venv/bin/pytest tests/ -q
@@ -85,7 +105,7 @@ PYTHONPATH=. ./.venv/bin/pytest tests/ -q
 Result:
 
 ```text
-45 passed in 1.92s
+46 passed in 2.03s
 ```
 
 Frontend build:
@@ -95,6 +115,10 @@ cd frontend && npm run build
 ```
 
 Result: production build completed successfully.
+
+Local proof artifact:
+
+- `docs/live-proof/shfantasy-master-ladder-local-20260718T104203Z.json`
 
 ## Why The Full Source Is Not On GitHub Yet
 
@@ -121,11 +145,13 @@ Best path:
 1. Authenticate the laptop with GitHub CLI, or create a new repo `gogochanky-afk/shfantasy-v2-app`.
 2. Push the local branch from `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`.
 3. Open a draft PR for architecture, security, game balance, determinism, test coverage, and production-readiness review.
-4. Decide after review whether SHFantasy v2 replaces the old production app, becomes a sub-app, or donates specific modules.
+4. Have 5.6 review Master Ladder RP tuning, promotion rewards, seasonal resets, sport/table segmentation, and whether the HUD feels game-native.
+5. Decide after review whether SHFantasy v2 replaces the old production app, becomes a sub-app, or donates specific modules.
 
 ## Product Review Focus
 
 - Multi-sport table architecture.
+- Master Ladder ranked progression and no-pay-to-win competitive pressure.
 - Private table chip mode and no-cash-value safety boundary.
 - Daily Blitz gameplay: up to 5 players, salary cap 10, price tiers 4 / 3 / 2 / 1, captain 1.5x.
 - Sport-specific skill reads for football, basketball, golf, baseball, WWE-style sports entertainment, and future sports.
