@@ -1,0 +1,118 @@
+diff --git a/README.md b/README.md
+index d832c46..1294cd6 100644
+--- a/README.md
++++ b/README.md
+@@ -12,7 +12,7 @@ The current product direction is a play-money, skill-based fantasy game:
+ - Cosmetic collection: skins, frames, rarity, and progression must not change scoring power.
+ - Skill Parlay: a strategy/read layer with XP and titles only; no cash value or pay-to-win boost.
+ - Private table chips: friends can optionally stake 0 / 5 / 10 / 20 / 50 game coins for social tension only.
+-- Master Ladder: ranked RP progression from Rookie to Master based on recap score, five-card completion, and role diversity.
++- Master Ladder: ranked RP progression from Rookie to Master using one-settlement ledger events, sport-specific rank state, and same-slate percentile results.
+ - Legacy Cube loop remains available for 3-pick card prediction experiments.
+ 
+ ## Safety Scope
+@@ -61,7 +61,7 @@ Key regression coverage:
+ - 100-bot Daily Blitz legality simulation;
+ - cosmetic-only collection and no pay-to-win scoring.
+ - private chips remain game coins only;
+-- Master Ladder RP persists, promotes by skill results, and ignores chip stake.
++- Master Ladder RP uses authenticated player identity, one ranked attempt per user/sport/slate/rules version, idempotent reveal settlement, sport-separated rank state, and chip-free progression.
+ 
+ ## Mock Ingest
+ 
+@@ -91,6 +91,7 @@ Source-level proof lives in `docs/live-proof/`. The latest local validation arti
+ - `shfantasy-daily-blitz-8card-captain-local-20260718T071203Z.json`
+ - `shfantasy-cosmetic-parlay-local-20260718T072136Z.json`
+ - `shfantasy-guided-first-hand-local-20260718T094502Z.json`
++- `shfantasy-master-ladder-hardening-local-20260718T112115Z.json`
+ 
+ Release packages are not the canonical source of truth. A git commit should be treated as the version to review, with tarball hashes used only as deployment evidence.
+ 
+diff --git a/backend/db.py b/backend/db.py
+index 7cbe404..584d8ab 100644
+--- a/backend/db.py
++++ b/backend/db.py
+@@ -152,6 +152,33 @@ def init_db(conn):
+             score REAL DEFAULT 0,
+             PRIMARY KEY(entry_id, player_id)
+         );
++        CREATE TABLE IF NOT EXISTS daily_blitz_rank_state (
++            user_id TEXT NOT NULL,
++            sport TEXT NOT NULL,
++            season_id TEXT NOT NULL,
++            rules_version TEXT NOT NULL,
++            rank_points INTEGER NOT NULL DEFAULT 0,
++            rank_tier TEXT NOT NULL DEFAULT 'Rookie',
++            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
++            PRIMARY KEY(user_id, sport, season_id, rules_version)
++        );
++        CREATE TABLE IF NOT EXISTS daily_blitz_rank_events (
++            rank_event_id TEXT PRIMARY KEY,
++            entry_id TEXT NOT NULL UNIQUE,
++            user_id TEXT NOT NULL,
++            sport TEXT NOT NULL,
++            slate_id TEXT NOT NULL,
++            season_id TEXT NOT NULL,
++            rules_version TEXT NOT NULL,
++            previous_points INTEGER NOT NULL,
++            delta INTEGER NOT NULL,
++            rank_points INTEGER NOT NULL,
++            rank_tier TEXT NOT NULL,
++            score REAL NOT NULL,
++            percentile REAL NOT NULL,
++            source TEXT DEFAULT 'daily_blitz_reveal',
++            created_at TEXT DEFAULT CURRENT_TIMESTAMP
++        );
+         """
+     )
+     _ensure_column(conn, "cubes", "card_ids_json", "TEXT DEFAULT '[]'")
+@@ -163,6 +190,29 @@ def init_db(conn):
+     _ensure_column(conn, "daily_blitz_entries", "rank_delta", "INTEGER DEFAULT 0")
+     _ensure_column(conn, "daily_blitz_entries", "rank_points", "INTEGER DEFAULT 0")
+     _ensure_column(conn, "daily_blitz_entries", "rank_tier", "TEXT DEFAULT 'Rookie'")
++    _ensure_column(conn, "daily_blitz_entries", "ranked_status", "TEXT DEFAULT 'ranked_pending'")
++    _ensure_column(conn, "daily_blitz_entries", "ranked_attempt_key", "TEXT")
++    _ensure_column(conn, "daily_blitz_entries", "season_id", "TEXT DEFAULT 'season-2026-summer'")
++    _ensure_column(conn, "daily_blitz_entries", "rules_version", "TEXT DEFAULT 'rank-v2-percentile'")
++    conn.execute(
++        """
++        CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_blitz_ranked_attempt
++        ON daily_blitz_entries(ranked_attempt_key)
++        WHERE ranked_attempt_key IS NOT NULL
++        """
++    )
++    conn.execute(
++        """
++        CREATE INDEX IF NOT EXISTS idx_daily_blitz_rank_state_lookup
++        ON daily_blitz_rank_state(user_id, sport, season_id, rules_version)
++        """
++    )
++    conn.execute(
++        """
++        CREATE INDEX IF NOT EXISTS idx_daily_blitz_rank_events_user_sport
++        ON daily_blitz_rank_events(user_id, sport, season_id, rules_version)
++        """
++    )
+     conn.commit()
+ 
+ 
+diff --git a/backend/main.py b/backend/main.py
+index b33c2b2..5a6f4d1 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -2,6 +2,7 @@ from __future__ import annotations
+ 
+ import os
+ from pathlib import Path
++from threading import RLock
+ from fastapi import FastAPI, Request
+ from fastapi.middleware.cors import CORSMiddleware
+ 
+@@ -91,6 +92,7 @@ def magic_link(payload: MagicLinkRequest, request: Request):
+ def create_app(db_path: str | Path | None = None):
+     app = FastAPI(title="SHFantasy v2", version="0.1.0")
+     app.state.db = connect(db_path)
++    app.state.rank_settlement_lock = RLock()
+     cors_origins = [
+         origin.strip()
+         for origin in os.environ.get("SHFANTASY_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
