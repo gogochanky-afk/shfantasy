@@ -1,0 +1,50 @@
+{
+  "title": "SHFantasy Master Ladder Hardening",
+  "timestamp_utc": "2026-07-18T11:21:15Z",
+  "base_commit": "fefb7681033154f724697d5399626d24b34b9f49",
+  "head_commit": "0a81171 harden master ladder ranked settlement",
+  "scope": "Post-review hardening for Daily Blitz ranked settlement, identity, attempt policy, and returning-player UI state.",
+  "status": "local_verified_not_deployed",
+  "implemented": [
+    "Added daily_blitz_rank_events as a unique settlement ledger with entry_id uniqueness.",
+    "Added daily_blitz_rank_state as the sport-specific rank source of truth.",
+    "Added ranked_status, ranked_attempt_key, season_id, and rules_version snapshots on daily_blitz_entries.",
+    "Added a unique ranked attempt key for one ranked settlement per user, sport, slate, season, and rules version.",
+    "Converted duplicate same-slate entries into unranked practice hands that can reveal lessons but cannot earn RP.",
+    "Changed rank movement from raw score to same-slate percentile.",
+    "Kept full-hand and role-diverse bonuses tiny and blocked them from turning negative results into positive RP.",
+    "Added authenticated user handling via request state or dev X-SHF-User-ID header.",
+    "Rejected mismatched body user_id values and blocked other users from revealing private entries.",
+    "Added /daily-blitz/ranked/me for authenticated full rank state.",
+    "Changed /daily-blitz/ranked/{user_id} to public-safe display profile only.",
+    "Added reveal idempotency through saved rank events.",
+    "Added a rank settlement lock for SQLite runtime concurrent reveal protection.",
+    "Updated the frontend API wrapper to send X-SHF-User-ID from localStorage.",
+    "Updated Daily Blitz to hydrate the active sport rank on load and avoid a returning-player Rookie flash."
+  ],
+  "review_items_addressed": [
+    "P0 identity/rank impersonation",
+    "P0 missing rank settlement ledger",
+    "P0 ranked attempt farming",
+    "P1 negative result bonus turning positive",
+    "P1 raw score cross-sport comparability",
+    "P1 returning-player rank hydration"
+  ],
+  "verification": {
+    "backend_tests": {
+      "command": "PYTHONPATH=. ./.venv/bin/pytest tests -q",
+      "result": "50 passed in 2.39s"
+    },
+    "frontend_build": {
+      "command": "cd frontend && npm run build",
+      "result": "vite build completed successfully"
+    }
+  },
+  "not_done": [
+    "Not deployed to production in this local run.",
+    "Real sports data provider integration remains behind the existing mock/dry-run source until API and budget are approved.",
+    "Season soft reset and Diamond/Master inactivity decay are still design-ready but not implemented.",
+    "Public leaderboard should remain gated until the deployment owner confirms auth middleware and migration path."
+  ],
+  "safety": "Play-money only. No betting, payment, KYC, deposits, withdrawals, or cash-value prizes."
+}
