@@ -1,0 +1,583 @@
+diff --git a/backend/routes/daily_blitz.py b/backend/routes/daily_blitz.py
+index ed2a5c1..c1a0e0a 100644
+--- a/backend/routes/daily_blitz.py
++++ b/backend/routes/daily_blitz.py
+@@ -1,7 +1,11 @@
+ from __future__ import annotations
+
++import hashlib
+ import itertools
++import json
++import math
+ import os
++import random
+ import sqlite3
+ from datetime import date
+ from typing import Optional
+@@ -33,6 +37,9 @@ except ModuleNotFoundError:
+ router = APIRouter(prefix="/daily-blitz", tags=["daily-blitz"])
+ RANK_SEASON_ID = "season-2026-summer"
+ RANK_RULES_VERSION = "rank-v2-percentile"
++RANK_BENCHMARK_VERSION = "benchmark-v1-same-roster"
++RANK_BENCHMARK_COMBO_CAP = 50_000
++RANK_BENCHMARK_SAMPLE_SIZE = 10_000
+
+ RANK_TIERS = [
+     {"key": "rookie", "name": "Rookie", "floor": 0, "badge": "Training Table"},
+@@ -59,11 +66,20 @@ def _authenticated_user_id(request: Request) -> str:
+     if state_user:
+         return str(state_user)
+     header_user = request.headers.get("x-shf-user-id")
+-    if os.environ.get("SHFANTASY_AUTH_MODE", "dev") == "dev" and header_user:
++    if os.environ.get("SHFANTASY_AUTH_MODE", "disabled").strip().lower() == "dev" and header_user:
+         return header_user.strip()
+     raise HTTPException(status_code=401, detail="Authenticated SHFantasy user is required.")
+
+
++def validate_auth_runtime_configuration():
++    auth_mode = os.environ.get("SHFANTASY_AUTH_MODE", "disabled").strip().lower()
++    runtime_env = os.environ.get("SHFANTASY_RUNTIME_ENV", "").strip().lower()
++    if auth_mode not in {"disabled", "dev", "session"}:
++        raise RuntimeError("SHFANTASY_AUTH_MODE must be disabled, dev, or session.")
++    if runtime_env in {"prod", "production"} and auth_mode != "session":
++        raise RuntimeError("Production SHFantasy must use session/JWT auth, not dev or disabled header auth.")
++
++
+ def _assert_payload_user(payload: DailyBlitzEntryPayload, authenticated_user_id: str):
+     if payload.user_id and payload.user_id != authenticated_user_id:
+         raise HTTPException(status_code=403, detail="Request user does not match authenticated user.")
+@@ -177,7 +193,7 @@ def _rank_ladder_packet(points: int) -> dict[str, object]:
+         "rules_version": RANK_RULES_VERSION,
+         "rules": [
+             "Daily Blitz rank points settle once per ranked entry after recap reveal.",
+-            "Rank movement is based on same-slate percentile, not raw cross-sport score.",
++            "Rank movement is based on frozen same-slate benchmark percentile, not raw cross-sport score.",
+             "Private chips do not affect rank points, salary cap, or scoring.",
+             "Ranks and chips have no cash value.",
+         ],
+@@ -263,6 +279,9 @@ def _rank_event_packet(row) -> dict[str, object]:
+         "delta": int(row["delta"]),
+         "rank_points": current,
+         "percentile": round(float(row["percentile"]), 3),
++        "benchmark_percentile": round(float(row["benchmark_percentile"] or row["percentile"]), 3),
++        "benchmark_version": row["benchmark_version"] or RANK_BENCHMARK_VERSION,
++        "field_snapshot_id": row["field_snapshot_id"] or "",
+         "tier_before": before,
+         "tier_after": after,
+         "promoted": promoted,
+@@ -277,13 +296,13 @@ def _rank_event_packet(row) -> dict[str, object]:
+     }
+
+
+-def _slate_score_percentile(slate: DailyBlitzSlate, score: float) -> float:
++def _playable_benchmark_player_ids(slate: DailyBlitzSlate) -> list[str]:
+     playing_team_ids = {
+         team_id
+         for game in slate.games
+         for team_id in (game.home_team_id, game.away_team_id)
+     }
+-    playable = [
++    return [
+         player_id
+         for player_id, player in slate.players.items()
+         if player.team_id in playing_team_ids
+@@ -294,22 +313,200 @@ def _slate_score_percentile(slate: DailyBlitzSlate, score: float) -> float:
+             in {"out", "injured", "inactive", "suspended", "unavailable", "doubtful"}
+         )
+     ]
++
++
++def _benchmark_snapshot_hash(slate: DailyBlitzSlate, playable: list[str], roster_size: int) -> str:
++    payload = {
++        "sport": slate.sport,
++        "slate_id": slate.slate_id,
++        "season_id": RANK_SEASON_ID,
++        "rules_version": RANK_RULES_VERSION,
++        "benchmark_version": RANK_BENCHMARK_VERSION,
++        "roster_size": roster_size,
++        "players": [
++            {
++                "player_id": player_id,
++                "team_id": slate.players[player_id].team_id,
++                "tier": slate.salaries[player_id].tier,
++                "status": slate.statuses[player_id].status if slate.statuses.get(player_id) else "available",
++            }
++            for player_id in playable
++        ],
++    }
++    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
++
++
++def _benchmark_field_snapshot_id(slate: DailyBlitzSlate, roster_size: int) -> str:
++    seed = f"{slate.sport}:{slate.slate_id}:{RANK_SEASON_ID}:{RANK_RULES_VERSION}:{RANK_BENCHMARK_VERSION}:{roster_size}"
++    return f"dbb_{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:16]}"
++
++
++def _score_benchmark_combo(slate: DailyBlitzSlate, combo: tuple[str, ...], captain_id: str) -> float:
++    base_points = {
++        player_id: _deterministic_player_points(player_id, slate.salaries[player_id].tier)
++        for player_id in combo
++    }
++    return score_daily_blitz_entry(base_points, list(combo), captain_id)
++
++
++def _build_benchmark_distribution(slate: DailyBlitzSlate, roster_size: int) -> tuple[list[float], str, int]:
++    playable = sorted(_playable_benchmark_player_ids(slate))
++    if roster_size < 1 or roster_size > 5 or len(playable) < roster_size:
++        return [], "empty", 0
++    possible_hands = math.comb(len(playable), roster_size) * roster_size
+     benchmark_scores: list[float] = []
+-    for size in range(1, min(5, len(playable)) + 1):
+-        for combo in itertools.combinations(playable, size):
++    if possible_hands <= RANK_BENCHMARK_COMBO_CAP:
++        for combo in itertools.combinations(playable, roster_size):
+             cost = sum(slate.salaries[player_id].tier for player_id in combo)
+             if cost > 10:
+                 continue
+-            base_points = {
+-                player_id: _deterministic_player_points(player_id, slate.salaries[player_id].tier)
+-                for player_id in combo
+-            }
+             for captain_id in combo:
+-                benchmark_scores.append(score_daily_blitz_entry(base_points, list(combo), captain_id))
++                benchmark_scores.append(_score_benchmark_combo(slate, combo, captain_id))
++        return benchmark_scores, "exhaustive", len(benchmark_scores)
++
++    rng = random.Random(_benchmark_snapshot_hash(slate, playable, roster_size))
++    seen: set[tuple[str, ...]] = set()
++    attempts = 0
++    max_attempts = RANK_BENCHMARK_SAMPLE_SIZE * 20
++    while len(benchmark_scores) < RANK_BENCHMARK_SAMPLE_SIZE and attempts < max_attempts:
++        attempts += 1
++        combo = tuple(sorted(rng.sample(playable, roster_size)))
++        if combo in seen:
++            continue
++        cost = sum(slate.salaries[player_id].tier for player_id in combo)
++        if cost > 10:
++            continue
++        seen.add(combo)
++        captain_id = rng.choice(combo)
++        benchmark_scores.append(_score_benchmark_combo(slate, combo, captain_id))
++    return benchmark_scores, "deterministic_sample", len(benchmark_scores)
++
++
++def _frozen_benchmark_distribution(conn, slate: DailyBlitzSlate, roster_size: int) -> dict[str, object]:
++    field_snapshot_id = _benchmark_field_snapshot_id(slate, roster_size)
++    row = conn.execute(
++        """
++        SELECT *
++        FROM daily_blitz_rank_benchmarks
++        WHERE field_snapshot_id = ?
++        """,
++        (field_snapshot_id,),
++    ).fetchone()
++    if row:
++        return {
++            "field_snapshot_id": row["field_snapshot_id"],
++            "benchmark_version": row["benchmark_version"],
++            "scores": [float(score) for score in json.loads(row["scores_json"])],
++            "calculation_mode": row["calculation_mode"],
++            "sample_size": int(row["sample_size"]),
++        }
++
++    playable = sorted(_playable_benchmark_player_ids(slate))
++    scores, calculation_mode, sample_size = _build_benchmark_distribution(slate, roster_size)
++    snapshot_hash = _benchmark_snapshot_hash(slate, playable, roster_size)
++    conn.execute(
++        """
++        INSERT INTO daily_blitz_rank_benchmarks(
++            field_snapshot_id, sport, slate_id, season_id, rules_version, benchmark_version,
++            roster_size, player_count, sample_size, calculation_mode, scores_json, snapshot_hash
++        )
++        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++        ON CONFLICT(sport, slate_id, season_id, rules_version, benchmark_version, roster_size) DO NOTHING
++        """,
++        (
++            field_snapshot_id,
++            slate.sport,
++            slate.slate_id,
++            RANK_SEASON_ID,
++            RANK_RULES_VERSION,
++            RANK_BENCHMARK_VERSION,
++            roster_size,
++            len(playable),
++            sample_size,
++            calculation_mode,
++            json.dumps(scores, separators=(",", ":")),
++            snapshot_hash,
++        ),
++    )
++    row = conn.execute(
++        """
++        SELECT *
++        FROM daily_blitz_rank_benchmarks
++        WHERE field_snapshot_id = ?
++        """,
++        (field_snapshot_id,),
++    ).fetchone()
++    if row:
++        return {
++            "field_snapshot_id": row["field_snapshot_id"],
++            "benchmark_version": row["benchmark_version"],
++            "scores": [float(score) for score in json.loads(row["scores_json"])],
++            "calculation_mode": row["calculation_mode"],
++            "sample_size": int(row["sample_size"]),
++        }
++    return {
++        "field_snapshot_id": field_snapshot_id,
++        "benchmark_version": RANK_BENCHMARK_VERSION,
++        "scores": scores,
++        "calculation_mode": calculation_mode,
++        "sample_size": sample_size,
++    }
++
++
++def _slate_score_percentile(conn, slate: DailyBlitzSlate, score: float, roster_size: int) -> dict[str, object]:
++    benchmark = _frozen_benchmark_distribution(conn, slate, roster_size)
++    benchmark_scores = benchmark["scores"]
+     if not benchmark_scores:
+-        return 0.0
+-    below_or_equal = sum(1 for benchmark in benchmark_scores if benchmark <= score)
+-    return below_or_equal / len(benchmark_scores)
++        percentile = 0.0
++    else:
++        below_or_equal = sum(1 for benchmark_score in benchmark_scores if benchmark_score <= score)
++        percentile = below_or_equal / len(benchmark_scores)
++    return {
++        "percentile": percentile,
++        "benchmark_percentile": percentile,
++        "benchmark_version": benchmark["benchmark_version"],
++        "field_snapshot_id": benchmark["field_snapshot_id"],
++        "sample_size": benchmark["sample_size"],
++        "calculation_mode": benchmark["calculation_mode"],
++        "roster_size": roster_size,
++    }
++
++
++def _ranked_unsettled_packet(conn, entry, slate: DailyBlitzSlate, total_score: float, roster_size: int) -> dict[str, object]:
++    ladder = _rank_ladder_packet(_current_rank_points(conn, str(entry["user_id"]), slate.sport))
++    benchmark = _slate_score_percentile(conn, slate, total_score, roster_size)
++    return {
++        "previous_points": ladder["rank_points"],
++        "delta": 0,
++        "rank_points": ladder["rank_points"],
++        "percentile": round(float(benchmark["percentile"]), 3),
++        "benchmark_percentile": round(float(benchmark["benchmark_percentile"]), 3),
++        "benchmark_version": benchmark["benchmark_version"],
++        "field_snapshot_id": benchmark["field_snapshot_id"],
++        "tier_before": ladder["tier"],
++        "tier_after": ladder["tier"],
++        "promoted": False,
++        "demoted": False,
++        "headline": "Unranked practice hand. First ranked entry for this table already exists.",
++        "ladder": ladder,
++        "season_id": RANK_SEASON_ID,
++        "rules_version": RANK_RULES_VERSION,
++        "settled": False,
++        "idempotent_replay": False,
++        "skill_gate": "Practice hands can teach and earn cosmetic XP, but cannot farm ranked RP.",
++    }
++
++
++def _begin_immediate_if_needed(conn) -> bool:
++    if getattr(conn, "in_transaction", False):
++        return False
++    conn.execute("BEGIN IMMEDIATE")
++    return True
++
++
++def _is_ranked_attempt_conflict(error: sqlite3.IntegrityError) -> bool:
++    message = str(error).lower()
++    return "ranked_attempt_key" in message or "idx_daily_blitz_ranked_attempt" in message
+
+
+ def _settle_rank_event(
+@@ -320,81 +517,124 @@ def _settle_rank_event(
+     parlay_chain: dict[str, object],
+ ) -> dict[str, object]:
+     entry_id = str(entry["entry_id"])
++    roster_size = len(
++        conn.execute(
++            "SELECT 1 FROM daily_blitz_entry_players WHERE entry_id = ?",
++            (entry_id,),
++        ).fetchall()
++    )
+     existing = _entry_rank_event(conn, entry_id)
+     if existing:
+         return _rank_event_packet(existing)
+-    if str(entry["ranked_status"] or "") != "ranked_pending":
+-        ladder = _rank_ladder_packet(_current_rank_points(conn, str(entry["user_id"]), slate.sport))
+-        return {
+-            "previous_points": ladder["rank_points"],
+-            "delta": 0,
+-            "rank_points": ladder["rank_points"],
+-            "percentile": _slate_score_percentile(slate, total_score),
+-            "tier_before": ladder["tier"],
+-            "tier_after": ladder["tier"],
+-            "promoted": False,
+-            "demoted": False,
+-            "headline": "Unranked practice hand. First ranked entry for this table already exists.",
+-            "ladder": ladder,
+-            "season_id": RANK_SEASON_ID,
+-            "rules_version": RANK_RULES_VERSION,
+-            "settled": False,
+-            "idempotent_replay": False,
+-            "skill_gate": "Practice hands can teach and earn cosmetic XP, but cannot farm ranked RP.",
+-        }
++    if str(entry["ranked_status"] or "") != "ranked_pending" or not entry["ranked_attempt_key"]:
++        return _ranked_unsettled_packet(conn, entry, slate, total_score, roster_size)
+
+-    percentile = _slate_score_percentile(slate, total_score)
+-    previous_points = _current_rank_points(conn, str(entry["user_id"]), slate.sport)
+-    result = _rank_result_packet(previous_points, percentile, parlay_chain)
++    started_transaction = _begin_immediate_if_needed(conn)
+     rank_event_id = f"dre_{uuid4().hex[:16]}"
+     try:
++        existing = _entry_rank_event(conn, entry_id)
++        if existing:
++            if started_transaction:
++                conn.commit()
++            return _rank_event_packet(existing)
++
+         conn.execute(
+             """
+-            INSERT INTO daily_blitz_rank_events(
+-                rank_event_id, entry_id, user_id, sport, slate_id, season_id, rules_version,
+-                previous_points, delta, rank_points, rank_tier, score, percentile
++            INSERT INTO daily_blitz_rank_state(user_id, sport, season_id, rules_version, rank_points, rank_tier, version)
++            VALUES(?, ?, ?, ?, 0, 'Rookie', 0)
++            ON CONFLICT(user_id, sport, season_id, rules_version) DO NOTHING
++            """,
++            (entry["user_id"], slate.sport, RANK_SEASON_ID, RANK_RULES_VERSION),
++        )
++        state = _rank_state_row(conn, str(entry["user_id"]), slate.sport)
++        previous_points = max(0, int(state["rank_points"] or 0)) if state else 0
++        benchmark = _slate_score_percentile(conn, slate, total_score, roster_size)
++        result = _rank_result_packet(previous_points, float(benchmark["percentile"]), parlay_chain)
++        try:
++            conn.execute(
++                """
++                INSERT INTO daily_blitz_rank_events(
++                    rank_event_id, entry_id, user_id, sport, slate_id, season_id, rules_version,
++                    previous_points, delta, rank_points, rank_tier, score, percentile,
++                    benchmark_percentile, benchmark_version, field_snapshot_id
++                )
++                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++                """,
++                (
++                    rank_event_id,
++                    entry_id,
++                    entry["user_id"],
++                    slate.sport,
++                    entry["slate_id"],
++                    RANK_SEASON_ID,
++                    RANK_RULES_VERSION,
++                    result["previous_points"],
++                    result["delta"],
++                    result["rank_points"],
++                    result["tier_after"]["name"],
++                    total_score,
++                    result["percentile"],
++                    benchmark["benchmark_percentile"],
++                    benchmark["benchmark_version"],
++                    benchmark["field_snapshot_id"],
++                ),
+             )
+-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++        except sqlite3.IntegrityError:
++            existing = _entry_rank_event(conn, entry_id)
++            if existing:
++                if started_transaction:
++                    conn.commit()
++                return _rank_event_packet(existing)
++            raise
++        conn.execute(
++            """
++            UPDATE daily_blitz_rank_state
++            SET rank_points = MAX(0, rank_points + ?),
++                version = version + 1,
++                updated_at = CURRENT_TIMESTAMP
++            WHERE user_id = ? AND sport = ? AND season_id = ? AND rules_version = ?
+             """,
+-            (
+-                rank_event_id,
+-                entry_id,
+-                entry["user_id"],
+-                slate.sport,
+-                entry["slate_id"],
+-                RANK_SEASON_ID,
+-                RANK_RULES_VERSION,
+-                result["previous_points"],
+-                result["delta"],
+-                result["rank_points"],
+-                result["tier_after"]["name"],
+-                total_score,
+-                result["percentile"],
+-            ),
++            (result["delta"], entry["user_id"], slate.sport, RANK_SEASON_ID, RANK_RULES_VERSION),
+         )
+-    except sqlite3.IntegrityError:
+-        existing = _entry_rank_event(conn, entry_id)
+-        if existing:
+-            return _rank_event_packet(existing)
++        state = _rank_state_row(conn, str(entry["user_id"]), slate.sport)
++        settled_points = max(0, int(state["rank_points"] or 0)) if state else result["rank_points"]
++        settled_tier = _tier_for_points(settled_points)
++        conn.execute(
++            """
++            UPDATE daily_blitz_rank_state
++            SET rank_tier = ?, updated_at = CURRENT_TIMESTAMP
++            WHERE user_id = ? AND sport = ? AND season_id = ? AND rules_version = ?
++            """,
++            (settled_tier["name"], entry["user_id"], slate.sport, RANK_SEASON_ID, RANK_RULES_VERSION),
++        )
++        if settled_points != result["rank_points"] or settled_tier["name"] != result["tier_after"]["name"]:
++            conn.execute(
++                """
++                UPDATE daily_blitz_rank_events
++                SET rank_points = ?, rank_tier = ?
++                WHERE rank_event_id = ?
++                """,
++                (settled_points, settled_tier["name"], rank_event_id),
++            )
++            result = _rank_event_packet(_entry_rank_event(conn, entry_id))
++        else:
++            result["benchmark_percentile"] = round(float(benchmark["benchmark_percentile"]), 3)
++            result["benchmark_version"] = benchmark["benchmark_version"]
++            result["field_snapshot_id"] = benchmark["field_snapshot_id"]
++        conn.execute(
++            """
++            UPDATE daily_blitz_entries
++            SET ranked_status = 'ranked_settled'
++            WHERE entry_id = ?
++            """,
++            (entry_id,),
++        )
++    except Exception:
++        if started_transaction:
++            conn.rollback()
+         raise
+-    conn.execute(
+-        """
+-        INSERT INTO daily_blitz_rank_state(user_id, sport, season_id, rules_version, rank_points, rank_tier)
+-        VALUES(?, ?, ?, ?, ?, ?)
+-        ON CONFLICT(user_id, sport, season_id, rules_version) DO UPDATE SET
+-            rank_points = excluded.rank_points,
+-            rank_tier = excluded.rank_tier,
+-            updated_at = CURRENT_TIMESTAMP
+-        """,
+-        (
+-            entry["user_id"],
+-            slate.sport,
+-            RANK_SEASON_ID,
+-            RANK_RULES_VERSION,
+-            result["rank_points"],
+-            result["tier_after"]["name"],
+-        ),
+-    )
++    if started_transaction:
++        conn.commit()
+     result["rank_event_id"] = rank_event_id
+     result["settled"] = True
+     result["idempotent_replay"] = False
+@@ -533,14 +773,6 @@ def _entry_recap_packet(conn, entry_id: str, authenticated_user_id: str):
+         team = slate.teams.get(player.team_id) if player else None
+         multiplier = 1.5 if player_id == captain_player_id else 1.0
+         score = round(base_points[player_id] * multiplier, 2)
+-        conn.execute(
+-            """
+-            UPDATE daily_blitz_entry_players
+-            SET score = ?
+-            WHERE entry_id = ? AND player_id = ?
+-            """,
+-            (score, entry_id, player_id),
+-        )
+         player_results.append(
+             {
+                 "player_id": player_id,
+@@ -559,36 +791,49 @@ def _entry_recap_packet(conn, entry_id: str, authenticated_user_id: str):
+             }
+         )
+
+-    conn.execute(
+-        """
+-        UPDATE daily_blitz_entries
+-        SET status = 'revealed', score = ?
+-        WHERE entry_id = ?
+-        """,
+-        (total_score, entry_id),
+-    )
+-
+     best = max(player_results, key=lambda item: item["score"])
+     grade = _grade_for_score(total_score)
+     stake = int(entry["chip_stake"] or 0) if "chip_stake" in entry.keys() else 0
+     chip_result = _chip_result(stake, total_score)
+     parlay_chain = _entry_strategy_packet(slate, selected_player_ids, captain_player_id)
+-    ranked_result = _settle_rank_event(conn, entry, slate, total_score, parlay_chain)
+-    conn.execute(
+-        """
+-        UPDATE daily_blitz_entries
+-        SET chip_delta = ?, rank_delta = ?, rank_points = ?, rank_tier = ?
+-        WHERE entry_id = ?
+-        """,
+-        (
+-            chip_result["delta"],
+-            ranked_result["delta"],
+-            ranked_result["rank_points"],
+-            ranked_result["tier_after"]["name"],
+-            entry_id,
+-        ),
+-    )
+-    conn.commit()
++    conn.execute("BEGIN IMMEDIATE")
++    try:
++        for result_row in player_results:
++            conn.execute(
++                """
++                UPDATE daily_blitz_entry_players
++                SET score = ?
++                WHERE entry_id = ? AND player_id = ?
++                """,
++                (result_row["score"], entry_id, result_row["player_id"]),
++            )
++        conn.execute(
++            """
++            UPDATE daily_blitz_entries
++            SET status = 'revealed', score = ?
++            WHERE entry_id = ?
++            """,
++            (total_score, entry_id),
++        )
++        ranked_result = _settle_rank_event(conn, entry, slate, total_score, parlay_chain)
++        conn.execute(
++            """
++            UPDATE daily_blitz_entries
++            SET chip_delta = ?, rank_delta = ?, rank_points = ?, rank_tier = ?
++            WHERE entry_id = ?
++            """,
++            (
++                chip_result["delta"],
++                ranked_result["delta"],
++                ranked_result["rank_points"],
++                ranked_result["tier_after"]["name"],
++                entry_id,
++            ),
++        )
++        conn.commit()
++    except Exception:
++        conn.rollback()
++        raise
+     return {
+         "ok": True,
+         "entry_id": entry_id,
+@@ -1144,7 +1389,9 @@ def submit_entry(payload: DailyBlitzEntryPayload, request: Request):
+                 RANK_RULES_VERSION,
+             ),
+         )
+-    except sqlite3.IntegrityError:
++    except sqlite3.IntegrityError as error:
++        if not _is_ranked_attempt_conflict(error):
++            raise
+         ranked_status_value = "unranked_duplicate"
+         conn.execute(
+             """
