@@ -1,0 +1,260 @@
+diff --git a/backend/routes/daily_blitz.py b/backend/routes/daily_blitz.py
+index c934731..ed2a5c1 100644
+--- a/backend/routes/daily_blitz.py
++++ b/backend/routes/daily_blitz.py
+@@ -1,7 +1,11 @@
+ from __future__ import annotations
+ 
++import itertools
++import os
++import sqlite3
+ from datetime import date
+ from typing import Optional
++from uuid import uuid4
+ 
+ from fastapi import APIRouter, HTTPException, Request
+ from pydantic import BaseModel, Field
+@@ -27,6 +31,8 @@ except ModuleNotFoundError:
+ 
+ 
+ router = APIRouter(prefix="/daily-blitz", tags=["daily-blitz"])
++RANK_SEASON_ID = "season-2026-summer"
++RANK_RULES_VERSION = "rank-v2-percentile"
+ 
+ RANK_TIERS = [
+     {"key": "rookie", "name": "Rookie", "floor": 0, "badge": "Training Table"},
+@@ -40,7 +46,7 @@ RANK_TIERS = [
+ 
+ 
+ class DailyBlitzEntryPayload(BaseModel):
+-    user_id: str = Field(min_length=1, max_length=80)
++    user_id: Optional[str] = Field(default=None, min_length=1, max_length=80)
+     player_ids: list[str] = Field(min_length=1, max_length=5)
+     captain_player_id: str
+     slate_date: Optional[date] = None
+@@ -48,6 +54,21 @@ class DailyBlitzEntryPayload(BaseModel):
+     chip_stake: int = 0
+ 
+ 
++def _authenticated_user_id(request: Request) -> str:
++    state_user = getattr(request.state, "user_id", None)
++    if state_user:
++        return str(state_user)
++    header_user = request.headers.get("x-shf-user-id")
++    if os.environ.get("SHFANTASY_AUTH_MODE", "dev") == "dev" and header_user:
++        return header_user.strip()
++    raise HTTPException(status_code=401, detail="Authenticated SHFantasy user is required.")
++
++
++def _assert_payload_user(payload: DailyBlitzEntryPayload, authenticated_user_id: str):
++    if payload.user_id and payload.user_id != authenticated_user_id:
++        raise HTTPException(status_code=403, detail="Request user does not match authenticated user.")
++
++
+ def _slate_for_request(slate_date: Optional[date], sport: str = "football") -> DailyBlitzSlate:
+     return build_mock_daily_blitz_slate(slate_date or date.today(), sport=sport)
+ 
+@@ -95,43 +116,41 @@ def _next_tier(points: int) -> dict[str, object] | None:
+     return None
+ 
+ 
+-def _rank_delta_for_score(score: float, parlay_chain: dict[str, object]) -> int:
+-    if score >= 105:
++def _rank_delta_for_score(percentile: float, parlay_chain: dict[str, object]) -> int:
++    if percentile >= 0.9:
+         base = 42
+-    elif score >= 88:
++    elif percentile >= 0.75:
+         base = 28
+-    elif score >= 70:
++    elif percentile >= 0.55:
+         base = 12
++    elif percentile >= 0.35:
++        base = -2
+     else:
+-        base = -6
++        base = -8
+     chain_bonus = 0
+     if int(parlay_chain.get("chain_size") or 0) >= 5:
+-        chain_bonus += 4
++        chain_bonus += 2
+     if int(parlay_chain.get("distinct_roles") or 0) >= 3:
+-        chain_bonus += 4
++        chain_bonus += 2
++    if base < 0:
++        return min(-2, base + chain_bonus)
+     return base + chain_bonus
+ 
+ 
+-def _current_rank_points(conn, user_id: str, exclude_entry_id: str | None = None) -> int:
+-    if exclude_entry_id:
+-        row = conn.execute(
+-            """
+-            SELECT COALESCE(SUM(rank_delta), 0) AS points
+-            FROM daily_blitz_entries
+-            WHERE user_id = ? AND entry_id != ?
+-            """,
+-            (user_id, exclude_entry_id),
+-        ).fetchone()
+-    else:
+-        row = conn.execute(
+-            """
+-            SELECT COALESCE(SUM(rank_delta), 0) AS points
+-            FROM daily_blitz_entries
+-            WHERE user_id = ?
+-            """,
+-            (user_id,),
+-        ).fetchone()
+-    return max(0, int(row["points"] or 0))
++def _rank_state_row(conn, user_id: str, sport: str):
++    return conn.execute(
++        """
++        SELECT *
++        FROM daily_blitz_rank_state
++        WHERE user_id = ? AND sport = ? AND season_id = ? AND rules_version = ?
++        """,
++        (user_id, sport, RANK_SEASON_ID, RANK_RULES_VERSION),
++    ).fetchone()
++
++
++def _current_rank_points(conn, user_id: str, sport: str) -> int:
++    row = _rank_state_row(conn, user_id, sport)
++    return max(0, int(row["rank_points"] or 0)) if row else 0
+ 
+ 
+ def _rank_ladder_packet(points: int) -> dict[str, object]:
+@@ -154,9 +173,11 @@ def _rank_ladder_packet(points: int) -> dict[str, object]:
+         "progress": progress,
+         "points_to_next": distance,
+         "tiers": RANK_TIERS,
++        "season_id": RANK_SEASON_ID,
++        "rules_version": RANK_RULES_VERSION,
+         "rules": [
+-            "Daily Blitz score moves rank points after recap reveal.",
+-            "Five-card hands and role-diverse Skill Parlay chains add small rank bonuses.",
++            "Daily Blitz rank points settle once per ranked entry after recap reveal.",
++            "Rank movement is based on same-slate percentile, not raw cross-sport score.",
+             "Private chips do not affect rank points, salary cap, or scoring.",
+             "Ranks and chips have no cash value.",
+         ],
+@@ -164,12 +185,8 @@ def _rank_ladder_packet(points: int) -> dict[str, object]:
+     }
+ 
+ 
+-def _rank_result_packet(
+-    previous_points: int,
+-    score: float,
+-    parlay_chain: dict[str, object],
+-) -> dict[str, object]:
+-    delta = _rank_delta_for_score(score, parlay_chain)
++def _rank_result_packet(previous_points: int, percentile: float, parlay_chain: dict[str, object]) -> dict[str, object]:
++    delta = _rank_delta_for_score(percentile, parlay_chain)
+     current_points = max(0, previous_points + delta)
+     before = _tier_for_points(previous_points)
+     after = _tier_for_points(current_points)
+@@ -188,26 +205,232 @@ def _rank_result_packet(
+         "previous_points": previous_points,
+         "delta": delta,
+         "rank_points": current_points,
++        "percentile": round(percentile, 3),
+         "tier_before": before,
+         "tier_after": after,
+         "promoted": promoted,
+         "demoted": demoted,
+         "headline": headline,
+         "ladder": ladder,
+-        "skill_gate": "Master climb rewards cleaner reads, roster balance, and recap discipline. Chips never buy rank.",
++        "season_id": RANK_SEASON_ID,
++        "rules_version": RANK_RULES_VERSION,
++        "skill_gate": "Master climb rewards same-slate finish, cleaner reads, and recap discipline. Chips never buy rank.",
+     }
+ 
+ 
+-def _rank_preview_packet(conn, user_id: str) -> dict[str, object]:
+-    ladder = _rank_ladder_packet(_current_rank_points(conn, user_id))
++def _rank_preview_packet(conn, user_id: str, sport: str) -> dict[str, object]:
++    ladder = _rank_ladder_packet(_current_rank_points(conn, user_id, sport))
+     return {
+         "state": "pre_lock",
+         "current": ladder,
+-        "locked_hand_bonus": "A legal five-card, three-role hand can add up to +8 RP after reveal.",
++        "sport": sport,
++        "ranked_attempt_policy": "Only the first entry per user, sport, slate, season, and rules version can settle ranked RP.",
++        "locked_hand_bonus": "A legal five-card, three-role hand can add a tiny RP bonus only when the same-slate result is already positive.",
+         "next_action": "Lock one coherent hand, then reveal the recap to move rank.",
+     }
+ 
+ 
++def _entry_rank_event(conn, entry_id: str):
++    return conn.execute(
++        """
++        SELECT *
++        FROM daily_blitz_rank_events
++        WHERE entry_id = ?
++        """,
++        (entry_id,),
++    ).fetchone()
++
++
++def _rank_event_packet(row) -> dict[str, object]:
++    ladder = _rank_ladder_packet(int(row["rank_points"]))
++    previous = int(row["previous_points"])
++    current = int(row["rank_points"])
++    before = _tier_for_points(previous)
++    after = _tier_for_points(current)
++    promoted = str(before["key"]) != str(after["key"]) and current > previous
++    demoted = str(before["key"]) != str(after["key"]) and current < previous
++    if promoted:
++        headline = f"Promoted to {after['name']}."
++    elif demoted:
++        headline = f"Dropped to {after['name']}. Tighten the next captain read."
++    elif int(row["delta"]) > 0:
++        headline = f"+{int(row['delta'])} RP toward {ladder['next_tier']['name'] if ladder['next_tier'] else 'Master shield'}."
++    else:
++        headline = f"{int(row['delta'])} RP. Use the recap lesson before the next lock."
++    return {
++        "rank_event_id": row["rank_event_id"],
++        "previous_points": previous,
++        "delta": int(row["delta"]),
++        "rank_points": current,
++        "percentile": round(float(row["percentile"]), 3),
++        "tier_before": before,
++        "tier_after": after,
++        "promoted": promoted,
++        "demoted": demoted,
++        "headline": headline,
++        "ladder": ladder,
++        "season_id": row["season_id"],
++        "rules_version": row["rules_version"],
++        "settled": True,
++        "idempotent_replay": True,
++        "skill_gate": "Master climb rewards same-slate finish, cleaner reads, and recap discipline. Chips never buy rank.",
++    }
++
++
++def _slate_score_percentile(slate: DailyBlitzSlate, score: float) -> float:
++    playing_team_ids = {
++        team_id
++        for game in slate.games
++        for team_id in (game.home_team_id, game.away_team_id)
++    }
++    playable = [
++        player_id
++        for player_id, player in slate.players.items()
++        if player.team_id in playing_team_ids
++        and player_id in slate.salaries
++        and not (
++            slate.statuses.get(player_id)
++            and slate.statuses[player_id].status.lower()
++            in {"out", "injured", "inactive", "suspended", "unavailable", "doubtful"}
++        )
++    ]
++    benchmark_scores: list[float] = []
++    for size in range(1, min(5, len(playable)) + 1):
++        for combo in itertools.combinations(playable, size):
++            cost = sum(slate.salaries[player_id].tier for player_id in combo)
++            if cost > 10:
++                continue
++            base_points = {
++                player_id: _deterministic_player_points(player_id, slate.salaries[player_id].tier)
++                for player_id in combo
