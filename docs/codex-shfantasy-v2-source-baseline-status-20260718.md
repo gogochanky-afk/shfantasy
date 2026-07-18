@@ -1,14 +1,15 @@
 # SHFantasy v2 Source Baseline Status - 2026-07-18
 
-Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop and then corrected the product direction to parallel sport tables.
+Codex has converted the local SHFantasy v2 app into a clean standalone git baseline on the laptop, corrected the product direction to parallel sport tables, and added baseball/WWE-style skill fantasy tables.
 
 ## Local Source Baseline
 
 - Local path: `/Users/chankoonyuk/Documents/Codex/apps/shfantasy-v2-app`
 - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
-- Local HEAD commit: `0e8383c align arena around parallel sport tables`
+- Local HEAD commit: `5b54787 add skill fantasy baseball and wwe tables`
+- Prior commit: `0e8383c align arena around parallel sport tables`
 - Baseline commit: `f915f08 baseline shfantasy v2 app`
-- Tracked files: 101
+- Tracked files: 102
 
 ## Product Direction Correction
 
@@ -17,12 +18,22 @@ SHFantasy should not frame one sport as permanently primary and another as reser
 Correct model:
 
 - Daily Blitz is the primary ruleset.
-- Football, basketball, golf, tennis, and future sports are parallel SHFantasy tables.
+- Football, basketball, golf, baseball, WWE-style sports entertainment, tennis, and future sports are parallel SHFantasy tables.
 - The active table for a given day is selected by verified slate quality, event heat, player availability, and roster depth.
 - Telegram is a chat/distribution surface, not the main game UI.
 - The game should feel like a collectible sports-card arena with strategy, identity, recap, return reasons, and cosmetic progression.
 
 Codex changed source copy/API packet/tests to remove the old `football default / basketball reserve` framing.
+
+## New Skill Fantasy Expansion
+
+Implemented locally:
+
+- Baseball mock Daily Blitz slate with pitcher ceiling, lineup slot, on-base bridge, power, speed, and lineup scratch handling.
+- WWE-style mock Daily Blitz slate with main-event aura, crowd swing, promo control, match-card leverage, upset reads, and pulled-match handling.
+- `skill_fantasy_rules` packet inspired by Polymarket-style resolution clarity and DraftKings-style roster/cap tension, without copying real-money gambling mechanics.
+- AI scout roster recommendation now prefers legal full hands and sport-aware captain priority instead of greedily taking two expensive stars.
+- Frontend table selectors now show football, basketball, baseball, and WWE-style tables as first-class lanes.
 
 ## Safety
 
@@ -41,16 +52,16 @@ A secret scan was run before committing. The only match was a CSS `mask-image` p
 
 ## Verification
 
-Backend tests:
+Backend tests after the skill fantasy expansion:
 
 ```bash
 PYTHONPATH=. ./.venv/bin/pytest tests/ -q
 ```
 
-Result after the parallel-sport correction:
+Result:
 
 ```text
-40 passed in 1.33s
+43 passed in 1.82s
 ```
 
 Frontend build:
@@ -61,16 +72,13 @@ cd frontend && npm run build
 
 Result: production build completed successfully.
 
-Focused product tests:
-
-```bash
-PYTHONPATH=. ./.venv/bin/pytest tests/test_ai_arena.py tests/test_daily_blitz.py tests/test_endpoints.py -q
-```
-
-Result:
+AI scout sanity check:
 
 ```text
-33 passed in 1.96s
+football captain=football-superstar cost=10 valid=True
+basketball captain=mock-star cost=10 valid=True
+baseball captain=baseball-ace cost=10 valid=True
+wwe captain=wwe-main-event cost=10 valid=True
 ```
 
 ## Why The Full Source Is Not On GitHub Yet
@@ -104,6 +112,7 @@ Best path:
 
 - Multi-sport table architecture.
 - Daily Blitz gameplay: up to 5 players, salary cap 10, price tiers 4 / 3 / 2 / 1, captain 1.5x.
+- Sport-specific skill reads for football, basketball, golf, baseball, WWE-style sports entertainment, and future sports.
 - Player pool quality: daily slate breadth, current team mapping, unavailable player exclusion, and empty data fallback behavior.
 - Game feel: mobile-first pick flow, guided first hand, card role clarity, cosmetic collection, return hook, and recap learning loop.
 - Skill Parlay: confirm it creates real strategy rather than extra terminology.
