@@ -1,0 +1,711 @@
+From fefb7681033154f724697d5399626d24b34b9f49 Mon Sep 17 00:00:00 2001
+From: Chan Koon yuk <chankoonyuk@ChandeMacBook-Pro.local>
+Date: Sat, 18 Jul 2026 18:42:49 +0800
+Subject: [PATCH] add master ladder ranked progression
+
+---
+ README.md                                     |   4 +
+ backend/db.py                                 |   3 +
+ backend/routes/daily_blitz.py                 | 172 +++++++++++++++++-
+ ...de_5_6_source_baseline_handoff_20260718.md |  31 +++-
+ ...-master-ladder-local-20260718T104203Z.json |  34 ++++
+ docs/skill_fantasy_market_notes_20260718.md   |  14 ++
+ frontend/src/routes/daily-blitz/+page.svelte  |  98 +++++++++-
+ tests/test_daily_blitz.py                     |  74 ++++++++
+ 8 files changed, 420 insertions(+), 10 deletions(-)
+ create mode 100644 docs/live-proof/shfantasy-master-ladder-local-20260718T104203Z.json
+
+diff --git a/README.md b/README.md
+index f7cd750..d832c46 100644
+--- a/README.md
++++ b/README.md
+@@ -12,6 +12,7 @@ The current product direction is a play-money, skill-based fantasy game:
+ - Cosmetic collection: skins, frames, rarity, and progression must not change scoring power.
+ - Skill Parlay: a strategy/read layer with XP and titles only; no cash value or pay-to-win boost.
+ - Private table chips: friends can optionally stake 0 / 5 / 10 / 20 / 50 game coins for social tension only.
++- Master Ladder: ranked RP progression from Rookie to Master based on recap score, five-card completion, and role diversity.
+ - Legacy Cube loop remains available for 3-pick card prediction experiments.
+ 
+ ## Safety Scope
+@@ -20,6 +21,7 @@ The current product direction is a play-money, skill-based fantasy game:
+ - Local SQLite at `data/play.sqlite`, excluded from git.
+ - No deposits, withdrawals, payments, KYC, broker APIs, wagering execution, cash-value prizes, or automatic public posting.
+ - Private table chips are not money, cannot be withdrawn, cannot be redeemed, and should not be promoted as public gambling.
++- Private table chips do not affect Master Ladder rank, fantasy scoring, salary cap, or roster legality.
+ - `.env`, API keys, Telegram tokens, private data, local build output, and backup archives are excluded from git.
+ 
+ ## Backend
+@@ -58,6 +60,8 @@ Key regression coverage:
+ - empty or failed external data handling;
+ - 100-bot Daily Blitz legality simulation;
+ - cosmetic-only collection and no pay-to-win scoring.
++- private chips remain game coins only;
++- Master Ladder RP persists, promotes by skill results, and ignores chip stake.
+ 
+ ## Mock Ingest
+ 
+diff --git a/backend/db.py b/backend/db.py
+index a1b8d99..7cbe404 100644
+--- a/backend/db.py
++++ b/backend/db.py
+@@ -160,6 +160,9 @@ def init_db(conn):
+     _ensure_column(conn, "cubes", "resolved_at", "TEXT")
+     _ensure_column(conn, "daily_blitz_entries", "chip_stake", "INTEGER DEFAULT 0")
+     _ensure_column(conn, "daily_blitz_entries", "chip_delta", "INTEGER DEFAULT 0")
++    _ensure_column(conn, "daily_blitz_entries", "rank_delta", "INTEGER DEFAULT 0")
++    _ensure_column(conn, "daily_blitz_entries", "rank_points", "INTEGER DEFAULT 0")
++    _ensure_column(conn, "daily_blitz_entries", "rank_tier", "TEXT DEFAULT 'Rookie'")
+     conn.commit()
+ 
+ 
+diff --git a/backend/routes/daily_blitz.py b/backend/routes/daily_blitz.py
+index cb0a3e4..c934731 100644
+--- a/backend/routes/daily_blitz.py
++++ b/backend/routes/daily_blitz.py
+@@ -28,6 +28,16 @@ except ModuleNotFoundError:
+ 
+ router = APIRouter(prefix="/daily-blitz", tags=["daily-blitz"])
+ 
++RANK_TIERS = [
++    {"key": "rookie", "name": "Rookie", "floor": 0, "badge": "Training Table"},
++    {"key": "bronze", "name": "Bronze", "floor": 60, "badge": "Public Hand"},
++    {"key": "silver", "name": "Silver", "floor": 140, "badge": "Sharp Reader"},
++    {"key": "gold", "name": "Gold", "floor": 240, "badge": "Table Captain"},
++    {"key": "platinum", "name": "Platinum", "floor": 380, "badge": "Slate Hunter"},
++    {"key": "diamond", "name": "Diamond", "floor": 560, "badge": "Edge Architect"},
++    {"key": "master", "name": "Master", "floor": 800, "badge": "Fantasy Master"},
++]
++
+ 
+ class DailyBlitzEntryPayload(BaseModel):
+     user_id: str = Field(min_length=1, max_length=80)
+@@ -70,6 +80,134 @@ def _grade_for_score(score: float) -> dict[str, str]:
+     return {"grade": "C", "title": "Training Run"}
+ 
+ 
++def _tier_for_points(points: int) -> dict[str, object]:
++    tier = RANK_TIERS[0]
++    for candidate in RANK_TIERS:
++        if points >= int(candidate["floor"]):
++            tier = candidate
++    return tier
++
++
++def _next_tier(points: int) -> dict[str, object] | None:
++    for candidate in RANK_TIERS:
++        if points < int(candidate["floor"]):
++            return candidate
++    return None
++
++
++def _rank_delta_for_score(score: float, parlay_chain: dict[str, object]) -> int:
++    if score >= 105:
++        base = 42
++    elif score >= 88:
++        base = 28
++    elif score >= 70:
++        base = 12
++    else:
++        base = -6
++    chain_bonus = 0
++    if int(parlay_chain.get("chain_size") or 0) >= 5:
++        chain_bonus += 4
++    if int(parlay_chain.get("distinct_roles") or 0) >= 3:
++        chain_bonus += 4
++    return base + chain_bonus
++
++
++def _current_rank_points(conn, user_id: str, exclude_entry_id: str | None = None) -> int:
++    if exclude_entry_id:
++        row = conn.execute(
++            """
++            SELECT COALESCE(SUM(rank_delta), 0) AS points
++            FROM daily_blitz_entries
++            WHERE user_id = ? AND entry_id != ?
++            """,
++            (user_id, exclude_entry_id),
++        ).fetchone()
++    else:
++        row = conn.execute(
++            """
++            SELECT COALESCE(SUM(rank_delta), 0) AS points
++            FROM daily_blitz_entries
++            WHERE user_id = ?
++            """,
++            (user_id,),
++        ).fetchone()
++    return max(0, int(row["points"] or 0))
++
++
++def _rank_ladder_packet(points: int) -> dict[str, object]:
++    tier = _tier_for_points(points)
++    next_tier = _next_tier(points)
++    floor = int(tier["floor"])
++    if next_tier:
++        next_floor = int(next_tier["floor"])
++        progress = round((points - floor) / max(1, next_floor - floor), 3)
++        distance = next_floor - points
++    else:
++        next_floor = floor
++        progress = 1.0
++        distance = 0
++    return {
++        "mode": "Master Ladder",
++        "rank_points": points,
++        "tier": tier,
++        "next_tier": next_tier,
++        "progress": progress,
++        "points_to_next": distance,
++        "tiers": RANK_TIERS,
++        "rules": [
++            "Daily Blitz score moves rank points after recap reveal.",
++            "Five-card hands and role-diverse Skill Parlay chains add small rank bonuses.",
++            "Private chips do not affect rank points, salary cap, or scoring.",
++            "Ranks and chips have no cash value.",
++        ],
++        "return_reason": "Climb the next table by proving one cleaner captain read tomorrow.",
++    }
++
++
++def _rank_result_packet(
++    previous_points: int,
++    score: float,
++    parlay_chain: dict[str, object],
++) -> dict[str, object]:
++    delta = _rank_delta_for_score(score, parlay_chain)
++    current_points = max(0, previous_points + delta)
++    before = _tier_for_points(previous_points)
++    after = _tier_for_points(current_points)
++    ladder = _rank_ladder_packet(current_points)
++    promoted = str(before["key"]) != str(after["key"]) and current_points > previous_points
++    demoted = str(before["key"]) != str(after["key"]) and current_points < previous_points
++    if promoted:
++        headline = f"Promoted to {after['name']}."
++    elif demoted:
++        headline = f"Dropped to {after['name']}. Tighten the next captain read."
++    elif delta > 0:
++        headline = f"+{delta} RP toward {ladder['next_tier']['name'] if ladder['next_tier'] else 'Master shield'}."
++    else:
++        headline = f"{delta} RP. Use the recap lesson before the next lock."
++    return {
++        "previous_points": previous_points,
++        "delta": delta,
++        "rank_points": current_points,
++        "tier_before": before,
++        "tier_after": after,
++        "promoted": promoted,
++        "demoted": demoted,
++        "headline": headline,
++        "ladder": ladder,
++        "skill_gate": "Master climb rewards cleaner reads, roster balance, and recap discipline. Chips never buy rank.",
++    }
++
++
++def _rank_preview_packet(conn, user_id: str) -> dict[str, object]:
++    ladder = _rank_ladder_packet(_current_rank_points(conn, user_id))
++    return {
++        "state": "pre_lock",
++        "current": ladder,
++        "locked_hand_bonus": "A legal five-card, three-role hand can add up to +8 RP after reveal.",
++        "next_action": "Lock one coherent hand, then reveal the recap to move rank.",
++    }
++
++
+ def _chip_options() -> list[int]:
+     return [0, 5, 10, 20, 50]
+ 
+@@ -210,13 +348,22 @@ def _entry_recap_packet(conn, entry_id: str):
+     grade = _grade_for_score(total_score)
+     stake = int(entry["chip_stake"] or 0) if "chip_stake" in entry.keys() else 0
+     chip_result = _chip_result(stake, total_score)
++    parlay_chain = _entry_strategy_packet(slate, selected_player_ids, captain_player_id)
++    previous_rank_points = _current_rank_points(conn, str(entry["user_id"]), exclude_entry_id=entry_id)
++    ranked_result = _rank_result_packet(previous_rank_points, total_score, parlay_chain)
+     conn.execute(
+         """
+         UPDATE daily_blitz_entries
+-        SET chip_delta = ?
++        SET chip_delta = ?, rank_delta = ?, rank_points = ?, rank_tier = ?
+         WHERE entry_id = ?
+         """,
+-        (chip_result["delta"], entry_id),
++        (
++            chip_result["delta"],
++            ranked_result["delta"],
++            ranked_result["rank_points"],
++            ranked_result["tier_after"]["name"],
++            entry_id,
++        ),
+     )
+     conn.commit()
+     return {
+@@ -235,13 +382,14 @@ def _entry_recap_packet(conn, entry_id: str):
+             "Your strongest daily edge is not picking every star. It is matching one captain "
+             "with enough value and sleeper support to keep the cap alive."
+         ),
+-        "parlay_chain": _entry_strategy_packet(slate, selected_player_ids, captain_player_id),
++        "parlay_chain": parlay_chain,
+         "chip_result": chip_result,
++        "ranked_result": ranked_result,
+         "card_xp": {
+             "earned": 35 if total_score >= 88 else 18,
+             "track": "Superstar Table" if best["is_captain"] else "Value Heist",
+         },
+-        "return_hook": "Tomorrow unlocks a fresh slate with one new captain test and one comeback token.",
++        "return_hook": f"{ranked_result['headline']} Tomorrow unlocks a fresh slate with one new captain test.",
+         "safety": "Play-money only. No betting, payments, cash value, or KYC.",
+     }
+ 
+@@ -281,6 +429,7 @@ def _slate_packet(slate: DailyBlitzSlate):
+         ],
+         "collection": _collection_packet(slate, playing_team_ids),
+         "guided_hands": _guided_hands_packet(slate, playing_team_ids),
++        "ranked_mode": _rank_ladder_packet(0),
+         "copy": {
+             "headline": "Build up to 5 players under 10 cap.",
+             "captain_rule": "Captain scores 1.5x.",
+@@ -288,6 +437,7 @@ def _slate_packet(slate: DailyBlitzSlate):
+             "skin_rule": "Skins are cosmetic flex only: nicer card art, reveal frames, and recap titles, never stronger scoring.",
+             "parlay_rule": "Skill Parlay chains reward coherent reads with style XP and titles, not cash value.",
+             "chip_rule": "Private friends tables can stake game coins for extra tension. Chips have no cash value and cannot be withdrawn.",
++            "rank_rule": "Master Ladder turns each reveal into rank points. Climb by reading cleaner slates, not by staking chips.",
+             "safety": "Play-money only. No betting, payments, or KYC.",
+         },
+         "private_chip_mode": _private_chip_mode(),
+@@ -667,8 +817,18 @@ def daily_blitz_slate(slate_date: Optional[date] = None, sport: str = "football"
+     return _slate_packet(_slate_for_request(slate_date, sport))
+ 
+ 
++@router.get("/ranked/{user_id}")
++def ranked_status(user_id: str, request: Request):
++    return {
++        "ok": True,
++        "user_id": user_id,
++        "ranked_mode": _rank_ladder_packet(_current_rank_points(request.app.state.db, user_id)),
++        "safety": "Rank points are competitive game progress only. No cash value.",
++    }
++
++
+ @router.post("/entry/validate")
+-def validate_entry(payload: DailyBlitzEntryPayload):
++def validate_entry(payload: DailyBlitzEntryPayload, request: Request):
+     slate = _slate_for_request(payload.slate_date, payload.sport)
+     result = validate_daily_blitz_entry(
+         slate,
+@@ -689,6 +849,7 @@ def validate_entry(payload: DailyBlitzEntryPayload):
+         "captain_player_id": result.captain_player_id,
+         "parlay_chain": _entry_strategy_packet(slate, result.selected_player_ids, result.captain_player_id),
+         "private_chip_mode": _private_chip_mode(payload.chip_stake),
++        "rank_preview": _rank_preview_packet(request.app.state.db, payload.user_id),
+     }
+ 
+ 
+@@ -739,6 +900,7 @@ def submit_entry(payload: DailyBlitzEntryPayload, request: Request):
+         "captain_player_id": result.captain_player_id,
+         "parlay_chain": _entry_strategy_packet(slate, result.selected_player_ids, result.captain_player_id),
+         "private_chip_mode": _private_chip_mode(payload.chip_stake),
++        "rank_preview": _rank_preview_packet(conn, payload.user_id),
+         "next_action": "Wait for results, then review the recap lesson.",
+     }
+ 
+diff --git a/docs/claude_5_6_source_baseline_handoff_20260718.md b/docs/claude_5_6_source_baseline_handoff_20260718.md
+index 6966d1c..2b57c03 100644
+--- a/docs/claude_5_6_source_baseline_handoff_20260718.md
++++ b/docs/claude_5_6_source_baseline_handoff_20260718.md
+@@ -5,8 +5,8 @@
+ This directory is now an isolated local git repository for the current SHFantasy v2 app baseline.
+ 
+ - Local branch: `codex/shfantasy-v2-source-baseline-20260718`
+-- Local commit: `f915f08decaeae077183c2ea8d02e9e1442a8224` before the multi-sport-table correction
+-- Commit message: `baseline shfantasy v2 app`
++- Original baseline commit: `f915f08decaeae077183c2ea8d02e9e1442a8224`
++- Latest local work now includes multi-sport tables, private table chips, and Master Ladder ranked progression.
+ - Tracked files: 100
+ - Excluded from git: `.env`, API keys, SQLite database, `.venv`, node_modules, Svelte build output, cache folders, and backup archives.
+ 
+@@ -29,7 +29,7 @@ PYTHONPATH=. ./.venv/bin/pytest tests/ -q
+ Result:
+ 
+ ```text
+-40 passed in 1.65s
++46 passed in 1.62s
+ ```
+ 
+ Frontend:
+@@ -56,7 +56,30 @@ Priority review areas:
+ 4. Game feel: mobile-first pick flow, guided first hand, card role clarity, cosmetic collection, return hook, and recap learning loop.
+ 5. Skill Parlay: confirm it creates real strategy instead of only terminology.
+ 6. Fairness and compliance: play-money only, no wagering/payment/KYC/cash-value language, no pay-to-win card effects.
+-7. Production migration: decide whether this app replaces the old SHFantasy repo, becomes a sub-app, or donates only specific modules.
++7. Master Ladder: confirm Rookie-to-Master RP movement feels competitive without becoming pay-to-win or gambling-like.
++8. Production migration: decide whether this app replaces the old SHFantasy repo, becomes a sub-app, or donates only specific modules.
++
++## 5.6 Review Request - Master Ladder
++
++Codex added a ranked spine so Daily Blitz feels like competitive play rather than one-off form submission.
++
++What changed:
++
++- `daily_blitz_entries` now stores `rank_delta`, `rank_points`, and `rank_tier`.
++- `/daily-blitz/slate` exposes `ranked_mode`.
++- `/daily-blitz/ranked/{user_id}` exposes current player ladder state.
++- `/daily-blitz/entry/validate` and `/daily-blitz/entry/submit` expose `rank_preview`.
++- `/daily-blitz/entry/{entry_id}/reveal` exposes `ranked_result` with previous points, delta, tier movement, promotion/demotion flags, and recap headline.
++- Frontend Daily Blitz now has a compact Master Ladder HUD between deck route and private chips.
++- Private chip stake is explicitly excluded from rank points, scoring, cap, roster legality, and captain multiplier.
++
++Please review:
++
++1. Whether the RP thresholds are satisfying enough: Rookie 0, Bronze 60, Silver 140, Gold 240, Platinum 380, Diamond 560, Master 800.
++2. Whether RP delta should be more aggressive for excellent scores or more punishing for poor scores.
++3. Whether promotion copy should unlock cosmetic-only table badges or profile frames.
++4. Whether the ladder should reset by season, sport, or private table.
++5. Whether the frontend Master Ladder panel is visible enough without making the board feel like a SaaS dashboard.
+ 
+ ## Key Files
+ 
+diff --git a/docs/live-proof/shfantasy-master-ladder-local-20260718T104203Z.json b/docs/live-proof/shfantasy-master-ladder-local-20260718T104203Z.json
+new file mode 100644
+index 0000000..95c9e28
+--- /dev/null
++++ b/docs/live-proof/shfantasy-master-ladder-local-20260718T104203Z.json
+@@ -0,0 +1,34 @@
++{
++  "artifact": "shfantasy-master-ladder-local-20260718T104203Z",
++  "status": "local_verified",
++  "scope": "Daily Blitz ranked progression and competitive ladder feel",
++  "changes": [
++    "Added Master Ladder tiers from Rookie to Master.",
++    "Persisted Daily Blitz rank_delta, rank_points, and rank_tier on entries.",
++    "Added ranked_mode to slate packets and rank_preview to validate/submit packets.",
++    "Added ranked_result to recap/reveal packets with RP delta, promotion/demotion flags, and next-tier progress.",
++    "Added a compact Master Ladder HUD to the mobile Daily Blitz board.",
++    "Kept private table chips outside rank scoring, salary cap, roster legality, and captain multiplier."
++  ],
++  "safety": [
++    "Play-money only.",
++    "Ranks have no cash value.",
++    "Private chips have no cash value.",
++    "Private chip stake does not affect rank points or fantasy score.",
++    "No deposits, withdrawals, KYC, payments, broker APIs, or real-money wagering."
++  ],
++  "verification": {
++    "backend_tests": {
++      "command": "PYTHONPATH=. ./.venv/bin/pytest tests/ -q",
++      "result": "46 passed in 1.62s"
++    },
++    "frontend_build": {
++      "command": "cd frontend && npm run build",
++      "result": "svelte production build succeeded"
++    }
++  },
++  "handoff": {
++    "file": "docs/claude_5_6_source_baseline_handoff_20260718.md",
++    "request": "Review RP balance, seasonal reset, cosmetic promotion rewards, sport/table segmentation, and whether the HUD feels game-native."
++  }
++}
+diff --git a/docs/skill_fantasy_market_notes_20260718.md b/docs/skill_fantasy_market_notes_20260718.md
+index 7d4db2d..7dda444 100644
+--- a/docs/skill_fantasy_market_notes_20260718.md
++++ b/docs/skill_fantasy_market_notes_20260718.md
+@@ -34,6 +34,7 @@ SHFantasy should become a skill-first card arena:
+ - Card skins are collectible identity, not scoring power.
+ - Skill Parlay should reward coherent reads with XP/titles, not money.
+ - Private friends tables may use game coins as table chips, but those chips have no cash value, no withdrawal path, and no external transfer value.
++- Master Ladder should make every revealed entry feel like ranked play: climb from Rookie to Master through score quality, five-card completion, and role-diverse reads.
+ 
+ ## Private Chip Mode
+ 
+@@ -46,6 +47,19 @@ Simple private-table mode:
+ - No conversion to money.
+ - No public gambling positioning.
+ - No deposits, withdrawals, KYC, payment processor, or cash ledger.
++- Chip stake must not change rank points, fantasy score, salary cap, card legality, or captain multiplier.
++
++## Master Ladder
++
++Ranked mode is the competitive spine:
++
++- Tiers: Rookie, Bronze, Silver, Gold, Platinum, Diamond, Master.
++- Rank points are settled only after recap reveal.
++- Score drives the main RP movement.
++- Five-card hands and three-role Skill Parlay chains add small skill bonuses.
++- Low-quality results can lose RP, but points never go below zero.
++- Promotion/demotion copy belongs in recap and private/friend tables, not ops logs.
++- Master Ladder has no cash value and cannot be bought with chips or skins.
+ 
+ ## Sport Skill Tables
+ 
+diff --git a/frontend/src/routes/daily-blitz/+page.svelte b/frontend/src/routes/daily-blitz/+page.svelte
+index a8b2c74..2b15f14 100644
+--- a/frontend/src/routes/daily-blitz/+page.svelte
++++ b/frontend/src/routes/daily-blitz/+page.svelte
+@@ -25,6 +25,21 @@
+       completion_reward: 'Table Legends animated profile frame',
+       fairness_rule: 'Skins never improve fantasy points, salary cap, captain multiplier, or roster legality.'
+     },
++    ranked_mode: {
++      mode: 'Master Ladder',
++      rank_points: 0,
++      tier: { key: 'rookie', name: 'Rookie', floor: 0, badge: 'Training Table' },
++      next_tier: { key: 'bronze', name: 'Bronze', floor: 60, badge: 'Public Hand' },
++      progress: 0,
++      points_to_next: 60,
++      rules: [
++        'Daily Blitz score moves rank points after recap reveal.',
++        'Five-card hands and role-diverse Skill Parlay chains add small rank bonuses.',
++        'Private chips do not affect rank points, salary cap, or scoring.',
++        'Ranks and chips have no cash value.'
++      ],
++      return_reason: 'Climb the next table by proving one cleaner captain read tomorrow.'
++    },
+     private_chip_mode: {
+       enabled: true,
+       selected_stake: 0,
+@@ -42,6 +57,7 @@
+       skin_rule: 'Skins are cosmetic flex only: nicer card art, reveal frames, and recap titles, never stronger scoring.',
+       parlay_rule: 'Skill Parlay chains reward coherent reads with style XP and titles, not cash value.',
+       chip_rule: 'Private friends tables can stake game coins for extra tension. Chips have no cash value and cannot be withdrawn.',
++      rank_rule: 'Master Ladder turns each reveal into rank points. Climb by reading cleaner slates, not by staking chips.',
+       safety: 'Play-money only. No betting, payments, or KYC.'
+     }
+   };
+@@ -87,6 +103,13 @@
+   $: activeParlay = submitResult?.parlay_chain || validation?.parlay_chain || localParlay;
+   $: chipMode = submitResult?.private_chip_mode || validation?.private_chip_mode || slate.private_chip_mode || fallbackSlate.private_chip_mode;
+   $: chipOptions = chipMode?.stake_options || [0, 5, 10, 20, 50];
++  $: rankMode =
++    submitResult?.rank_preview?.current ||
++    validation?.rank_preview?.current ||
++    slate.ranked_mode ||
++    fallbackSlate.ranked_mode;
++  $: rankProgressPercent = Math.max(0, Math.min(100, Math.round(Number(rankMode?.progress || 0) * 100)));
++  $: nextRankName = rankMode?.next_tier?.name || 'Master shield';
+   $: rarityLine = Object.entries(slate.collection?.rarity_counts || {}).map(([rarity, count]) => `${count} ${rarity}`).join(' · ');
+   $: canSubmit = selectedIds.length > 0 && selectedIds.length <= (slate.max_players || 5) && captainId && selectedCost <= cap && !syncing;
+ 
+@@ -364,6 +387,23 @@
+         <small>{comboLine}</small>
+       </div>
+ 
++      <div class="rank-ladder" aria-label="Master Ladder rank progress">
++        <div class="rank-topline">
++          <div>
++            <span>Master Ladder</span>
++            <strong>{rankMode?.tier?.name || 'Rookie'}</strong>
++          </div>
++          <div>
++            <span>{rankMode?.rank_points || 0} RP</span>
++            <strong>{rankMode?.points_to_next || 0} to {nextRankName}</strong>
++          </div>
++        </div>
++        <div class="rank-meter">
++          <span style={`width: ${rankProgressPercent}%`}></span>
++        </div>
++        <small>{slate.copy?.rank_rule || rankMode?.return_reason}</small>
++      </div>
++
+       <div class="chip-stake" aria-label="Private friends table chips">
+         <div>
+           <span>Private chips</span>
+@@ -433,7 +473,7 @@
+         <div class="locked">
+           <strong>Entry locked</strong>
+           <span>{submitResult.entry_id} · {submitResult.private_chip_mode?.selected_stake || 0} private chips</span>
+-          <small>{submitResult.next_action} {submitResult.private_chip_mode?.safety}</small>
++          <small>{submitResult.rank_preview?.next_action || submitResult.next_action} {submitResult.private_chip_mode?.safety}</small>
+         </div>
+       {/if}
+     </section>
+@@ -793,6 +833,62 @@
+     line-height: 1.3;
+   }
+ 
++  .rank-ladder {
++    display: grid;
++    gap: 10px;
++    border: 1px solid rgba(242, 188, 85, 0.32);
++    border-radius: var(--shf-radius);
++    background:
++      linear-gradient(135deg, rgba(242, 188, 85, 0.18), rgba(61, 83, 120, 0.14)),
++      #fffaf0;
++    color: var(--shf-ink);
++    padding: 12px;
++    margin-bottom: 12px;
++  }
++
++  .rank-topline {
++    display: grid;
++    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
++    gap: 10px;
++    align-items: center;
++  }
++
++  .rank-topline > div:last-child {
++    text-align: right;
++  }
++
++  .rank-ladder span,
++  .rank-ladder small {
++    display: block;
++    color: var(--shf-muted);
++    font-size: 11px;
++    font-weight: 900;
++    line-height: 1.35;
++  }
++
++  .rank-ladder strong {
++    display: block;
++    margin-top: 3px;
++    color: #3d5378;
++    font-size: 18px;
++    line-height: 1.05;
++  }
++
++  .rank-meter {
++    height: 9px;
++    overflow: hidden;
++    border-radius: 999px;
++    background: rgba(18, 18, 15, 0.12);
++  }
++
++  .rank-meter span {
++    display: block;
++    height: 100%;
++    border-radius: inherit;
++    background: linear-gradient(90deg, #3d5378, var(--shf-gold));
++    transition: width 180ms ease;
++  }
++
+   .chip-stake {
+     display: grid;
+     gap: 10px;
+diff --git a/tests/test_daily_blitz.py b/tests/test_daily_blitz.py
+index 6d99df5..6308eea 100644
+--- a/tests/test_daily_blitz.py
++++ b/tests/test_daily_blitz.py
+@@ -192,6 +192,11 @@ def test_daily_blitz_schema_is_created_without_breaking_existing_tables(tmp_path
+     assert "daily_blitz_entries" in tables
+     assert "daily_blitz_entry_players" in tables
+     assert "player_game_status" in tables
++    columns = {
++        row["name"]
++        for row in conn.execute("PRAGMA table_info(daily_blitz_entries)").fetchall()
++    }
++    assert {"chip_stake", "chip_delta", "rank_delta", "rank_points", "rank_tier"}.issubset(columns)
+ 
+ 
+ def test_daily_blitz_slate_endpoint_returns_multi_game_player_pool(tmp_path):
+@@ -224,6 +229,10 @@ def test_daily_blitz_slate_endpoint_returns_multi_game_player_pool(tmp_path):
+     assert data["collection"]["playable_cards"] >= 8
+     assert data["collection"]["completion_reward"] == "Table Legends animated profile frame"
+     assert "no pay-to-win" in data["collection"]["monetization_fit"]
++    assert data["ranked_mode"]["mode"] == "Master Ladder"
++    assert data["ranked_mode"]["tier"]["name"] == "Rookie"
++    assert data["ranked_mode"]["next_tier"]["name"] == "Bronze"
++    assert any("Private chips do not affect rank points" in rule for rule in data["ranked_mode"]["rules"])
+     assert len(data["guided_hands"]) == 3
+     assert {guide["key"] for guide in data["guided_hands"]} == {"safe_table", "ceiling_hunt", "value_heist"}
+     assert all(len(guide["player_ids"]) == 5 for guide in data["guided_hands"])
+@@ -234,6 +243,7 @@ def test_daily_blitz_slate_endpoint_returns_multi_game_player_pool(tmp_path):
+     assert "Draft one identity" in data["copy"]["deck_rule"]
+     assert "cosmetic flex only" in data["copy"]["skin_rule"]
+     assert "not cash value" in data["copy"]["parlay_rule"]
++    assert "Master Ladder" in data["copy"]["rank_rule"]
+     assert "No betting" in data["copy"]["safety"]
+ 
+ 
+@@ -362,6 +372,9 @@ def test_daily_blitz_submit_endpoint_locks_valid_entry(tmp_path):
+     assert data["captain_player_id"] == "football-superstar"
+     assert data["parlay_chain"]["cash_value"] == "none"
+     assert data["parlay_chain"]["style_multiplier_label"].startswith("Style XP")
++    assert data["rank_preview"]["current"]["mode"] == "Master Ladder"
++    assert data["rank_preview"]["current"]["tier"]["name"] == "Rookie"
++    assert "legal five-card" in data["rank_preview"]["locked_hand_bonus"]
+ 
+     saved_entry = app.state.db.execute(
+         "SELECT * FROM daily_blitz_entries WHERE entry_id = ?",
+@@ -412,6 +425,8 @@ def test_daily_blitz_private_chip_stake_is_game_coin_only(tmp_path):
+     assert recap["chip_result"]["cash_value"] == "none"
+     assert recap["chip_result"]["withdrawable"] is False
+     assert recap["chip_result"]["private_table_only"] is True
++    assert recap["ranked_result"]["skill_gate"].endswith("Chips never buy rank.")
++    assert recap["ranked_result"]["rank_points"] == recap["ranked_result"]["delta"]
+ 
+ 
+ def test_daily_blitz_rejects_unsupported_chip_stake(tmp_path):
+@@ -462,6 +477,11 @@ def test_daily_blitz_reveal_scores_entry_and_returns_recap(tmp_path):
+     assert recap["parlay_chain"]["cash_value"] == "none"
+     assert recap["parlay_chain"]["captain_route"] == "Safe Captain"
+     assert recap["parlay_chain"]["style_xp_preview"] > 0
++    assert recap["ranked_result"]["delta"] > 0
++    assert recap["ranked_result"]["rank_points"] > 0
++    assert recap["ranked_result"]["tier_after"]["name"] in {"Rookie", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master"}
++    assert "RP" in recap["ranked_result"]["headline"] or "Promoted" in recap["ranked_result"]["headline"]
++    assert "RP" in recap["return_hook"] or "Promoted" in recap["return_hook"]
+     captain = next(player for player in recap["player_results"] if player["is_captain"])
+     assert captain["player_id"] == "football-superstar"
+     assert captain["multiplier"] == 1.5
+@@ -479,6 +499,60 @@ def test_daily_blitz_reveal_scores_entry_and_returns_recap(tmp_path):
+     assert saved_entry["status"] == "revealed"
+     assert saved_entry["score"] == recap["score"]
+     assert all(row["score"] > 0 for row in saved_scores)
++    saved_rank = app.state.db.execute(
++        "SELECT rank_delta, rank_points, rank_tier FROM daily_blitz_entries WHERE entry_id = ?",
++        (entry["entry_id"],),
++    ).fetchone()
++
++    assert saved_rank["rank_delta"] == recap["ranked_result"]["delta"]
++    assert saved_rank["rank_points"] == recap["ranked_result"]["rank_points"]
++    assert saved_rank["rank_tier"] == recap["ranked_result"]["tier_after"]["name"]
++
++
++def test_daily_blitz_master_ladder_progress_persists_across_entries(tmp_path):
++    client = TestClient(create_app(tmp_path / "play.sqlite"))
++    first = client.post("/daily-blitz/entry/submit", json={
++        "user_id": "ranker",
++        "slate_date": "2026-07-17",
++        "sport": "football",
++        "player_ids": [
++            "football-superstar",
++            "football-value",
++            "football-sleeper",
++            "football-punt",
++            "football-runner",
++        ],
++        "captain_player_id": "football-superstar",
++        "chip_stake": 50,
++    }).json()
++    first_recap = client.post(f"/daily-blitz/entry/{first['entry_id']}/reveal").json()
++    ranked = client.get("/daily-blitz/ranked/ranker").json()
++
++    assert ranked["ok"] is True
++    assert ranked["ranked_mode"]["rank_points"] == first_recap["ranked_result"]["rank_points"]
++    assert ranked["safety"].endswith("No cash value.")
++
++    second = client.post("/daily-blitz/entry/submit", json={
++        "user_id": "ranker",
++        "slate_date": "2026-07-17",
++        "sport": "baseball",
++        "player_ids": [
++            "baseball-ace",
++            "baseball-onbase",
++            "baseball-cheap-arm",
++            "baseball-nine-hole",
++            "baseball-platoon",
++        ],
++        "captain_player_id": "baseball-ace",
++        "chip_stake": 0,
++    }).json()
++    second_recap = client.post(f"/daily-blitz/entry/{second['entry_id']}/reveal").json()
++
++    assert second["rank_preview"]["current"]["rank_points"] == first_recap["ranked_result"]["rank_points"]
++    assert second_recap["ranked_result"]["previous_points"] == first_recap["ranked_result"]["rank_points"]
++    assert second_recap["ranked_result"]["rank_points"] == (
++        first_recap["ranked_result"]["rank_points"] + second_recap["ranked_result"]["delta"]
++    )
+ 
+ 
+ def test_daily_blitz_reveal_is_idempotent_for_same_entry(tmp_path):
+-- 
+2.50.1 (Apple Git-155)
