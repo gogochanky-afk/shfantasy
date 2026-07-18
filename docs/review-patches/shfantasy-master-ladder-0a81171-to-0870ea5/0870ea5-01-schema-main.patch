@@ -1,0 +1,97 @@
+diff --git a/backend/db.py b/backend/db.py
+index 584d8ab..f9035f2 100644
+--- a/backend/db.py
++++ b/backend/db.py
+@@ -12,6 +12,7 @@ def connect(path: str | Path | None = None):
+     db_path.parent.mkdir(parents=True, exist_ok=True)
+     conn = sqlite3.connect(db_path, check_same_thread=False)
+     conn.row_factory = sqlite3.Row
++    conn.execute("PRAGMA foreign_keys = ON")
+     init_db(conn)
+     return conn
+
+@@ -159,12 +160,29 @@ def init_db(conn):
+             rules_version TEXT NOT NULL,
+             rank_points INTEGER NOT NULL DEFAULT 0,
+             rank_tier TEXT NOT NULL DEFAULT 'Rookie',
++            version INTEGER NOT NULL DEFAULT 0,
+             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+             PRIMARY KEY(user_id, sport, season_id, rules_version)
+         );
++        CREATE TABLE IF NOT EXISTS daily_blitz_rank_benchmarks (
++            field_snapshot_id TEXT PRIMARY KEY,
++            sport TEXT NOT NULL,
++            slate_id TEXT NOT NULL,
++            season_id TEXT NOT NULL,
++            rules_version TEXT NOT NULL,
++            benchmark_version TEXT NOT NULL,
++            roster_size INTEGER NOT NULL,
++            player_count INTEGER NOT NULL,
++            sample_size INTEGER NOT NULL,
++            calculation_mode TEXT NOT NULL,
++            scores_json TEXT NOT NULL,
++            snapshot_hash TEXT NOT NULL,
++            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
++            UNIQUE(sport, slate_id, season_id, rules_version, benchmark_version, roster_size)
++        );
+         CREATE TABLE IF NOT EXISTS daily_blitz_rank_events (
+             rank_event_id TEXT PRIMARY KEY,
+-            entry_id TEXT NOT NULL UNIQUE,
++            entry_id TEXT NOT NULL UNIQUE REFERENCES daily_blitz_entries(entry_id),
+             user_id TEXT NOT NULL,
+             sport TEXT NOT NULL,
+             slate_id TEXT NOT NULL,
+@@ -176,6 +194,9 @@ def init_db(conn):
+             rank_tier TEXT NOT NULL,
+             score REAL NOT NULL,
+             percentile REAL NOT NULL,
++            benchmark_percentile REAL,
++            benchmark_version TEXT,
++            field_snapshot_id TEXT,
+             source TEXT DEFAULT 'daily_blitz_reveal',
+             created_at TEXT DEFAULT CURRENT_TIMESTAMP
+         );
+@@ -194,6 +215,18 @@ def init_db(conn):
+     _ensure_column(conn, "daily_blitz_entries", "ranked_attempt_key", "TEXT")
+     _ensure_column(conn, "daily_blitz_entries", "season_id", "TEXT DEFAULT 'season-2026-summer'")
+     _ensure_column(conn, "daily_blitz_entries", "rules_version", "TEXT DEFAULT 'rank-v2-percentile'")
++    _ensure_column(conn, "daily_blitz_rank_state", "version", "INTEGER NOT NULL DEFAULT 0")
++    _ensure_column(conn, "daily_blitz_rank_events", "benchmark_percentile", "REAL")
++    _ensure_column(conn, "daily_blitz_rank_events", "benchmark_version", "TEXT")
++    _ensure_column(conn, "daily_blitz_rank_events", "field_snapshot_id", "TEXT")
++    conn.execute(
++        """
++        UPDATE daily_blitz_entries
++        SET ranked_status = 'legacy_unranked'
++        WHERE ranked_status = 'ranked_pending'
++          AND ranked_attempt_key IS NULL
++        """
++    )
+     conn.execute(
+         """
+         CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_blitz_ranked_attempt
+@@ -213,6 +246,12 @@ def init_db(conn):
+         ON daily_blitz_rank_events(user_id, sport, season_id, rules_version)
+         """
+     )
++    conn.execute(
++        """
++        CREATE INDEX IF NOT EXISTS idx_daily_blitz_rank_events_entry
++        ON daily_blitz_rank_events(entry_id)
++        """
++    )
+     conn.commit()
+
+
+diff --git a/backend/main.py b/backend/main.py
+index 5a6f4d1..2ebf65c 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -90,6 +90,7 @@ def magic_link(payload: MagicLinkRequest, request: Request):
+
+
+ def create_app(db_path: str | Path | None = None):
++    daily_blitz.validate_auth_runtime_configuration()
+     app = FastAPI(title="SHFantasy v2", version="0.1.0")
+     app.state.db = connect(db_path)
+     app.state.rank_settlement_lock = RLock()
