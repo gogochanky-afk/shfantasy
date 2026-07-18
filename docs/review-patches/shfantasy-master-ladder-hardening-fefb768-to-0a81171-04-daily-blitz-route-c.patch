@@ -1,0 +1,75 @@
++            (
++                entry_id,
++                authenticated_user_id,
++                slate.slate_id,
++                payload.captain_player_id,
++                result.total_cost,
++                payload.chip_stake,
++                ranked_attempt_key,
++                ranked_status_value,
++                RANK_SEASON_ID,
++                RANK_RULES_VERSION,
++            ),
++        )
++    except sqlite3.IntegrityError:
++        ranked_status_value = "unranked_duplicate"
++        conn.execute(
++            """
++            INSERT INTO daily_blitz_entries(
++                entry_id, user_id, slate_id, captain_player_id, total_cost, chip_stake,
++                ranked_attempt_key, ranked_status, season_id, rules_version
++            )
++            VALUES(?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
++            """,
++            (
++                entry_id,
++                authenticated_user_id,
++                slate.slate_id,
++                payload.captain_player_id,
++                result.total_cost,
++                payload.chip_stake,
++                ranked_status_value,
++                RANK_SEASON_ID,
++                RANK_RULES_VERSION,
++            ),
++        )
+     for player_id in payload.player_ids:
+         salary = slate.salaries[player_id]
+         conn.execute(
+@@ -894,22 +1181,33 @@ def submit_entry(payload: DailyBlitzEntryPayload, request: Request):
+         "entry_id": entry_id,
+         "slate_id": slate.slate_id,
+         "status": "locked",
++        "ranked_status": ranked_status_value,
+         "total_cost": result.total_cost,
+         "salary_cap": 10,
+         "selected_player_ids": result.selected_player_ids,
+         "captain_player_id": result.captain_player_id,
+         "parlay_chain": _entry_strategy_packet(slate, result.selected_player_ids, result.captain_player_id),
+         "private_chip_mode": _private_chip_mode(payload.chip_stake),
+-        "rank_preview": _rank_preview_packet(conn, payload.user_id),
++        "rank_preview": _rank_preview_packet(conn, authenticated_user_id, slate.sport),
+         "next_action": "Wait for results, then review the recap lesson.",
+     }
+ 
+ 
+ @router.post("/entry/{entry_id}/reveal")
+ def reveal_entry(entry_id: str, request: Request):
+-    return _entry_recap_packet(request.app.state.db, entry_id)
++    user_id = _authenticated_user_id(request)
++    lock = getattr(request.app.state, "rank_settlement_lock", None)
++    if lock:
++        with lock:
++            return _entry_recap_packet(request.app.state.db, entry_id, user_id)
++    return _entry_recap_packet(request.app.state.db, entry_id, user_id)
+ 
+ 
+ @router.get("/entry/{entry_id}/recap")
+ def entry_recap(entry_id: str, request: Request):
+-    return _entry_recap_packet(request.app.state.db, entry_id)
++    user_id = _authenticated_user_id(request)
++    lock = getattr(request.app.state, "rank_settlement_lock", None)
++    if lock:
++        with lock:
++            return _entry_recap_packet(request.app.state.db, entry_id, user_id)
++    return _entry_recap_packet(request.app.state.db, entry_id, user_id)
