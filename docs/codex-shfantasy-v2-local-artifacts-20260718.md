@@ -1,18 +1,18 @@
 # SHFantasy v2 Local Artifact Hashes - 2026-07-18
 
-These artifacts were refreshed on the laptop from local git commit `0e8383c align arena around parallel sport tables`.
+These artifacts were refreshed on the laptop from local git commit `5b54787 add skill fantasy baseball and wwe tables`.
 
 ## Files
 
 - `/tmp/shfantasy-v2-source-baseline-20260718.bundle`
-  - Size: 206 KB
-  - SHA256: `bec3fd0c9b597819c6ed3e25390f38ec512fb6358ed7bf92fbf5eca55580d703`
+  - Size: 212 KB
+  - SHA256: `693b01a6f3f455ab390c9403439be91c821f3224a0d4020986acb9f0e690c77a`
 - `/tmp/shfantasy-v2-source-baseline-20260718.tar.gz`
-  - Size: 176 KB
-  - SHA256: `f4fd710ac6b6686896078a6ab5729569477a5acbf86cee9a9de758836a2b4e2e`
+  - Size: 179 KB
+  - SHA256: `53843818d4536158e171c15982f92ce5a624397ab0076ba7ddfe06412f33c587`
 - `/tmp/shfantasy-v2-source-baseline-20260718.patch`
-  - Size: 834 KB
-  - SHA256: `288e97b5c805af3a06d75053c98cf3013a219b883357e89e4206edbaf9435f2b`
+  - Size: 862 KB
+  - SHA256: `963f4da721dfb0d8959f4f86a86114540bdd76ab00d1f4c0fd99d4ca5bfd1daf`
 
 ## Notes
 
@@ -21,3 +21,4 @@ These artifacts were refreshed on the laptop from local git commit `0e8383c alig
 - These files are local laptop artifacts, not public GitHub downloads.
 - The GitHub handoff branch remains documentation-only until a proper GitHub credential/publish lane pushes the actual source branch.
 - Product direction now treats sports as parallel SHFantasy tables. Active table means today's best slate, not permanent sport priority.
+- Baseball and WWE-style sports entertainment are now implemented in the local source baseline as dry-run skill fantasy tables with tests.
