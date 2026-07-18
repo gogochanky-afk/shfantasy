@@ -1,0 +1,66 @@
+diff --git a/frontend/src/lib/api.ts b/frontend/src/lib/api.ts
+index d92b96c..858d24a 100644
+--- a/frontend/src/lib/api.ts
++++ b/frontend/src/lib/api.ts
+@@ -1,10 +1,26 @@
+ export const API_BASE = import.meta.env.VITE_API_BASE || '/shfantasy-api';
++const DEV_HEADER_AUTH =
++  import.meta.env.DEV || import.meta.env.VITE_SHFANTASY_AUTH_MODE === 'dev';
++const DEV_USER_STORAGE_KEY = 'shfantasyUserId';
++
++export function getDevUserId() {
++  if (!DEV_HEADER_AUTH || typeof localStorage === 'undefined') return '';
++  const existing = localStorage.getItem(DEV_USER_STORAGE_KEY);
++  if (existing) return existing;
++  const generated =
++    typeof crypto !== 'undefined' && 'randomUUID' in crypto
++      ? `guest-${crypto.randomUUID()}`
++      : `guest-${Date.now().toString(36)}`;
++  localStorage.setItem(DEV_USER_STORAGE_KEY, generated);
++  return generated;
++}
+
+ function requestHeaders(options: RequestInit) {
+   const headers = new Headers(options.headers || {});
+   if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+-  if (typeof localStorage !== 'undefined' && !headers.has('X-SHF-User-ID')) {
+-    headers.set('X-SHF-User-ID', localStorage.getItem('shfantasyUserId') || 'hugo');
++  const devUserId = getDevUserId();
++  if (devUserId && !headers.has('X-SHF-User-ID')) {
++    headers.set('X-SHF-User-ID', devUserId);
+   }
+   return headers;
+ }
+diff --git a/frontend/src/routes/daily-blitz/+page.svelte b/frontend/src/routes/daily-blitz/+page.svelte
+index 8493058..a2d0c78 100644
+--- a/frontend/src/routes/daily-blitz/+page.svelte
++++ b/frontend/src/routes/daily-blitz/+page.svelte
+@@ -1,6 +1,6 @@
+ <script>
+   import { onMount } from 'svelte';
+-  import { api } from '$lib/api';
++  import { api, getDevUserId } from '$lib/api';
+
+   const today = new Date().toISOString().slice(0, 10);
+
+@@ -72,7 +72,7 @@
+   let slate = fallbackSlate;
+   let slateDate = today;
+   let selectedSport = 'football';
+-  let userId = 'hugo';
++  let userId = '';
+   let selectedIds = [];
+   let captainId = '';
+   let validation = null;
+@@ -125,10 +125,7 @@
+     submitResult = null;
+     validation = null;
+     rankStatus = null;
+-    if (typeof localStorage !== 'undefined') {
+-      userId = localStorage.getItem('shfantasyUserId') || 'hugo';
+-      localStorage.setItem('shfantasyUserId', userId);
+-    }
++    userId = getDevUserId();
+     try {
+       slate = await api(`/daily-blitz/slate?slate_date=${encodeURIComponent(slateDate)}&sport=${encodeURIComponent(selectedSport)}`);
+       selectedSport = slate.sport || selectedSport;
